@@ -1,7 +1,7 @@
 import axios, { AxiosRequestConfig } from "axios";
 
-const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://devstridenex.quantcloud.in/api/";
-export const BASE_URL = rawBaseUrl.endsWith('/') ? rawBaseUrl : rawBaseUrl + '/';
+const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+export const BASE_URL = rawBaseUrl ? (rawBaseUrl.endsWith('/') ? rawBaseUrl : rawBaseUrl + '/') : '/';
 export const BASE_DOMAIN = BASE_URL.replace(/\/api\/?$/, "") || "";
 
 export const api = axios.create({
@@ -15,8 +15,12 @@ export const api = axios.create({
 
 // Generic API caller with token injection
 const apiRequest = async (config: AxiosRequestConfig) => {
+  const apiKey = typeof window !== "undefined" ? localStorage.getItem("apiKey") : null;
+  const apiSecret = typeof window !== "undefined" ? localStorage.getItem("apiSecret") : null;
+
   const headers = {
     ...config.headers,
+    ...(apiKey && apiSecret ? { Authorization: `token ${apiKey}:${apiSecret}` } : {}),
   };
   
   try {
