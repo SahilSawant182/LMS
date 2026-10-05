@@ -61,21 +61,40 @@ export interface Course {
 }
 
 export const getCourses = async (): Promise<Course[]> => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_courses`);
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_courses`, {
+    headers: {
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
 };
 
 export const getCourseCompletionData = async (payload?: any) => {
   // If payload is required, you can change the parameter and use it in params or data depending on method.
   // Assuming GET requires params, but standard frappe utils often use GET with params.
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_completion_data`, { params: payload });
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_completion_data`, { 
+    params: payload,
+    headers: {
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
 };
 
 export const getCourseDetails = async (payload: GetCourseDetailsPayload) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_details`, { params: payload });
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_details`, { 
+    params: payload,
+    headers: {
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
 };
 
 export const getCourseOutline = async (payload?: any) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_outline`, { params: payload });
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_outline`, { 
+    params: payload,
+    headers: {
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
 };
 
 export const getChapters = async (payload?: any) => {
@@ -88,7 +107,12 @@ export const getChapters = async (payload?: any) => {
 };
 
 export const getLesson = async (payload: GetLessonPayload) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_lesson`, { params: payload });
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_lesson`, { 
+    params: payload,
+    headers: {
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
 };
 
 export const getLessons = async (payload?: any) => {
@@ -110,7 +134,12 @@ export const getEnrollments = async (payload?: any) => {
 };
 
 export const getReviews = async (payload: GetReviewsPayload) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_reviews`, { params: payload });
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_reviews`, { 
+    params: payload,
+    headers: {
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
 };
 
 export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
@@ -124,7 +153,12 @@ export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
 };
 
 export const getBatchCourses = async (payload: GetBatchCoursesPayload) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_batch_courses`, { params: payload });
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_batch_courses`, { 
+    params: payload,
+    headers: {
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
 };
 
 export const getBatches = async () => {
