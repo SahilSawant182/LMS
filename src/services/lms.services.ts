@@ -61,21 +61,21 @@ export interface Course {
 }
 
 export const getCourses = async (): Promise<Course[]> => {
-  return apiService.get(`method/lms.lms.utils.get_courses`);
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_courses`);
 };
 
 export const getCourseCompletionData = async (payload?: any) => {
   // If payload is required, you can change the parameter and use it in params or data depending on method.
   // Assuming GET requires params, but standard frappe utils often use GET with params.
-  return apiService.get(`method/lms.lms.utils.get_course_completion_data`, { params: payload });
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_completion_data`, { params: payload });
 };
 
 export const getCourseDetails = async (payload: GetCourseDetailsPayload) => {
-  return apiService.get(`method/lms.lms.utils.get_course_details`, { params: payload });
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_details`, { params: payload });
 };
 
 export const getCourseOutline = async (payload?: any) => {
-  return apiService.get(`method/lms.lms.utils.get_course_outline`, { params: payload });
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_outline`, { params: payload });
 };
 
 export const getChapters = async (payload?: any) => {
@@ -88,7 +88,7 @@ export const getChapters = async (payload?: any) => {
 };
 
 export const getLesson = async (payload: GetLessonPayload) => {
-  return apiService.get(`method/lms.lms.utils.get_lesson`, { params: payload });
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_lesson`, { params: payload });
 };
 
 export const getLessons = async (payload?: any) => {
@@ -110,7 +110,7 @@ export const getEnrollments = async (payload?: any) => {
 };
 
 export const getReviews = async (payload: GetReviewsPayload) => {
-  return apiService.get(`method/lms.lms.utils.get_reviews`, { params: payload });
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_reviews`, { params: payload });
 };
 
 export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
@@ -124,7 +124,7 @@ export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
 };
 
 export const getBatchCourses = async (payload: GetBatchCoursesPayload) => {
-  return apiService.get(`method/lms.lms.utils.get_batch_courses`, { params: payload });
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_batch_courses`, { params: payload });
 };
 
 export const getBatches = async () => {
