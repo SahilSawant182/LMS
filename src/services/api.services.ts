@@ -4,6 +4,7 @@ const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 export const BASE_URL = rawBaseUrl ? (rawBaseUrl.endsWith('/') ? rawBaseUrl : rawBaseUrl + '/') : '/';
 export const BASE_DOMAIN = BASE_URL.replace(/\/api\/?$/, "") || "";
 export const API_TOKEN = process.env.NEXT_PUBLIC_API_TOKEN || "";
+export const API_METHOD_PREFIX = process.env.NEXT_PUBLIC_API_METHOD_PREFIX || "stridenex_app.api_stridenex_app.lms";
 
 export const api = axios.create({
   baseURL: BASE_URL,

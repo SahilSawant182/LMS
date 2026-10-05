@@ -1,4 +1,4 @@
-import { apiService, API_TOKEN } from "./api.services";
+import { apiService, API_TOKEN, API_METHOD_PREFIX } from "./api.services";
 
 // Define interfaces if needed, or use any/generic for now
 export interface GetCourseDetailsPayload {
@@ -79,7 +79,7 @@ export const getCourseOutline = async (payload?: any) => {
 };
 
 export const getChapters = async (payload?: any) => {
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_chapters`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_chapters`, { 
     params: payload,
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -92,7 +92,7 @@ export const getLesson = async (payload: GetLessonPayload) => {
 };
 
 export const getLessons = async (payload?: any) => {
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_lessons`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_lessons`, { 
     params: payload,
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -101,7 +101,7 @@ export const getLessons = async (payload?: any) => {
 };
 
 export const getEnrollments = async (payload?: any) => {
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_enrollments`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_enrollments`, { 
     params: payload,
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -115,7 +115,7 @@ export const getReviews = async (payload: GetReviewsPayload) => {
 
 export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
   const nameParam = payload.name || payload.batch;
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_batch`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_batch`, { 
     params: { name: nameParam },
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -128,7 +128,7 @@ export const getBatchCourses = async (payload: GetBatchCoursesPayload) => {
 };
 
 export const getBatches = async () => {
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_batches`, {
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_batches`, {
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }
@@ -136,7 +136,7 @@ export const getBatches = async () => {
 };
 
 export const getCertificates = async () => {
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_certificates`, {
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_certificates`, {
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }
@@ -144,7 +144,7 @@ export const getCertificates = async () => {
 };
 
 export const getCertificate = async (name: string) => {
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_certificate`, {
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_certificate`, {
     params: { name },
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -153,7 +153,7 @@ export const getCertificate = async (name: string) => {
 };
 
 export const createCourse = async (data: FormData) => {
-  return apiService.post(`method/stridenex_app.api_stridenex_app.lms.create_course`, data, {
+  return apiService.post(`method/${API_METHOD_PREFIX}.create_course`, data, {
     headers: { 
       'Content-Type': 'multipart/form-data',
       'Authorization': `token ${API_TOKEN}`
@@ -162,7 +162,7 @@ export const createCourse = async (data: FormData) => {
 };
 
 export const updateCourse = async (data: FormData) => {
-  return apiService.post(`method/stridenex_app.api_stridenex_app.lms.update_course`, data, {
+  return apiService.post(`method/${API_METHOD_PREFIX}.update_course`, data, {
     headers: { 
       'Content-Type': 'multipart/form-data',
       'Authorization': `token ${API_TOKEN}`
@@ -171,7 +171,7 @@ export const updateCourse = async (data: FormData) => {
 };
 
 export const deleteCourse = async (name: string) => {
-  return apiService.post(`method/stridenex_app.api_stridenex_app.lms.delete_course`, { name }, {
+  return apiService.post(`method/${API_METHOD_PREFIX}.delete_course`, { name }, {
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }
@@ -179,7 +179,7 @@ export const deleteCourse = async (name: string) => {
 };
 
 export const deleteBatch = async (name: string) => {
-  return apiService.post(`method/stridenex_app.api_stridenex_app.lms.delete_batch`, null, {
+  return apiService.post(`method/${API_METHOD_PREFIX}.delete_batch`, null, {
     params: { name },
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -188,7 +188,7 @@ export const deleteBatch = async (name: string) => {
 };
 
 export const createChapter = async (data: FormData) => {
-  return apiService.post(`method/stridenex_app.api_stridenex_app.lms.create_chapter`, data, {
+  return apiService.post(`method/${API_METHOD_PREFIX}.create_chapter`, data, {
     headers: { 
       'Content-Type': 'multipart/form-data',
       'Authorization': `token ${API_TOKEN}`
@@ -197,7 +197,7 @@ export const createChapter = async (data: FormData) => {
 };
 
 export const createLesson = async (data: FormData) => {
-  return apiService.post(`method/stridenex_app.api_stridenex_app.lms.create_lesson`, data, {
+  return apiService.post(`method/${API_METHOD_PREFIX}.create_lesson`, data, {
     headers: { 
       'Content-Type': 'multipart/form-data',
       'Authorization': `token ${API_TOKEN}`
@@ -206,7 +206,7 @@ export const createLesson = async (data: FormData) => {
 };
 
 export const getQuizzes = async () => {
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_quizzes`, {
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_quizzes`, {
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }
@@ -214,7 +214,7 @@ export const getQuizzes = async () => {
 };
 
 export const getQuiz = async (name: string) => {
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_quiz`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_quiz`, { 
     params: { name },
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -244,7 +244,7 @@ export interface CreateQuestionPayload {
   multiple?: number;
 }
 export const getQuestions = async () => {
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_questions`, {
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_questions`, {
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }
@@ -252,7 +252,7 @@ export const getQuestions = async () => {
 };
 
 export const getQuestion = async (name: string) => {
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_question`, {
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_question`, {
     params: { name },
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -268,7 +268,7 @@ export const createQuestion = async (data: CreateQuestionPayload) => {
     }
   });
 
-  return apiService.post(`method/stridenex_app.api_stridenex_app.lms.create_question`, params, {
+  return apiService.post(`method/${API_METHOD_PREFIX}.create_question`, params, {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Authorization': `token ${API_TOKEN}`
@@ -297,7 +297,7 @@ export const createCertificateEvaluation = async (data: CreateCertificateEvaluat
     }
   });
 
-  return apiService.post(`method/stridenex_app.api_stridenex_app.lms.create_certificate_evaluation`, params, {
+  return apiService.post(`method/${API_METHOD_PREFIX}.create_certificate_evaluation`, params, {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Authorization': `token ${API_TOKEN}`
@@ -317,7 +317,7 @@ export const updateCertificateEvaluation = async (data: UpdateCertificateEvaluat
     }
   });
 
-  return apiService.post(`method/stridenex_app.api_stridenex_app.lms.update_certificate_evaluation`, params, {
+  return apiService.post(`method/${API_METHOD_PREFIX}.update_certificate_evaluation`, params, {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Authorization': `token ${API_TOKEN}`
@@ -326,7 +326,7 @@ export const updateCertificateEvaluation = async (data: UpdateCertificateEvaluat
 };
 
 export const getCertificateEvaluation = async (name: string) => {
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_certificate_evaluation`, {
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_certificate_evaluation`, {
     params: { name },
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -335,7 +335,7 @@ export const getCertificateEvaluation = async (name: string) => {
 };
 
 export const getCertificateEvaluations = async () => {
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_certificate_evaluations`, {
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_certificate_evaluations`, {
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }
@@ -343,7 +343,7 @@ export const getCertificateEvaluations = async () => {
 };
 
 export const deleteCertificateEvaluation = async (name: string) => {
-  return apiService.post(`method/stridenex_app.api_stridenex_app.lms.delete_certificate_evaluation`, null, {
+  return apiService.post(`method/${API_METHOD_PREFIX}.delete_certificate_evaluation`, null, {
     params: { name },
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -352,7 +352,7 @@ export const deleteCertificateEvaluation = async (name: string) => {
 };
 
 export const getCourseProgress = async (course: string) => {
-  return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_course_progress`, {
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_progress`, {
     params: { course },
     headers: {
       'Authorization': `token ${API_TOKEN}`
