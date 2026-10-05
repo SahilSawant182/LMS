@@ -1,4 +1,4 @@
-import { apiService } from "./api.services";
+import { apiService, API_TOKEN } from "./api.services";
 
 // Define interfaces if needed, or use any/generic for now
 export interface GetCourseDetailsPayload {
@@ -82,7 +82,7 @@ export const getChapters = async (payload?: any) => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_chapters`, { 
     params: payload,
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -95,7 +95,7 @@ export const getLessons = async (payload?: any) => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_lessons`, { 
     params: payload,
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -104,7 +104,7 @@ export const getEnrollments = async (payload?: any) => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_enrollments`, { 
     params: payload,
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -118,7 +118,7 @@ export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_batch`, { 
     params: { name: nameParam },
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -130,7 +130,7 @@ export const getBatchCourses = async (payload: GetBatchCoursesPayload) => {
 export const getBatches = async () => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_batches`, {
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -138,7 +138,7 @@ export const getBatches = async () => {
 export const getCertificates = async () => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_certificates`, {
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -147,7 +147,7 @@ export const getCertificate = async (name: string) => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_certificate`, {
     params: { name },
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -156,7 +156,7 @@ export const createCourse = async (data: FormData) => {
   return apiService.post(`method/stridenex_app.api_stridenex_app.lms.create_course`, data, {
     headers: { 
       'Content-Type': 'multipart/form-data',
-      'Authorization': 'token accf7b66dd64697:9e1f936f0d102d3'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -165,7 +165,7 @@ export const updateCourse = async (data: FormData) => {
   return apiService.post(`method/stridenex_app.api_stridenex_app.lms.update_course`, data, {
     headers: { 
       'Content-Type': 'multipart/form-data',
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -173,7 +173,7 @@ export const updateCourse = async (data: FormData) => {
 export const deleteCourse = async (name: string) => {
   return apiService.post(`method/stridenex_app.api_stridenex_app.lms.delete_course`, { name }, {
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -182,7 +182,7 @@ export const deleteBatch = async (name: string) => {
   return apiService.post(`method/stridenex_app.api_stridenex_app.lms.delete_batch`, null, {
     params: { name },
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -191,7 +191,7 @@ export const createChapter = async (data: FormData) => {
   return apiService.post(`method/stridenex_app.api_stridenex_app.lms.create_chapter`, data, {
     headers: { 
       'Content-Type': 'multipart/form-data',
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -200,7 +200,7 @@ export const createLesson = async (data: FormData) => {
   return apiService.post(`method/stridenex_app.api_stridenex_app.lms.create_lesson`, data, {
     headers: { 
       'Content-Type': 'multipart/form-data',
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -208,7 +208,7 @@ export const createLesson = async (data: FormData) => {
 export const getQuizzes = async () => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_quizzes`, {
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -217,7 +217,7 @@ export const getQuiz = async (name: string) => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_quiz`, { 
     params: { name },
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -246,7 +246,7 @@ export interface CreateQuestionPayload {
 export const getQuestions = async () => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_questions`, {
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -255,7 +255,7 @@ export const getQuestion = async (name: string) => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_question`, {
     params: { name },
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -271,7 +271,7 @@ export const createQuestion = async (data: CreateQuestionPayload) => {
   return apiService.post(`method/stridenex_app.api_stridenex_app.lms.create_question`, params, {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -300,7 +300,7 @@ export const createCertificateEvaluation = async (data: CreateCertificateEvaluat
   return apiService.post(`method/stridenex_app.api_stridenex_app.lms.create_certificate_evaluation`, params, {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -320,7 +320,7 @@ export const updateCertificateEvaluation = async (data: UpdateCertificateEvaluat
   return apiService.post(`method/stridenex_app.api_stridenex_app.lms.update_certificate_evaluation`, params, {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -329,7 +329,7 @@ export const getCertificateEvaluation = async (name: string) => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_certificate_evaluation`, {
     params: { name },
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -337,7 +337,7 @@ export const getCertificateEvaluation = async (name: string) => {
 export const getCertificateEvaluations = async () => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_certificate_evaluations`, {
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -346,7 +346,7 @@ export const deleteCertificateEvaluation = async (name: string) => {
   return apiService.post(`method/stridenex_app.api_stridenex_app.lms.delete_certificate_evaluation`, null, {
     params: { name },
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
@@ -355,7 +355,7 @@ export const getCourseProgress = async (course: string) => {
   return apiService.get(`method/stridenex_app.api_stridenex_app.lms.get_course_progress`, {
     params: { course },
     headers: {
-      'Authorization': 'token b658c8efecac0c0:9cc3739960f3eed'
+      'Authorization': `token ${API_TOKEN}`
     }
   });
 };
