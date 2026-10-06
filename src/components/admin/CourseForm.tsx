@@ -64,7 +64,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
 
       // Add a slight delay for better UX before redirecting
       setTimeout(() => {
-        router.push('/courses');
+        router.push('/');
         router.refresh();
       }, 1500);
 
@@ -209,7 +209,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                         await import('@/services/lms.services').then(m => m.deleteCourse(formData.name));
                         setSuccess('Course deleted successfully!');
                         setTimeout(() => {
-                          router.push('/courses');
+                          router.push('/');
                           router.refresh();
                         }, 1500);
                       } catch (err: any) {

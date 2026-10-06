@@ -20,35 +20,47 @@ const apiRequest = async (config: AxiosRequestConfig) => {
   const apiKey = typeof window !== "undefined" ? localStorage.getItem("apiKey") : null;
   const apiSecret = typeof window !== "undefined" ? localStorage.getItem("apiSecret") : null;
 
-  const headers = {
-    ...config.headers,
-    ...(apiKey && apiSecret ? { Authorization: `token ${apiKey}:${apiSecret}` } : {}),
-  };
+  const headers: Record<string, any> = { ...config.headers };
+
+  if (headers.Authorization === 'token ' || headers.Authorization === 'token :') {
+    delete headers.Authorization;
+  }
+
+  if (!headers.Authorization && apiKey && apiSecret) {
+    headers.Authorization = `token ${apiKey}:${apiSecret}`;
+  }
   
   try {
     const response = await api({ ...config, headers });
     
     if (response.data?.message?.success === false || response.data?.success === false) {
       const errorMessage = response.data?.message?.message || response.data?.message || "Operation failed";
-      const customError = new Error(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
-      (customError as any).status = 400; // Mock status
-      (customError as any).response = { data: response.data };
+      
+      interface CustomApiError extends Error {
+        status?: number;
+        response?: { data: unknown };
+      }
+      
+      const customError: CustomApiError = new Error(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
+      customError.status = 400; // Mock status
+      customError.response = { data: response.data };
       throw customError;
     }
 
     // Usually Frappe sends data in `message` or `data` property
     return response.data?.message ?? response.data?.data ?? response.data;
-  } catch (error: any) {
-    console.error(`API Error (${config.method} ${config.url}):`, error.message || "Request failed");
+  } catch (error: unknown) {
+    const errMessage = error instanceof Error ? error.message : "Request failed";
+    console.error(`API Error (${config.method} ${config.url}):`, errMessage);
     throw error;
   }
 };
 
 export const apiService = {
   get: (url: string, config?: AxiosRequestConfig) => apiRequest({ ...config, method: "GET", url }),
-  post: (url: string, data?: any, config?: AxiosRequestConfig) => apiRequest({ ...config, method: "POST", url, data }),
-  put: (url: string, data?: any, config?: AxiosRequestConfig) => apiRequest({ ...config, method: "PUT", url, data }),
-  patch: (url: string, data?: any, config?: AxiosRequestConfig) => apiRequest({ ...config, method: "PATCH", url, data }),
+  post: (url: string, data?: unknown, config?: AxiosRequestConfig) => apiRequest({ ...config, method: "POST", url, data }),
+  put: (url: string, data?: unknown, config?: AxiosRequestConfig) => apiRequest({ ...config, method: "PUT", url, data }),
+  patch: (url: string, data?: unknown, config?: AxiosRequestConfig) => apiRequest({ ...config, method: "PATCH", url, data }),
   delete: (url: string, config?: AxiosRequestConfig) => apiRequest({ ...config, method: "DELETE", url }),
 };
 

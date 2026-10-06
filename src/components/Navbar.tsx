@@ -37,7 +37,6 @@ export default function Navbar() {
 
           {/* Right side: Links and Auth */}
           <div className="hidden lg:flex items-center space-x-4 text-sm font-semibold whitespace-nowrap flex-shrink-0">
-            <Link href="/" className="text-gray-600 hover:text-indigo-600 transition-colors">Courses</Link>
             <Link href="/batches" className="text-gray-600 hover:text-indigo-600 transition-colors">Batches</Link>
             <Link href="/certificates" className="text-gray-600 hover:text-indigo-600 transition-colors">Certificates</Link>
             <Link href="/dashboard" className="text-gray-600 hover:text-indigo-600 transition-colors">My Dashboard</Link>
