@@ -60,10 +60,33 @@ const apiRequest = async (config: AxiosRequestConfig) => {
 
     // Usually Frappe sends data in `message` or `data` property
     return response.data?.message ?? response.data?.data ?? response.data;
-  } catch (error: unknown) {
-    const errMessage = error instanceof Error ? error.message : "Request failed";
+  } catch (error: any) {
+    let errMessage = error.message || "Request failed";
+    
+    if (error.response?.data) {
+      const respData = error.response.data;
+      if (typeof respData.message === 'object' && respData.message?.message) {
+        errMessage = respData.message.message;
+      } else if (typeof respData.message === 'string') {
+        errMessage = respData.message;
+      } else if (typeof respData.error === 'string') {
+        errMessage = respData.error;
+      } else if (respData.exc_type) {
+        errMessage = respData.exception || respData.exc_type;
+      }
+    }
+    
     console.error(`API Error (${config.method} ${config.url}):`, errMessage);
-    throw error;
+    
+    interface CustomApiError extends Error {
+      status?: number;
+      response?: any;
+    }
+    
+    const customError: CustomApiError = new Error(errMessage);
+    customError.status = error.response?.status || 500;
+    customError.response = error.response;
+    throw customError;
   }
 };
 

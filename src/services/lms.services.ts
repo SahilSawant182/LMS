@@ -393,3 +393,76 @@ export const getCourseProgress = async (course: string) => {
     }
   });
 };
+
+export const getAssignments = async () => {
+  return apiService.get(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignments`, {
+    headers: {
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
+};
+
+export const getAssignment = async (name: string) => {
+  return apiService.get(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignment`, {
+    params: { name },
+    headers: {
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
+};
+
+export const createAssignment = async (data: FormData | Record<string, any>) => {
+  const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+  const params = isFormData ? data : new URLSearchParams(data as Record<string, string>);
+  const contentType = isFormData ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
+  
+  return apiService.post(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.create_assignment`, params, {
+    headers: {
+      'Content-Type': contentType,
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
+};
+
+export const createAssignmentSubmission = async (data: FormData | Record<string, any>) => {
+  const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+  const params = isFormData ? data : new URLSearchParams(data as Record<string, string>);
+  const contentType = isFormData ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
+  
+  return apiService.post(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.create_assignment_submission`, params, {
+    headers: {
+      'Content-Type': contentType,
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
+};
+
+export const updateAssignment = async (data: FormData | Record<string, any>) => {
+  const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+  const params = isFormData ? data : new URLSearchParams(data as Record<string, string>);
+  const contentType = isFormData ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
+
+  return apiService.post(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.update_assignment`, params, {
+    headers: {
+      'Content-Type': contentType,
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
+};
+
+export const deleteAssignment = async (name: string) => {
+  return apiService.post(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.delete_assignment`, null, {
+    params: { name },
+    headers: {
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
+};
+
+export const getAssignmentSubmissions = async () => {
+  return apiService.get(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignment_submissions`, {
+    headers: {
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
+};

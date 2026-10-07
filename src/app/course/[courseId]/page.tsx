@@ -2,14 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getCourseDetails, getChapters, getLessons, getReviews, createChapter, createLesson, getCourseProgress } from '@/services/lms.services';
+import { getCourseDetails, getChapters, getLessons, getReviews, createChapter, createLesson, getCourseProgress, getAssignments, getAssignmentSubmissions } from '@/services/lms.services';
 import { getImageUrl } from '@/services/api.services';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { 
   PlayCircle, Clock, BookOpen, Users, Award,
   Globe, Tags, ChevronRight, Star, CheckCircle2,
-  BookMarked, ArrowLeft, Edit, Plus, Loader2
+  BookMarked, ArrowLeft, Edit, Plus, Loader2, FileText, CheckCircle
 } from 'lucide-react';
 
 export default function CourseDetailPage() {
@@ -21,6 +21,7 @@ export default function CourseDetailPage() {
   const [outline, setOutline] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [progress, setProgress] = useState<any>(null);
+  const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInstructor, setIsInstructor] = useState(false);
@@ -51,12 +52,14 @@ export default function CourseDetailPage() {
   const fetchCourseData = async () => {
     setLoading(true);
     try {
-      const [detailsRes, outlineRes, reviewsRes, lessonsRes, progressRes] = await Promise.allSettled([
+      const [detailsRes, outlineRes, reviewsRes, lessonsRes, progressRes, assignmentsRes, submissionsRes] = await Promise.allSettled([
         getCourseDetails({ course: courseId }),
         getChapters({ course: courseId }),
         getReviews({ course: courseId }),
         getLessons({ course: courseId }),
-        getCourseProgress(courseId)
+        getCourseProgress(courseId),
+        getAssignments(),
+        getAssignmentSubmissions()
       ]);
 
       if (detailsRes.status === 'fulfilled') {
@@ -102,6 +105,28 @@ export default function CourseDetailPage() {
       if (progressRes.status === 'fulfilled') {
         const rawProgress = progressRes.value;
         setProgress(rawProgress?.message || rawProgress?.data || rawProgress);
+      }
+
+      if (assignmentsRes.status === 'fulfilled') {
+        const rawAss = assignmentsRes.value?.data || assignmentsRes.value;
+        const assData = rawAss?.message?.data?.assignments || rawAss?.message?.assignments || rawAss?.assignments || rawAss?.data || rawAss?.message || [];
+        const finalAss = Array.isArray(assData) ? assData : [];
+
+        let subList: any[] = [];
+        if (submissionsRes.status === 'fulfilled') {
+          const rawSub = submissionsRes.value?.data || submissionsRes.value;
+          const subData = rawSub?.message?.data || rawSub?.data || rawSub?.message || [];
+          subList = Array.isArray(subData) ? subData : [];
+        }
+
+        const courseAssignments = finalAss
+          .filter((a: any) => a.course === courseId)
+          .map((a: any) => ({
+            ...a,
+            _is_submitted: subList.some((s: any) => s.assignment === a.name || s.assignment_title === a.title)
+          }));
+        
+        setAssignments(courseAssignments);
       }
 
     } catch (err: any) {
@@ -445,6 +470,77 @@ export default function CourseDetailPage() {
             ) : (
               <div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-200">
                 <p className="text-sm text-slate-500 font-medium">Be the first to review this course!</p>
+              </div>
+            )}
+          </section>
+
+          {/* Course Assignments */}
+          <section className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-100">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900">
+                <FileText className="w-5 h-5 text-indigo-600" />
+                Course Assignments
+              </h2>
+              {isInstructor && (
+                <Link
+                  href={`/assignments/create?course=${courseId}`}
+                  className="text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Create Assignment
+                </Link>
+              )}
+            </div>
+            {assignments.length > 0 ? (
+              <div className="space-y-4">
+                {assignments.map((assignment: any) => {
+                  const isSubmitted = (assignment.status && assignment.status !== 'Pending') || assignment.submission_count > 0 || assignment._is_submitted;
+                  return (
+                    <div 
+                      key={assignment.name} 
+                      onClick={() => router.push(`/assignments/${assignment.name}`)}
+                      className="group bg-white border border-slate-200 rounded-xl p-5 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer relative overflow-hidden"
+                    >
+                      <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-start gap-4">
+                          <div className="mt-1 bg-indigo-50 p-2.5 rounded-lg text-indigo-600 group-hover:scale-110 transition-transform">
+                            <BookOpen className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-slate-900 text-lg group-hover:text-indigo-700 transition-colors">
+                              {assignment.title}
+                            </h3>
+                            <p className="text-sm text-slate-500 mt-1 flex items-center gap-2">
+                              <span>Type: {assignment.type || 'Standard'}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 sm:pl-4 sm:border-l border-slate-100">
+                          <div className="flex flex-col sm:items-end">
+                            <span className="text-xs text-slate-400 font-medium">{isInstructor ? 'Action' : 'Status'}</span>
+                            {isInstructor ? (
+                                <span className="text-sm font-medium flex items-center gap-1 text-indigo-600 mt-1">
+                                  <Users className="w-3.5 h-3.5" />
+                                  View Submissions
+                                </span>
+                            ) : (
+                               <span className={`text-sm font-medium flex items-center gap-1 mt-1 ${isSubmitted ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                 {isSubmitted ? <CheckCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                                 {isSubmitted ? 'Submitted' : 'Pending'}
+                               </span>
+                            )}
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm text-slate-500 font-medium">No assignments available for this course yet.</p>
               </div>
             )}
           </section>
