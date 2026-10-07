@@ -13,6 +13,7 @@ export default function CourseSection() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isInstructor, setIsInstructor] = useState(false);
 
   const fetchCourses = async () => {
     try {
@@ -29,6 +30,16 @@ export default function CourseSection() {
 
   useEffect(() => {
     fetchCourses();
+    const checkRoles = () => {
+      try {
+        const rolesStr = localStorage.getItem("roles");
+        if (rolesStr) {
+          const roles = JSON.parse(rolesStr);
+          setIsInstructor(roles.includes("Instructor"));
+        }
+      } catch (e) {}
+    };
+    checkRoles();
   }, []);
 
   const handleEdit = (courseId: string) => {
@@ -58,10 +69,12 @@ export default function CourseSection() {
             <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">Most Popular Courses</h2>
             <p className="text-slate-500 text-lg font-light leading-relaxed">Explore our most popular programs, get job-ready for an in-demand career with top-tier education.</p>
           </div>
-          <Link href="/course/create" className="hidden md:flex text-white bg-indigo-600 hover:bg-indigo-700 font-bold px-5 py-2.5 rounded-full transition-all items-center gap-2 shadow-sm">
-            <Plus className="w-5 h-5" />
-            Create Course
-          </Link>
+          {isInstructor && (
+            <Link href="/course/create" className="hidden md:flex text-white bg-indigo-600 hover:bg-indigo-700 font-bold px-5 py-2.5 rounded-full transition-all items-center gap-2 shadow-sm">
+              <Plus className="w-5 h-5" />
+              Create Course
+            </Link>
+          )}
         </div>
 
         {loading ? (
@@ -94,8 +107,8 @@ export default function CourseSection() {
                     cardGradient={course.card_gradient || undefined}
                     description={course.short_introduction || course.description || undefined}
                     price={course.paid_course ? `${course.currency || '$'} ${course.course_price || 0}` : 'Free'}
-                    onEdit={() => handleEdit(course.name)}
-                    onDelete={() => handleDelete(course.name)}
+                    onEdit={isInstructor ? () => handleEdit(course.name) : undefined}
+                    onDelete={isInstructor ? () => handleDelete(course.name) : undefined}
                   />
                 </Link>
               </div>
@@ -103,11 +116,13 @@ export default function CourseSection() {
           </div>
         )}
         
-        <div className="mt-12 md:hidden flex justify-center">
-          <Link href="/course/create" className="text-white bg-indigo-600 hover:bg-indigo-700 font-bold rounded-full px-8 py-3 w-full text-center transition-colors flex justify-center items-center gap-2">
-            <Plus className="w-5 h-5" /> Create Course
-          </Link>
-        </div>
+        {isInstructor && (
+          <div className="mt-12 md:hidden flex justify-center">
+            <Link href="/course/create" className="text-white bg-indigo-600 hover:bg-indigo-700 font-bold rounded-full px-8 py-3 w-full text-center transition-colors flex justify-center items-center gap-2">
+              <Plus className="w-5 h-5" /> Create Course
+            </Link>
+          </div>
+        )}
       </div>
     </section>
   );

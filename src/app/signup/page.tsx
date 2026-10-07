@@ -1,9 +1,93 @@
 "use client";
 
 import Link from "next/link";
-import React from "react";
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { signup } from "@/services/auth.services";
+import { GraduationCap, Users, Settings, Eye, EyeOff } from "lucide-react";
+
+const ROLES = [
+  {
+    id: "student",
+    label: "Student",
+    description: "Start your career journey",
+    icon: <GraduationCap className="w-5 h-5" />
+  },
+  {
+    id: "instructor",
+    label: "Instructor",
+    description: "Guide and inspire others",
+    icon: <Users className="w-5 h-5" />
+  }
+];
 
 export default function SignupPage() {
+  const router = useRouter();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [role, setRole] = useState("student");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState("");
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    const validatePassword = (pass: string) => {
+      if (pass.length < 8) return "Password must be at least 8 characters long";
+      if (!/[A-Z]/.test(pass)) return "Password must contain at least one uppercase letter";
+      if (!/[a-z]/.test(pass)) return "Password must contain at least one lowercase letter";
+      if (!/[0-9]/.test(pass)) return "Password must contain at least one number";
+      if (!/[!@#$%^&*(),.?":{}|<>]/.test(pass)) return "Password must contain at least one special character";
+      return "";
+    };
+
+    const passError = validatePassword(password);
+    if (passError) {
+      setPasswordError(passError);
+      setLoading(false);
+      return;
+    } else {
+      setPasswordError("");
+    }
+
+    if (password !== confirmPassword) {
+      setConfirmPasswordError("Passwords do not match");
+      setLoading(false);
+      return;
+    } else {
+      setConfirmPasswordError("");
+    }
+
+    try {
+      const payload = {
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        password,
+        role: [
+          { student: role === "student" ? 1 : 0 },
+          { instructor: role === "instructor" ? 1 : 0 }
+        ],
+        allow_promotional_news: 1
+      };
+      await signup(payload);
+      router.push("/login");
+    } catch (err: any) {
+      setError(err.message || "Failed to signup");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex w-full bg-white">
       {/* Left side - Image & Overlay */}
@@ -59,7 +143,7 @@ export default function SignupPage() {
             </p>
           </div>
 
-          <form className="mt-8 space-y-5" onSubmit={(e) => e.preventDefault()}>
+          <form className="mt-8 space-y-5" onSubmit={handleSignup}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label
@@ -74,6 +158,8 @@ export default function SignupPage() {
                     name="first-name"
                     type="text"
                     required
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
                     placeholder="John"
                     className="appearance-none block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-slate-900 transition-all duration-200"
                   />
@@ -92,6 +178,8 @@ export default function SignupPage() {
                     name="last-name"
                     type="text"
                     required
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
                     placeholder="Doe"
                     className="appearance-none block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-slate-900 transition-all duration-200"
                   />
@@ -113,6 +201,8 @@ export default function SignupPage() {
                   type="email"
                   autoComplete="email"
                   required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="student@example.com"
                   className="appearance-none block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-slate-900 transition-all duration-200"
                 />
@@ -124,20 +214,98 @@ export default function SignupPage() {
                 htmlFor="password"
                 className="block text-sm font-medium text-slate-700"
               >
-                Password
+                Password <span className="text-red-500">*</span>
               </label>
-              <div className="mt-1">
+              <div className="mt-1 relative">
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
                   required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="appearance-none block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-slate-900 transition-all duration-200"
+                  className={`appearance-none block w-full px-4 py-3 border ${passwordError ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-indigo-500 focus:border-indigo-500'} rounded-xl shadow-sm placeholder-slate-400 focus:outline-none sm:text-sm bg-white text-slate-900 transition-all duration-200 pr-10`}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
-              <p className="mt-2 text-xs text-slate-500">Must be at least 8 characters.</p>
+              {passwordError && (
+                <div className="text-red-500 text-xs mt-1">{passwordError}</div>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="confirm-password"
+                className="block text-sm font-medium text-slate-700"
+              >
+                Confirm Password <span className="text-red-500">*</span>
+              </label>
+              <div className="mt-1 relative">
+                <input
+                  id="confirm-password"
+                  name="confirm-password"
+                  type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className={`appearance-none block w-full px-4 py-3 border ${confirmPasswordError ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-indigo-500 focus:border-indigo-500'} rounded-xl shadow-sm placeholder-slate-400 focus:outline-none sm:text-sm bg-white text-slate-900 transition-all duration-200 pr-10`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                >
+                  {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+              {confirmPasswordError && (
+                <div className="text-red-500 text-xs mt-1">{confirmPasswordError}</div>
+              )}
+            </div>
+
+            <div className="pt-2">
+              <div className="text-center mb-4">
+                <label className="block text-sm font-semibold text-slate-900">
+                  Select your role to join as <span className="text-red-500">*</span>
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {ROLES.map((r) => (
+                  <div
+                    key={r.id}
+                    onClick={() => setRole(r.id)}
+                    className={`relative flex flex-col items-center p-3 border rounded-xl cursor-pointer transition-all duration-200 ${
+                      role === r.id
+                        ? "border-orange-500 bg-orange-50/50 shadow-sm"
+                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div
+                      className={`p-2 rounded-full mb-2 transition-colors ${
+                        role === r.id
+                          ? "bg-orange-100 text-orange-600"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {r.icon}
+                    </div>
+                    <div className="font-bold text-slate-900 text-xs mb-0.5">{r.label}</div>
+                    <div className="text-[10px] text-slate-500 text-center leading-tight">
+                      {r.description}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="flex items-center">
@@ -159,12 +327,17 @@ export default function SignupPage() {
               </label>
             </div>
 
+            {error && (
+              <div className="text-red-500 text-sm mt-2">{error}</div>
+            )}
+
             <div>
               <button
                 type="submit"
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 transform hover:-translate-y-0.5"
+                disabled={loading}
+                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Create Account
+                {loading ? "Creating Account..." : "Create Account"}
               </button>
             </div>
           </form>

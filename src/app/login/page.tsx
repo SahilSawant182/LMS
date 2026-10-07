@@ -3,15 +3,43 @@
 import Link from "next/link";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { login } from "@/services/auth.services";
 
 export default function LoginPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Allow login with anything - dummy auth
-    router.push("/dashboard");
+    console.log("Login form submitted, starting API call...", { email });
+    setLoading(true);
+    setError("");
+    try {
+      const res = await login({ usr: email, pwd: password });
+      console.log("Login API success:", res);
+      
+      if (res?.key_details) {
+        localStorage.setItem("apiKey", res.key_details.api_key);
+        localStorage.setItem("apiSecret", res.key_details.api_secret);
+        localStorage.setItem("fullName", res.full_name || "");
+        localStorage.setItem("userEmail", res.user || "");
+        localStorage.setItem("roles", JSON.stringify(res.roles || []));
+        
+        // Notify Navbar of auth state change
+        window.dispatchEvent(new Event("auth-changed"));
+      }
+      
+      router.push("/dashboard");
+    } catch (err: any) {
+      console.error("Login API error:", err);
+      setError(err.message || "Failed to login");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -86,6 +114,8 @@ export default function LoginPage() {
                     type="email"
                     autoComplete="email"
                     required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     placeholder="student@example.com"
                     className="appearance-none block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-slate-900 transition-all duration-200"
                   />
@@ -106,6 +136,8 @@ export default function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
                     required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     className="appearance-none block w-full pl-4 pr-10 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-slate-900 transition-all duration-200"
                   />
@@ -155,12 +187,17 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {error && (
+              <div className="text-red-500 text-sm mt-2">{error}</div>
+            )}
+            
             <div>
               <button
                 type="submit"
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 transform hover:-translate-y-0.5"
+                disabled={loading}
+                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Sign in
+                {loading ? "Signing in..." : "Sign in"}
               </button>
             </div>
             

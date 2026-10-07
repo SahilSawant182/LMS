@@ -12,6 +12,7 @@ import {
   CheckCircle, Search, Trash2, PlusCircle, 
   User, BookOpen, Star, Calendar, Clock, FileText, XCircle, RefreshCw, Edit2
 } from 'lucide-react';
+import Dropdown from '@/components/ui/Dropdown';
 
 export default function CertificateEvaluationsPage() {
   const [activeTab, setActiveTab] = useState<'create' | 'manage'>('create');
@@ -208,16 +209,29 @@ export default function CertificateEvaluationsPage() {
                   <input type="email" name="member" required value={formData.member} onChange={handleInputChange} placeholder="student@example.com" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm" />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                    <BookOpen className="w-4 h-4 text-slate-400" /> Course ID / Name
-                  </label>
-                  <input type="text" name="course" required value={formData.course} onChange={handleInputChange} placeholder="react-basics" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm" />
+                <div className="space-y-2 z-[90]">
+                  <Dropdown
+                    id="course"
+                    label="Course"
+                    value={formData.course}
+                    onChange={(value) => setFormData(prev => ({ ...prev, course: value }))}
+                    endpoint="https://devlms.stridenex.ai/api/method/lms.lms.stride_lms.get_course_dropdown"
+                    placeholder="Select Course"
+                    required
+                    searchable
+                  />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Batch Name</label>
-                  <input type="text" name="batch_name" value={formData.batch_name} onChange={handleInputChange} placeholder="e.g. ml-batch" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm" />
+                <div className="space-y-2 z-[80]">
+                  <Dropdown
+                    id="batch_name"
+                    label="Batch Name"
+                    value={formData.batch_name}
+                    onChange={(value) => setFormData(prev => ({ ...prev, batch_name: value }))}
+                    endpoint="https://devlms.stridenex.ai/api/method/lms.lms.stride_lms.get_batch_dropdown"
+                    placeholder="Select Batch"
+                    searchable
+                  />
                 </div>
 
                 <div className="space-y-2">

@@ -11,9 +11,9 @@ export default function LessonPage() {
   const params = useParams();
   const router = useRouter();
   
-  const courseId = params?.courseId as string;
-  const chapterId = params?.chapterId as string;
-  const lessonId = params?.lessonId as string;
+  const courseId = decodeURIComponent(params?.courseId as string);
+  const chapterId = decodeURIComponent(params?.chapterId as string);
+  const lessonId = decodeURIComponent(params?.lessonId as string);
 
   const [lessonData, setLessonData] = useState<any>(null);
   const [outline, setOutline] = useState<any[]>([]);
@@ -28,7 +28,7 @@ export default function LessonPage() {
       setLoading(true);
       try {
         const [lessonRes, outlineRes, progressRes] = await Promise.allSettled([
-          getLesson({ course: courseId, chapter: chapterId, lesson: lessonId }),
+          getLesson({ course: courseId, chapter: chapterId, name: lessonId }),
           getCourseOutline({ course: courseId }),
           getCourseProgress(courseId)
         ]);
@@ -117,11 +117,11 @@ export default function LessonPage() {
                 </h3>
                 <ul className="space-y-1">
                   {chapter.lessons?.map((l: any, lIndex: number) => {
-                    const isActive = String(lIndex + 1) === lessonId && String(cIndex + 1) === chapterId;
+                    const isActive = l.name === lessonId && chapter.name === chapterId;
                     return (
                       <li key={l.name || lIndex}>
                         <Link 
-                          href={`/course/${courseId}/${cIndex + 1}/${lIndex + 1}`}
+                          href={`/course/${courseId}/${encodeURIComponent(chapter.name)}/${encodeURIComponent(l.name)}`}
                           className={`flex items-start px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group relative ${
                             isActive 
                               ? 'bg-indigo-500/10 text-white font-semibold' 
@@ -149,16 +149,10 @@ export default function LessonPage() {
         <main className="flex-grow overflow-y-auto bg-slate-50 relative flex flex-col">
           
           {/* Header Banner */}
-          <div className="bg-white border-b border-slate-200 px-6 py-4 shadow-sm sticky top-0 z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex flex-col gap-1">
-              <Link href={`/course/${courseId}`} className="inline-flex items-center text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors mb-2">
-                <ArrowLeft className="w-3.5 h-3.5 mr-1" />
-                Back to Course Overview
-              </Link>
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                <span>Chapter {chapterId}</span>
-                <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                <span className="text-indigo-600">Lesson {lessonId}</span>
+          <div className="bg-white border-b border-slate-200 px-8 py-5 shadow-sm sticky top-0 z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-md border border-indigo-100">{chapterId}</span>
               </div>
               <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
                 {lessonData.title || lessonData.lesson_name || lessonData.name || `Lesson ${lessonId}`}
@@ -166,10 +160,10 @@ export default function LessonPage() {
             </div>
             
             <div className="flex items-center gap-3">
-              <button className="px-5 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 hover:border-slate-400 font-semibold text-sm transition-all shadow-sm">
+              <button className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 hover:border-slate-300 font-semibold text-sm transition-all shadow-sm">
                 Previous
               </button>
-              <button className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm transition-all shadow-sm shadow-indigo-200 flex items-center gap-2">
+              <button className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm transition-all shadow-sm shadow-indigo-200 flex items-center gap-2">
                 Next Lesson <ChevronRight className="w-4 h-4" />
               </button>
             </div>

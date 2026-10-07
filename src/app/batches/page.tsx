@@ -11,6 +11,7 @@ export default function BatchesPage() {
   const [batches, setBatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isInstructor, setIsInstructor] = useState(false);
 
   useEffect(() => {
     const fetchBatches = async () => {
@@ -32,6 +33,16 @@ export default function BatchesPage() {
     };
 
     fetchBatches();
+    const checkRoles = () => {
+      try {
+        const rolesStr = localStorage.getItem("roles");
+        if (rolesStr) {
+          const roles = JSON.parse(rolesStr);
+          setIsInstructor(roles.includes("Instructor"));
+        }
+      } catch (e) {}
+    };
+    checkRoles();
   }, []);
 
   const handleDelete = async (batchName: string) => {
@@ -102,15 +113,17 @@ export default function BatchesPage() {
                 <div key={batch.name || idx} className="relative bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md hover:border-indigo-200 transition-all flex flex-col h-full group">
                   
                   {/* Delete Button - Shows on Hover */}
-                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <button 
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(batch.name); }} 
-                      className="bg-red-50 hover:bg-red-100 text-red-600 p-2 rounded-lg transition-colors border border-red-200 shadow-sm flex items-center justify-center"
-                      title="Delete Batch"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {isInstructor && (
+                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                      <button 
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(batch.name); }} 
+                        className="bg-red-50 hover:bg-red-100 text-red-600 p-2 rounded-lg transition-colors border border-red-200 shadow-sm flex items-center justify-center"
+                        title="Delete Batch"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
 
                   <div className="p-5 flex-grow">
                     <div className="flex justify-between items-start mb-4 pr-10">

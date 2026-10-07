@@ -8,7 +8,7 @@ export interface GetCourseDetailsPayload {
 export interface GetLessonPayload {
   course: string;
   chapter: number | string;
-  lesson: number | string;
+  name: number | string;
 }
 
 export interface GetReviewsPayload {

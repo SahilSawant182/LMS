@@ -23,6 +23,7 @@ export default function CourseDetailPage() {
   const [progress, setProgress] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isInstructor, setIsInstructor] = useState(false);
 
   // Curriculum Management State
   const [isAddingChapter, setIsAddingChapter] = useState(false);
@@ -35,6 +36,16 @@ export default function CourseDetailPage() {
   useEffect(() => {
     if (!courseId) return;
     fetchCourseData();
+    const checkRoles = () => {
+      try {
+        const rolesStr = localStorage.getItem("roles");
+        if (rolesStr) {
+          const roles = JSON.parse(rolesStr);
+          setIsInstructor(roles.includes("Instructor"));
+        }
+      } catch (e) {}
+    };
+    checkRoles();
   }, [courseId]);
 
   const fetchCourseData = async () => {
@@ -200,13 +211,15 @@ export default function CourseDetailPage() {
               Back to Courses
             </Link>
             
-            <Link 
-              href={`/course/${courseId}/edit`}
-              className="inline-flex items-center gap-2 text-sm font-semibold text-white bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg backdrop-blur-sm transition-all"
-            >
-              <Edit className="w-4 h-4" />
-              Edit Course
-            </Link>
+            {isInstructor && (
+              <Link 
+                href={`/course/${courseId}/edit`}
+                className="inline-flex items-center gap-2 text-sm font-semibold text-white bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg backdrop-blur-sm transition-all"
+              >
+                <Edit className="w-4 h-4" />
+                Edit Course
+              </Link>
+            )}
           </div>
           <div className="max-w-3xl">
             {details.category && (
@@ -267,17 +280,26 @@ export default function CourseDetailPage() {
                 <PlayCircle className="w-5 h-5 text-indigo-600" />
                 Course Curriculum
               </h2>
-              <div className="flex items-center gap-4">
-                <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded">
-                  {outline.length} Chapters
-                </span>
-                <button
-                  onClick={() => setIsAddingChapter(!isAddingChapter)}
-                  className="text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Chapter
-                </button>
-              </div>
+              {isInstructor && (
+                <div className="flex items-center gap-4">
+                  <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded">
+                    {outline.length} Chapters
+                  </span>
+                  <button
+                    onClick={() => setIsAddingChapter(!isAddingChapter)}
+                    className="text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Chapter
+                  </button>
+                </div>
+              )}
+              {!isInstructor && (
+                <div className="flex items-center gap-4">
+                  <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded">
+                    {outline.length} Chapters
+                  </span>
+                </div>
+              )}
             </div>
 
             {isAddingChapter && (
@@ -324,7 +346,7 @@ export default function CourseDetailPage() {
                                 </span>
                               </div>
                               <Link 
-                                href={`/course/${courseId}/${index + 1}/${lIndex + 1}`}
+                                href={`/course/${courseId}/${encodeURIComponent(chapter.name)}/${encodeURIComponent(lesson.name)}`}
                                 className="flex items-center gap-1 text-indigo-600 text-xs font-bold opacity-0 group-hover/lesson:opacity-100 transition-all -translate-x-2 group-hover/lesson:translate-x-0"
                               >
                                 Start <ChevronRight className="w-3 h-3" />
@@ -337,50 +359,52 @@ export default function CourseDetailPage() {
                       )}
 
                       {/* Add Lesson UI */}
-                      <div className="mt-2 mb-3">
-                        {activeChapterForLesson === chapter.name ? (
-                          <form onSubmit={(e) => handleAddLesson(e, chapter.name)} className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                            <input
-                              type="text"
-                              placeholder="Lesson Title"
-                              value={newLessonTitle}
-                              onChange={(e) => setNewLessonTitle(e.target.value)}
-                              className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:border-indigo-500"
-                              required
-                            />
-                            <textarea
-                              placeholder="Lesson Content (HTML allowed)"
-                              value={newLessonBody}
-                              onChange={(e) => setNewLessonBody(e.target.value)}
-                              className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:border-indigo-500 min-h-[80px]"
-                              required
-                            />
-                            <div className="flex justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setActiveChapterForLesson(null)}
-                                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="submit"
-                                disabled={actionLoading}
-                                className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors flex items-center gap-1 disabled:opacity-50"
-                              >
-                                {actionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save Lesson'}
-                              </button>
-                            </div>
-                          </form>
-                        ) : (
-                          <button
-                            onClick={() => setActiveChapterForLesson(chapter.name)}
-                            className="text-xs font-semibold text-slate-500 hover:text-indigo-600 flex items-center gap-1 transition-colors"
-                          >
-                            <Plus className="w-3.5 h-3.5" /> Add Lesson
-                          </button>
-                        )}
-                      </div>
+                      {isInstructor && (
+                        <div className="mt-2 mb-3">
+                          {activeChapterForLesson === chapter.name ? (
+                            <form onSubmit={(e) => handleAddLesson(e, chapter.name)} className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                              <input
+                                type="text"
+                                placeholder="Lesson Title"
+                                value={newLessonTitle}
+                                onChange={(e) => setNewLessonTitle(e.target.value)}
+                                className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:border-indigo-500"
+                                required
+                              />
+                              <textarea
+                                placeholder="Lesson Content (HTML allowed)"
+                                value={newLessonBody}
+                                onChange={(e) => setNewLessonBody(e.target.value)}
+                                className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:border-indigo-500 min-h-[80px]"
+                                required
+                              />
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveChapterForLesson(null)}
+                                  className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="submit"
+                                  disabled={actionLoading}
+                                  className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors flex items-center gap-1 disabled:opacity-50"
+                                >
+                                  {actionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save Lesson'}
+                                </button>
+                              </div>
+                            </form>
+                          ) : (
+                            <button
+                              onClick={() => setActiveChapterForLesson(chapter.name)}
+                              className="text-xs font-semibold text-slate-500 hover:text-indigo-600 flex items-center gap-1 transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" /> Add Lesson
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -478,12 +502,14 @@ export default function CourseDetailPage() {
                 <button className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-lg shadow-indigo-200 transform hover:-translate-y-0.5 mt-3 flex justify-center items-center gap-2 text-sm">
                   {progress ? 'Continue Learning' : 'Enroll Now'} <ChevronRight className="w-4 h-4" />
                 </button>
-                <Link 
-                  href={`/course/${courseId}/edit`}
-                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-lg transition-all mt-3 flex justify-center items-center gap-2 text-sm border border-slate-200"
-                >
-                  <Edit className="w-4 h-4" /> Manage / Edit Course
-                </Link>
+                {isInstructor && (
+                  <Link 
+                    href={`/course/${courseId}/edit`}
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-lg transition-all mt-3 flex justify-center items-center gap-2 text-sm border border-slate-200"
+                  >
+                    <Edit className="w-4 h-4" /> Manage / Edit Course
+                  </Link>
+                )}
                 
                 {/* Quizzes & Questions moved here from Navbar */}
                 <Link 

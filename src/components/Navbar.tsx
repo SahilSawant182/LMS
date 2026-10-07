@@ -1,8 +1,57 @@
-import React from 'react';
-import { Search, ChevronDown, Menu } from 'lucide-react';
+"use client";
+
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, ChevronDown, Menu, LogOut, User, Bell } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { logout } from '@/services/auth.services';
 
 export default function Navbar() {
+  const router = useRouter();
+  const [userName, setUserName] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const checkAuth = () => {
+    if (typeof window !== "undefined") {
+      const apiKey = localStorage.getItem("apiKey");
+      if (apiKey) {
+        setUserName(localStorage.getItem("fullName") || "User");
+        setUserEmail(localStorage.getItem("userEmail") || "");
+      }
+    }
+  };
+
+  useEffect(() => {
+    checkAuth();
+    window.addEventListener("auth-changed", checkAuth);
+    return () => window.removeEventListener("auth-changed", checkAuth);
+  }, []);
+
+  const handleLogout = async () => {
+    if (window.confirm("Are you sure you want to log out?")) {
+      try {
+        await logout();
+      } catch (err) {
+        console.error("Logout API failed:", err);
+      }
+      localStorage.clear();
+      window.dispatchEvent(new Event("auth-changed"));
+      router.push("/login");
+    }
+  };
+
   return (
     <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm text-gray-800 transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -41,12 +90,61 @@ export default function Navbar() {
             <Link href="/certificates" className="text-gray-600 hover:text-indigo-600 transition-colors">Certificates</Link>
             <Link href="/dashboard" className="text-gray-600 hover:text-indigo-600 transition-colors">My Dashboard</Link>
             <div className="h-6 w-px bg-gray-200 mx-2"></div>
-            <Link href="/signup" className="bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-5 py-2 rounded-full font-semibold hover:shadow-lg hover:shadow-indigo-500/30 transform hover:-translate-y-0.5 transition-all duration-300">
-              Join for Free
-            </Link>
-            <Link href="/login" className="text-red-500 hover:text-red-600 font-semibold transition-colors border border-red-200 px-5 py-2 rounded-full hover:bg-red-50">
-              Log Out
-            </Link>
+            <div className="flex items-center space-x-6 relative">
+              <button className="text-gray-500 hover:text-indigo-600 transition-colors">
+                <Bell className="w-5 h-5" />
+              </button>
+              <div className="relative" ref={dropdownRef}>
+                <button 
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="flex items-center space-x-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-full py-1.5 px-1.5 pr-4 transition-all duration-200"
+                >
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-sm border border-indigo-200">
+                    {(userName || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-sm font-semibold text-gray-700">{userName || 'User'}</span>
+                </button>
+
+                {/* Dropdown Menu */}
+                {isDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50 animate-fade-in-up origin-top-right">
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <p className="text-xs text-gray-500">Signed in as</p>
+                      <p className="text-sm font-semibold text-gray-900 truncate">{userEmail || 'user@example.com'}</p>
+                    </div>
+                    
+                    <div className="py-1 border-b border-gray-100">
+                      <Link href="/profile" className="flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center">
+                          <User className="w-4 h-4 mr-3 text-gray-400" />
+                          Profile
+                        </div>
+                        <ChevronDown className="w-4 h-4 text-gray-400 -rotate-90" />
+                      </Link>
+                      <Link href="/plans" className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                        <svg className="w-4 h-4 mr-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                        Plans
+                      </Link>
+                    </div>
+
+                    <div className="py-1">
+                      <button 
+                        onClick={() => {
+                          setIsDropdownOpen(false);
+                          handleLogout();
+                        }}
+                        className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <LogOut className="w-4 h-4 mr-3" />
+                        Sign out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Mobile menu button */}
