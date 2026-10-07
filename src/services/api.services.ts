@@ -29,7 +29,7 @@ const apiRequest = async (config: AxiosRequestConfig) => {
 
   // Do not attach token headers for login and signup routes
   const isAuthRoute = typeof config.url === 'string' && 
-    (config.url.includes('lms_login.login') || config.url.includes('lms_login.signup'));
+    (config.url.includes('lms_login.login') || config.url.includes('lms_login.signup') || config.url.includes('lms_login.forgot_password'));
 
   if (!isAuthRoute && !headers.Authorization && apiKey && apiSecret) {
     headers.Authorization = `token ${apiKey}:${apiSecret}`;

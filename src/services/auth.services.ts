@@ -11,3 +11,7 @@ export const signup = async (payload: any) => {
 export const logout = async () => {
   return apiService.post("method/lms.lms.lms_login.logout", {});
 };
+
+export const forgotPassword = async (payload: { user: string }) => {
+  return apiService.post("method/lms.lms.lms_login.forgot_password", payload);
+};

@@ -3,16 +3,26 @@
 import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { BookOpen, Trophy, Clock, CheckCircle } from 'lucide-react';
 import { getCourseCompletionData } from '@/services/lms.services';
 import { getImageUrl } from '@/services/api.services';
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [completionData, setCompletionData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const apiKey = localStorage.getItem("apiKey");
+      if (!apiKey) {
+        router.push("/login");
+        return;
+      }
+    }
+
     const fetchCompletionData = async () => {
       setLoading(true);
       try {
@@ -27,7 +37,7 @@ export default function DashboardPage() {
     };
 
     fetchCompletionData();
-  }, []);
+  }, [router]);
 
   if (loading) {
     return (

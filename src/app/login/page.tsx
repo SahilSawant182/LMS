@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { login } from "@/services/auth.services";
+import { createPortal } from "react-dom";
+import { X, Check } from "lucide-react";
+import { login, forgotPassword } from "@/services/auth.services";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,6 +14,33 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordError, setForgotPasswordError] = useState("");
+  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (localStorage.getItem("apiKey")) {
+        router.push("/dashboard");
+      }
+    }
+  }, [router]);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (resendCooldown > 0) {
+      timer = setTimeout(() => {
+        setResendCooldown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [resendCooldown]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +68,28 @@ export default function LoginPage() {
       setError(err.message || "Failed to login");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!forgotPasswordEmail || !/^\S+@\S+\.\S+$/.test(forgotPasswordEmail)) {
+      setForgotPasswordError("Please enter a valid email address.");
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    setForgotPasswordError("");
+    setForgotPasswordSuccess(false);
+
+    try {
+      await forgotPassword({ user: forgotPasswordEmail });
+      
+      setForgotPasswordSuccess(true);
+      setResendCooldown(60);
+    } catch (err: any) {
+      setForgotPasswordError(err?.message || "An error occurred.");
+    } finally {
+      setForgotPasswordLoading(false);
     }
   };
 
@@ -178,12 +229,18 @@ export default function LoginPage() {
               </div>
 
               <div className="text-sm">
-                <a
-                  href="#"
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (email) {
+                      setForgotPasswordEmail(email);
+                    }
+                    setShowForgotPasswordModal(true);
+                  }}
                   className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors"
                 >
                   Forgot your password?
-                </a>
+                </button>
               </div>
             </div>
 
@@ -229,6 +286,96 @@ export default function LoginPage() {
           </form>
         </div>
       </div>
+
+      {typeof document !== "undefined" &&
+        createPortal(
+          showForgotPasswordModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <div
+                className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
+                onClick={() => !forgotPasswordLoading && setShowForgotPasswordModal(false)}
+              />
+              <div className="bg-white w-full max-w-md rounded-2xl shadow-xl relative z-[101] overflow-hidden flex flex-col transition-all">
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-slate-900">Reset Password</h3>
+                  <button
+                    onClick={() => setShowForgotPasswordModal(false)}
+                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    disabled={forgotPasswordLoading}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="p-5">
+                  {forgotPasswordSuccess ? (
+                    <div className="text-center space-y-4">
+                      <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
+                        <Check className="w-6 h-6" />
+                      </div>
+                      <h4 className="text-lg font-semibold text-slate-900">Email Sent!</h4>
+                      <p className="text-slate-600 text-sm">
+                        We've sent a password reset link to <span className="font-semibold">{forgotPasswordEmail}</span>. Please check your inbox.
+                      </p>
+                      {forgotPasswordError && (
+                        <p className="text-red-500 text-sm mt-2">{forgotPasswordError}</p>
+                      )}
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          type="button"
+                          className="flex-1 py-2 px-4 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
+                          onClick={() => setShowForgotPasswordModal(false)}
+                        >
+                          Close
+                        </button>
+                        <button
+                          type="button"
+                          className="flex-1 py-2 px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                          disabled={resendCooldown > 0 || forgotPasswordLoading}
+                          onClick={handleForgotPassword}
+                        >
+                          {forgotPasswordLoading
+                            ? "Sending..."
+                            : resendCooldown > 0
+                            ? `Resend in ${resendCooldown}s`
+                            : "Resend Email"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-slate-600 text-sm">
+                        Enter your email address and we'll send you a link to reset your password.
+                      </p>
+                      <div className="space-y-1">
+                        <label htmlFor="reset-email" className="block text-sm font-medium text-slate-700">Email Address</label>
+                        <input
+                          id="reset-email"
+                          type="email"
+                          className="flex h-10 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          placeholder="you@example.com"
+                          value={forgotPasswordEmail}
+                          onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                        />
+                      </div>
+                      {forgotPasswordError && (
+                        <p className="text-red-500 text-sm">{forgotPasswordError}</p>
+                      )}
+                      <button
+                        type="button"
+                        className="w-full mt-2 py-2 px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                        disabled={forgotPasswordLoading}
+                        onClick={handleForgotPassword}
+                      >
+                        {forgotPasswordLoading ? "Sending..." : "Send Reset Link"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ),
+          document.body
+        )}
     </div>
   );
 }
