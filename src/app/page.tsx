@@ -1,30 +1,10 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
 import CourseSection from '@/components/CourseSection';
 
 export default function Home() {
-  const router = useRouter();
-  const [isChecking, setIsChecking] = useState(true);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const apiKey = localStorage.getItem("apiKey");
-      if (apiKey) {
-        router.push("/dashboard");
-      } else {
-        router.push("/login");
-      }
-    }
-  }, [router]);
-
-  if (isChecking) {
-    return null; // Don't render until redirected
-  }
-
   return (
     <div className="min-h-screen flex flex-col font-sans bg-white">
       <Navbar />
