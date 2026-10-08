@@ -215,7 +215,8 @@ export default function CertificateEvaluationsPage() {
                     label="Course"
                     value={formData.course}
                     onChange={(value) => setFormData(prev => ({ ...prev, course: value }))}
-                    endpoint="https://devlms.stridenex.ai/api/method/lms.lms.stride_lms.get_course_dropdown"
+                    endpoint="https://devlms.stridenex.ai/api/method/lms.lms.master.get_dropdown_options"
+                    params={{ doctype: "LMS Course" }}
                     placeholder="Select Course"
                     required
                     searchable
@@ -228,7 +229,8 @@ export default function CertificateEvaluationsPage() {
                     label="Batch Name"
                     value={formData.batch_name}
                     onChange={(value) => setFormData(prev => ({ ...prev, batch_name: value }))}
-                    endpoint="https://devlms.stridenex.ai/api/method/lms.lms.stride_lms.get_batch_dropdown"
+                    endpoint="https://devlms.stridenex.ai/api/method/lms.lms.master.get_dropdown_options"
+                    params={{ doctype: "LMS Batch" }}
                     placeholder="Select Batch"
                     searchable
                   />

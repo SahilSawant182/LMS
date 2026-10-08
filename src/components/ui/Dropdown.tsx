@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, X, Check, Search, Loader2 } from "lucide-react";
 import axios from "axios";
+import { apiService } from "@/services/api.services";
 
 interface DropdownProps {
   id: string;
@@ -105,30 +106,14 @@ export default function Dropdown({
     setLoading(true);
     setFetchError("");
     try {
-      let responseData;
-      if (endpoint.includes('master.get_master_data')) {
-        const body = {
+      const relEndpoint = endpoint.replace(/^https?:\/\/[^\/]+\/api\//, '');
+      const responseData = await apiService.get(relEndpoint, {
+        params: {
           ...(params || {}),
-          search: searchTxt,
-          page: pageNum
-        };
-        const response = await axios.post(endpoint, body, {
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-          }
-        });
-        responseData = response.data;
-      } else {
-        const response = await axios.get(endpoint, {
-          params: {
-            ...(params || {}),
-            page: pageNum,
-            search: searchTxt
-          }
-        });
-        responseData = response.data;
-      }
+          page: pageNum,
+          search: searchTxt
+        }
+      });
 
       let data = [];
       let nextFlag = false;
@@ -193,7 +178,7 @@ export default function Dropdown({
       }
     } catch (err: any) {
       console.error(`Error fetching ${label || id}:`, err);
-      setFetchError(err?.response?.data?.message || `Failed to load ${label || id}`);
+      setFetchError("Failed to load");
       setOptions([]);
     } finally {
       setLoading(false);
@@ -294,7 +279,7 @@ export default function Dropdown({
       {/* Dropdown trigger button */}
       <div
         onClick={handleClick}
-        className={`w-full min-h-10 px-3 py-2 rounded-md border ${error ? "border-red-500" : fetchError ? "border-red-500" : "border-slate-200"
+        className={`w-full min-h-9 px-3 py-1.5 rounded-md border ${error ? "border-red-500" : fetchError ? "border-red-500" : "border-slate-200"
           } bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-accent focus:border-indigo-600 cursor-pointer flex flex-wrap items-center gap-1 relative hover:border-slate-300 transition-colors ${disabled ? "bg-slate-50 cursor-not-allowed opacity-60" : ""
           }`}
       >

@@ -68,6 +68,43 @@ export const getCourses = async (): Promise<Course[]> => {
   });
 };
 
+export const getMasterData = async (doctype: string, additionalPayload: any = {}) => {
+  try {
+    const payload = {
+      doctype,
+      ...additionalPayload
+    };
+    const response = await apiService.get(
+      "method/lms.lms.master.get_dropdown_options",
+      { params: payload }
+    );
+    let arr: any[] = [];
+    if (response?.data && response?.data?.data && Array.isArray(response?.data?.data)) {
+      arr = response.data.data;
+    } else if (response?.data && Array.isArray(response?.data)) {
+      arr = response.data;
+    } else if (response?.message && Array.isArray(response?.message)) {
+      arr = response.message;
+    } else if (response?.message && response?.message?.data && Array.isArray(response?.message?.data)) {
+      arr = response.message.data;
+    }
+    return arr.map((item: any) =>
+      typeof item === "string" ? item : item.name || item.id || item.title || item.course || item.category || ""
+    );
+  } catch (error) {
+    console.error(`Error fetching master data for ${doctype}:`, error);
+    return [];
+  }
+};
+
+export const enrollStudent = async (payload: { member: string, batch: string }) => {
+  return apiService.post("method/lms.lms.doctype.lms_batch_enrollment.lms_batch_enrollment.enroll_student", payload);
+};
+
+export const getEnrolledStudents = async (payload: { batch: string }) => {
+  return apiService.get("method/lms.lms.doctype.lms_batch_enrollment.lms_batch_enrollment.get_enrolled_students", { params: payload });
+};
+
 export const getCourseCompletionData = async (payload?: any) => {
   // If payload is required, you can change the parameter and use it in params or data depending on method.
   // Assuming GET requires params, but standard frappe utils often use GET with params.
@@ -143,9 +180,9 @@ export const getReviews = async (payload: GetReviewsPayload) => {
 };
 
 export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
-  const nameParam = payload.name || payload.batch;
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_batch`, { 
-    params: { name: nameParam },
+  const nameParam = payload.batch || payload.name;
+  return apiService.get(`method/lms.lms.stride_lms.get_batch_details`, { 
+    params: { batch: nameParam },
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }
@@ -163,9 +200,19 @@ export const getBatchCourses = async (payload: GetBatchCoursesPayload) => {
 
 export const getBatches = async () => {
   return apiService.get(`method/${API_METHOD_PREFIX}.get_batches`, {
-    headers: {
-      'Authorization': `token ${API_TOKEN}`
-    }
+    headers: { 'Authorization': `token ${API_TOKEN}` }
+  });
+};
+
+export const createBatch = async (payload: any) => {
+  return apiService.post(`method/lms.lms.stride_lms.create_batch`, payload, {
+    headers: { 'Authorization': `token ${API_TOKEN}` }
+  });
+};
+
+export const updateBatch = async (payload: any) => {
+  return apiService.post(`method/lms.lms.stride_lms.update_batch`, payload, {
+    headers: { 'Authorization': `token ${API_TOKEN}` }
   });
 };
 
@@ -461,6 +508,15 @@ export const deleteAssignment = async (name: string) => {
 
 export const getAssignmentSubmissions = async () => {
   return apiService.get(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignment_submissions`, {
+    headers: {
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
+};
+
+export const getBatchFeedback = async (batch: string) => {
+  return apiService.get(`method/lms.lms.doctype.lms_batch_feedback.lms_batch_feedback.get_batch_feedback`, {
+    params: { batch },
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }

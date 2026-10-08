@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { Users, Calendar, Clock, ArrowRight, Search, Trash2 } from 'lucide-react';
+import { Users, Calendar, Clock, ArrowRight, Search, Trash2, Plus, Edit } from 'lucide-react';
 import { getBatches, deleteBatch } from '@/services/lms.services';
 import { formatDate } from '@/utils/formatters';
 
@@ -91,11 +91,18 @@ export default function BatchesPage() {
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full -mt-12 relative z-20">
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 md:p-8 mb-8">
           
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
             <h2 className="text-xl font-bold text-slate-900">All Available Batches</h2>
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-              <input type="text" placeholder="Search batches..." className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-full sm:w-64" />
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                <input type="text" placeholder="Search batches..." className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-full sm:w-64" />
+              </div>
+              {isInstructor && (
+                <Link href="/batch/create" className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition-colors shadow-sm whitespace-nowrap">
+                  <Plus className="w-4 h-4" /> Create
+                </Link>
+              )}
             </div>
           </div>
 
@@ -112,9 +119,17 @@ export default function BatchesPage() {
               {batches.map((batch: any, idx: number) => (
                 <div key={batch.name || idx} className="relative bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md hover:border-indigo-200 transition-all flex flex-col h-full group">
                   
-                  {/* Delete Button - Shows on Hover */}
+                  {/* Actions - Shows on Hover */}
                   {isInstructor && (
-                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex gap-2">
+                      <Link 
+                        href={`/batch/${batch.name}/edit`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 p-2 rounded-lg transition-colors border border-indigo-200 shadow-sm flex items-center justify-center"
+                        title="Edit Batch"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Link>
                       <button 
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(batch.name); }} 
                         className="bg-red-50 hover:bg-red-100 text-red-600 p-2 rounded-lg transition-colors border border-red-200 shadow-sm flex items-center justify-center"
