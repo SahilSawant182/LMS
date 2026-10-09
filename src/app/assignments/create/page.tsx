@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createAssignment, getCourses } from '@/services/lms.services';
 import { ArrowLeft, BookOpen, Save, CheckCircle } from 'lucide-react';
 
-export default function CreateAssignmentPage() {
+function CreateAssignmentForm() {
   const router = useRouter();
   const [courses, setCourses] = useState<any[]>([]);
   
@@ -269,5 +269,13 @@ export default function CreateAssignmentPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function CreateAssignmentPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex justify-center items-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <CreateAssignmentForm />
+    </Suspense>
   );
 }

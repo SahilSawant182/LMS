@@ -93,6 +93,7 @@ export default function Navbar() {
 
           {/* Right side: Links and Auth */}
           <div className="hidden lg:flex items-center space-x-4 text-sm font-semibold whitespace-nowrap flex-shrink-0">
+            <Link href="/programs" className="text-gray-600 hover:text-indigo-600 transition-colors">Programs</Link>
             <Link href="/batches" className="text-gray-600 hover:text-indigo-600 transition-colors">Batches</Link>
             <Link href="/certificates" className="text-gray-600 hover:text-indigo-600 transition-colors">Certificates</Link>
             <Link href="/dashboard" className="text-gray-600 hover:text-indigo-600 transition-colors">My Dashboard</Link>
@@ -195,6 +196,7 @@ export default function Navbar() {
              </div>
           </div>
           <div className="px-4 py-2 space-y-1">
+            <Link href="/programs" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50">Programs</Link>
             <Link href="/batches" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50">Batches</Link>
             <Link href="/certificates" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50">Certificates</Link>
             <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50">My Dashboard</Link>

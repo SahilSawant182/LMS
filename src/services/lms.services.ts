@@ -514,10 +514,90 @@ export const getAssignmentSubmissions = async () => {
   });
 };
 
+
 export const getBatchFeedback = async (batch: string) => {
   return apiService.get(`method/lms.lms.doctype.lms_batch_feedback.lms_batch_feedback.get_batch_feedback`, {
     params: { batch },
     headers: {
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
+};
+
+
+
+
+
+
+
+//Programs
+
+export interface ProgramCourse {
+  name?: string;
+  course: string;
+  course_title: string;
+  idx?: number;
+}
+
+export interface ProgramMember {
+  name?: string;
+  member: string;
+  full_name?: string;
+  progress?: number;
+  idx?: number;
+}
+
+export interface Program {
+  name?: string;
+  title: string;
+  published: number;
+  enforce_course_order: number;
+  course_count: number;
+  member_count: number;
+  doctype?: string;
+  image?: string | null;
+  short_introduction?: string | null;
+  description?: string | null;
+  program_courses?: ProgramCourse[];
+  program_members?: ProgramMember[];
+}
+
+export const getProgramList = async (): Promise<Program[]> => {
+  return apiService.get(`method/lms.lms.doctype.lms_program.lms_program.get_program_list`, {
+    headers: { 'Authorization': `token ${API_TOKEN}` }
+  });
+};
+
+export const getProgramDetail = async (program_title: string): Promise<Program> => {
+  return apiService.get(`method/lms.lms.doctype.lms_program.lms_program.get_program_detail`, {
+    params: { program_title },
+    headers: { 'Authorization': `token ${API_TOKEN}` }
+  });
+};
+
+export const createProgram = async (data: Partial<Program>) => {
+  return apiService.post(`method/lms.lms.doctype.lms_program.lms_program.create_program`, data, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
+};
+export const updateProgram = async (data: Partial<Program> & { program_title?: string }) => {
+  return apiService.post(`method/lms.lms.doctype.lms_program.lms_program.update_program`, data, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `token ${API_TOKEN}`
+    }
+  });
+};
+
+export const deleteProgram = async (name: string) => {
+  return apiService.post(`method/lms.lms.doctype.lms_program.lms_program.delete_program`, {
+    program_title: name
+  }, {
+    headers: {
+      'Content-Type': 'application/json',
       'Authorization': `token ${API_TOKEN}`
     }
   });
