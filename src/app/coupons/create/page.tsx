@@ -155,12 +155,47 @@ export default function CreateCouponPage() {
       }, 1800);
     } catch (err: any) {
       console.error('Failed to create coupon:', err);
-      setError(
-        err?.response?.data?.message ||
-          err?.response?.data?._server_messages ||
-          err?.message ||
-          'Failed to create coupon. Please check your inputs and instructor permissions.'
-      );
+
+      let cleanMsg = '';
+      if (err?.response?.data?._server_messages) {
+        try {
+          const parsed = typeof err.response.data._server_messages === 'string'
+            ? JSON.parse(err.response.data._server_messages)
+            : err.response.data._server_messages;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const item = typeof parsed[0] === 'string' ? JSON.parse(parsed[0]) : parsed[0];
+            if (item?.message) {
+              cleanMsg = String(item.message).replace(/<[^>]*>?/gm, '').trim();
+            }
+          }
+        } catch {}
+      }
+
+      if (!cleanMsg && err?.response?.data?.message) {
+        cleanMsg = typeof err.response.data.message === 'string'
+          ? err.response.data.message
+          : err.response.data.message?.message || '';
+      }
+
+      if (!cleanMsg && err?.message && typeof err.message === 'string') {
+        cleanMsg = err.message;
+      }
+
+      // Filter out technical server internals, traceback, or raw JSON
+      if (
+        !cleanMsg ||
+        cleanMsg.includes('{') ||
+        cleanMsg.includes('[') ||
+        cleanMsg.includes('Unsupported fields') ||
+        cleanMsg.includes('__frappe_exc_id') ||
+        cleanMsg.includes('Traceback') ||
+        cleanMsg.includes('raise_exception') ||
+        cleanMsg.length > 150
+      ) {
+        cleanMsg = 'Please verify coupon details and ensure you have instructor permissions.';
+      }
+
+      setError(cleanMsg);
     } finally {
       setIsSubmitting(false);
     }

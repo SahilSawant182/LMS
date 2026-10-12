@@ -843,15 +843,23 @@ export const getLMSCoupon = async (name: string): Promise<LMSCoupon> => {
 };
 
 export const createLMSCoupon = async (payload: CreateLMSCouponPayload) => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
   return apiService.post(
     "method/lms.lms.doctype.lms_coupon.lms_coupon.create_lms_coupon",
     payload,
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `token ${API_TOKEN}`,
-      },
-    }
+    { headers }
   );
 };
 
