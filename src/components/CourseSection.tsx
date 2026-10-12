@@ -117,6 +117,7 @@ export default function CourseSection() {
                     status={course.status || undefined}
                     cardGradient={course.card_gradient || undefined}
                     description={course.short_introduction || course.description || undefined}
+                    isEnrolled={Boolean(course.is_enrolled)}
                     price={
                       course.is_enrolled
                         ? 'Enrolled'

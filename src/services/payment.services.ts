@@ -172,14 +172,82 @@ export const getCoursesWithEnrollment = async (): Promise<CourseWithEnrollment[]
   const res = await apiService.get(`${METHOD_PREFIX}.get_courses_with_enrollment`, {
     headers: authHeaders(),
   });
-  const data = extractData<CourseWithEnrollment[]>(res);
-  return Array.isArray(data) ? data : [];
+  const data = extractData<any>(res);
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.courses)) return data.courses;
+  return [];
 };
 
 export const getBatchesWithEnrollment = async (): Promise<BatchWithEnrollment[]> => {
   const res = await apiService.get(`${METHOD_PREFIX}.get_batches_with_enrollment`, {
     headers: authHeaders(),
   });
-  const data = extractData<BatchWithEnrollment[]>(res);
-  return Array.isArray(data) ? data : [];
+  const data = extractData<any>(res);
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.batches)) return data.batches;
+  return [];
+};
+
+export interface StudentDashboardData {
+  courses: Array<{
+    enrollment_id: string;
+    course: string;
+    course_title: string;
+    title: string;
+    image: string | null;
+    short_introduction?: string;
+    category?: string;
+    progress: number;
+    completed_lessons: number;
+    total_lessons: number;
+    current_lesson?: string;
+    enrollment_from_batch?: string;
+    instructors: any[];
+    enrolled_on: string;
+    is_enrolled: boolean;
+    is_paid: boolean;
+  }>;
+  batches: Array<{
+    enrollment_id: string;
+    batch: string;
+    title: string;
+    description?: string;
+    start_date?: string;
+    end_date?: string;
+    start_time?: string;
+    end_time?: string;
+    medium?: string;
+    courses: string[];
+    courses_count: number;
+    instructors: any[];
+    enrolled_on: string;
+    is_enrolled: boolean;
+  }>;
+  programs: Array<{
+    membership_id: string;
+    program: string;
+    title: string;
+    progress: number;
+    courses_count: number;
+    enrolled_on: string;
+    is_enrolled: boolean;
+  }>;
+  stats: {
+    enrolled_courses: number;
+    completed_courses: number;
+    enrolled_batches: number;
+    enrolled_programs: number;
+    certificates_earned: number;
+  };
+}
+
+/**
+ * 9) Student Dashboard
+ * Endpoint: GET /api/method/lms.lms.stride_lms.get_student_dashboard
+ */
+export const getStudentDashboard = async (): Promise<StudentDashboardData> => {
+  const res = await apiService.get(`${METHOD_PREFIX}.get_student_dashboard`, {
+    headers: authHeaders(),
+  });
+  return extractData<StudentDashboardData>(res);
 };
