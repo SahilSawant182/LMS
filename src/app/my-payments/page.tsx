@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CreditCard,
   Receipt,
@@ -23,26 +24,42 @@ import { getMyPayments } from "@/services/payment.services";
 import { PaymentHistoryItem } from "@/types/payment.types";
 
 export default function MyPaymentsPage() {
+  const router = useRouter();
   const [payments, setPayments] = useState<PaymentHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const apiKey = localStorage.getItem("apiKey");
+      if (!apiKey) {
+        router.push("/login?redirect=/my-payments");
+        return;
+      }
+    }
+
     const fetchPayments = async () => {
       setLoading(true);
       setError(null);
       try {
         const res = await getMyPayments({ limit: 50, offset: 0 });
-        const list = Array.isArray(res?.payments)
-          ? res.payments
-          : Array.isArray((res as any)?.data?.payments)
-          ? (res as any).data.payments
-          : Array.isArray((res as any)?.message?.payments)
-          ? (res as any).message.payments
-          : Array.isArray(res)
-          ? (res as any)
-          : [];
+        let list: PaymentHistoryItem[] = [];
+        if (Array.isArray(res)) {
+          list = res;
+        } else if (res && typeof res === "object") {
+          if (Array.isArray(res.payments)) {
+            list = res.payments;
+          } else if (Array.isArray((res as any)?.data?.payments)) {
+            list = (res as any).data.payments;
+          } else if (Array.isArray((res as any)?.message?.data?.payments)) {
+            list = (res as any).message.data.payments;
+          } else if (Array.isArray((res as any)?.message?.payments)) {
+            list = (res as any).message.payments;
+          } else if (Array.isArray((res as any)?.data)) {
+            list = (res as any).data;
+          }
+        }
         setPayments(list);
       } catch (err: any) {
         console.error("Failed to load payment history:", err);
@@ -53,7 +70,7 @@ export default function MyPaymentsPage() {
     };
 
     fetchPayments();
-  }, []);
+  }, [router]);
 
   // Filtered payments by search query
   const filtered = payments.filter((p) => {
