@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Menu, LogOut, User, Bell } from 'lucide-react';
+import { Search, ChevronDown, Menu, LogOut, User, Bell, Receipt } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/services/auth.services';
@@ -144,6 +144,10 @@ export default function Navbar() {
                           </svg>
                           Plans
                         </Link>
+                        <Link href="/my-payments" className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                          <Receipt className="w-4 h-4 mr-3 text-gray-400" />
+                          My Payments
+                        </Link>
                       </div>
 
                       <div className="py-1">
@@ -224,6 +228,7 @@ export default function Navbar() {
                 <div className="mt-3 px-2 space-y-1">
                   <Link href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50">Profile</Link>
                   <Link href="/plans" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50">Plans</Link>
+                  <Link href="/my-payments" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50">My Payments</Link>
                   <button 
                     onClick={() => {
                       setIsMobileMenuOpen(false);

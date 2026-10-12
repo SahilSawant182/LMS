@@ -1,20 +1,23 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { getBatchDetails, getBatchCourses, getBatchFeedback, enrollStudent, getEnrolledStudents } from '@/services/lms.services';
+import { getBatchWithEnrollment, enrollInBatch } from '@/services/payment.services';
 import { getImageUrl } from '@/services/api.services';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { BookOpen, Users, Calendar, ArrowLeft, Clock, Tag, User, Star, MessageSquare, Quote, Award, FileText, Video, PlayCircle, ClipboardList } from 'lucide-react';
+import { BookOpen, Users, Calendar, ArrowLeft, Clock, Tag, User, Star, MessageSquare, Quote, Award, FileText, Video, PlayCircle, ClipboardList, CheckCircle2 } from 'lucide-react';
 import CourseCard from '@/components/CourseCard';
 import { formatDate } from '@/utils/formatters';
 
 export default function BatchDetailsPage() {
   const params = useParams();
+  const router = useRouter();
   const batchId = params?.batchId as string;
 
   const [batchData, setBatchData] = useState<any>(null);
+  const [enrollmentData, setEnrollmentData] = useState<any>(null);
   const [batchCourses, setBatchCourses] = useState<any[]>([]);
   const [batchFeedback, setBatchFeedback] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,11 +53,20 @@ export default function BatchDetailsPage() {
     const fetchBatch = async () => {
       setLoading(true);
       try {
-        const [detailsRes, coursesRes, feedbackRes] = await Promise.allSettled([
+        const [detailsRes, coursesRes, feedbackRes, enrollRes] = await Promise.allSettled([
           getBatchDetails({ batch: batchId }),
           getBatchCourses({ batch: batchId }),
-          getBatchFeedback(batchId)
+          getBatchFeedback(batchId),
+          getBatchWithEnrollment(batchId)
         ]);
+
+        if (enrollRes.status === 'fulfilled' && enrollRes.value) {
+          const enrollInfo = enrollRes.value;
+          setEnrollmentData(enrollInfo);
+          if (enrollInfo.is_enrolled) {
+            setEnrollSuccess(true);
+          }
+        }
 
         if (detailsRes.status === 'fulfilled') {
           const rawData = detailsRes.value;
@@ -104,24 +116,21 @@ export default function BatchDetailsPage() {
   const handleEnroll = async () => {
     if (!userEmail) {
       alert("You must be logged in to enroll.");
+      const redirectUrl = `/batch/${batchId}`;
+      router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
       return;
     }
     setEnrolling(true);
     try {
-      const response = await enrollStudent({ member: userEmail, batch: batchId });
-      
-      // Handle Frappe returning 200 OK but with a success: false payload
-      if (response && typeof response === 'object') {
-        if (response.success === false) {
-          throw new Error(typeof response.message === 'string' ? response.message : JSON.stringify(response.message) || "Failed to enroll");
-        }
-        if (response.message && typeof response.message === 'object' && response.message.success === false) {
-          throw new Error(typeof response.message.message === 'string' ? response.message.message : "Failed to enroll");
-        }
+      try {
+        await enrollInBatch({ batch: batchId });
+      } catch (primaryErr) {
+        // Fallback to legacy enrollStudent
+        await enrollStudent({ member: userEmail, batch: batchId });
       }
 
       setEnrollSuccess(true);
-      alert("Successfully enrolled!");
+      alert("Successfully enrolled in batch!");
     } catch (err: any) {
       console.error(err);
       let errorMsg = "Failed to enroll";
@@ -138,20 +147,13 @@ export default function BatchDetailsPage() {
           try {
             const serverMsgs = JSON.parse(data._server_messages);
             if (Array.isArray(serverMsgs) && serverMsgs.length > 0) {
-              const parsedMsg = JSON.parse(serverMsgs[0]);
-              errorMsg = parsedMsg.message || errorMsg;
+              const parsed = JSON.parse(serverMsgs[0]);
+              errorMsg = parsed.message || errorMsg;
             }
           } catch (e) {}
         }
-      } else if (err instanceof Error) {
+      } else if (err?.message) {
         errorMsg = err.message;
-      } else if (typeof err === 'string') {
-        errorMsg = err;
-      }
-      
-      // Safety net to absolutely prevent [object Object]
-      if (typeof errorMsg === 'object') {
-        errorMsg = JSON.stringify(errorMsg);
       }
       
       alert(errorMsg);
@@ -185,6 +187,21 @@ export default function BatchDetailsPage() {
       </div>
     );
   }
+
+  const isEnrolled = enrollSuccess || Boolean(enrollmentData?.is_enrolled);
+  const isPaid = enrollmentData?.is_paid !== undefined
+    ? Boolean(enrollmentData.is_paid)
+    : Boolean(batchData?.paid_batch && Number(batchData?.amount) > 0);
+  const isSoldOut = Boolean(
+    enrollmentData?.is_sold_out ||
+    batchData?.is_sold_out ||
+    (batchData?.seats_left !== undefined && Number(batchData.seats_left) <= 0 && Number(batchData?.seat_count) > 0) ||
+    (batchData?.enrollment?.seat_count && Number(batchData.enrollment.total_enrolled) >= Number(batchData.enrollment.seat_count))
+  );
+  const batchAmount = enrollmentData?.amount !== undefined ? Number(enrollmentData.amount) : Number(batchData?.amount || 0);
+  const currencySymbol = (enrollmentData?.currency === "INR" || batchData?.currency === "INR")
+    ? "₹"
+    : (enrollmentData?.currency || batchData?.currency || "₹");
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
@@ -288,21 +305,43 @@ export default function BatchDetailsPage() {
                   </div>
                 )}
               </div>
-              {isStudent && (
-                <div className="mt-8">
+              {/* Batch Action Button */}
+              <div className="mt-8">
+                {isEnrolled ? (
                   <button
-                    onClick={handleEnroll}
-                    disabled={enrolling || enrollSuccess}
-                    className={`px-8 py-3 rounded-lg font-bold shadow-lg transition-all ${
-                      enrollSuccess 
-                        ? "bg-emerald-500 text-white cursor-default" 
-                        : "bg-indigo-500 hover:bg-indigo-400 text-white active:scale-95"
+                    onClick={() => {
+                      const elem = document.getElementById("batch-courses");
+                      if (elem) elem.scrollIntoView({ behavior: "smooth" });
+                    }}
+                    className="px-8 py-3.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95 text-sm"
+                  >
+                    <CheckCircle2 className="w-5 h-5" /> Enrolled • View Cohort Courses
+                  </button>
+                ) : isPaid ? (
+                  <button
+                    onClick={() => {
+                      if (isSoldOut) return;
+                      router.push(`/checkout?item_type=batch&item_id=${encodeURIComponent(batchId)}`);
+                    }}
+                    disabled={isSoldOut}
+                    className={`px-8 py-3.5 rounded-xl font-bold shadow-lg transition-all text-sm ${
+                      isSoldOut
+                        ? "bg-slate-700 text-slate-400 cursor-not-allowed border border-slate-600"
+                        : "bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white active:scale-95 cursor-pointer shadow-indigo-500/20"
                     }`}
                   >
-                    {enrolling ? "Enrolling..." : enrollSuccess ? "Successfully Enrolled!" : "Enroll Now"}
+                    {isSoldOut ? "Batch Full / Sold Out" : `Enroll Now for ${currencySymbol} ${batchAmount.toLocaleString("en-IN")}`}
                   </button>
-                </div>
-              )}
+                ) : (
+                  <button
+                    onClick={handleEnroll}
+                    disabled={enrolling}
+                    className="px-8 py-3.5 rounded-xl font-bold shadow-lg bg-indigo-500 hover:bg-indigo-400 text-white transition-all active:scale-95 disabled:opacity-50 cursor-pointer text-sm"
+                  >
+                    {enrolling ? "Enrolling..." : "Enroll for Free"}
+                  </button>
+                )}
+              </div>
             </div>
 
             {batchData.instructors && batchData.instructors.length > 0 && (
@@ -394,7 +433,7 @@ export default function BatchDetailsPage() {
           </section>
         )}
 
-        <section className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-100 mb-8">
+        <section id="batch-courses" className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-100 mb-8">
           <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
             <BookOpen className="w-5 h-5 text-indigo-600" />
             Courses in this Batch

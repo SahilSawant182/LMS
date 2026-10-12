@@ -621,3 +621,6 @@ export const getCourseProgressFiltered = async (filters: { name?: string, member
     headers: { 'Authorization': `token ${API_TOKEN}` }
   });
 };
+
+export * from './payment.services';
+
