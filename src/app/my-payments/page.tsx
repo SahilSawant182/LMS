@@ -34,7 +34,15 @@ export default function MyPaymentsPage() {
       setError(null);
       try {
         const res = await getMyPayments({ limit: 50, offset: 0 });
-        const list = Array.isArray(res?.payments) ? res.payments : [];
+        const list = Array.isArray(res?.payments)
+          ? res.payments
+          : Array.isArray((res as any)?.data?.payments)
+          ? (res as any).data.payments
+          : Array.isArray((res as any)?.message?.payments)
+          ? (res as any).message.payments
+          : Array.isArray(res)
+          ? (res as any)
+          : [];
         setPayments(list);
       } catch (err: any) {
         console.error("Failed to load payment history:", err);
