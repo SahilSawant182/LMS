@@ -7,7 +7,7 @@ import { getCourseWithEnrollment } from '@/services/payment.services';
 import { getImageUrl } from '@/services/api.services';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { 
+import {
   PlayCircle, Clock, BookOpen, Users, Award,
   Globe, Tags, ChevronRight, Star, CheckCircle2,
   BookMarked, ArrowLeft, Edit, Plus, Loader2, FileText, CheckCircle, Lock
@@ -49,7 +49,7 @@ export default function CourseDetailPage() {
           const roles = JSON.parse(rolesStr);
           setIsInstructor(roles.includes("Instructor"));
         }
-      } catch (e) {}
+      } catch (e) { }
     };
     checkRoles();
   }, [courseId]);
@@ -93,20 +93,20 @@ export default function CourseDetailPage() {
       let lessonsArray: any[] = [];
       if (lessonsRes.status === 'fulfilled') {
         const rawLessons = lessonsRes.value;
-        const unwrapped = Array.isArray(rawLessons) 
-          ? rawLessons 
+        const unwrapped = Array.isArray(rawLessons)
+          ? rawLessons
           : (rawLessons?.message?.data || rawLessons?.data?.message || rawLessons?.data || rawLessons?.message || []);
         lessonsArray = Array.isArray(unwrapped) ? unwrapped : [];
       }
 
       if (outlineRes.status === 'fulfilled') {
         const rawOutline = outlineRes.value;
-        const outlineArray = Array.isArray(rawOutline) 
-          ? rawOutline 
+        const outlineArray = Array.isArray(rawOutline)
+          ? rawOutline
           : (rawOutline?.message?.data || rawOutline?.data?.message || rawOutline?.data || rawOutline?.message || []);
-        
+
         const safeOutline = Array.isArray(outlineArray) ? outlineArray : [];
-        
+
         const enrollLessonsMap = new Map<string, any>();
         if (enrollRes.status === 'fulfilled' && enrollRes.value) {
           const eChapters = (enrollRes.value as any).chapters || [];
@@ -135,7 +135,7 @@ export default function CourseDetailPage() {
               };
             })
         }));
-        
+
         setOutline(mergedOutline);
       }
 
@@ -170,7 +170,7 @@ export default function CourseDetailPage() {
             ...a,
             _is_submitted: subList.some((s: any) => s.assignment === a.name || s.assignment_title === a.title)
           }));
-        
+
         setAssignments(courseAssignments);
       }
 
@@ -288,7 +288,7 @@ export default function CourseDetailPage() {
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
       <Navbar />
-      
+
       {/* Modern Hero Section */}
       <div className="relative overflow-hidden bg-slate-900 text-white pt-10 pb-20">
         {/* Decorative background elements */}
@@ -299,16 +299,16 @@ export default function CourseDetailPage() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="mb-6 flex items-center justify-between">
-            <Link 
-              href="/" 
+            <Link
+              href="/"
               className="inline-flex items-center gap-2 text-sm font-medium text-indigo-200 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Courses
             </Link>
-            
+
             {isInstructor && (
-              <Link 
+              <Link
                 href={`/course/${courseId}/edit`}
                 className="inline-flex items-center gap-2 text-sm font-semibold text-white bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg backdrop-blur-sm transition-all"
               >
@@ -329,7 +329,7 @@ export default function CourseDetailPage() {
             <p className="text-base md:text-lg text-indigo-100/80 mb-5 max-w-2xl font-light">
               {details.short_introduction || 'Learn the skills you need for your career with comprehensive lessons and expert guidance.'}
             </p>
-            
+
             <div className="flex flex-wrap items-center gap-3 text-sm font-medium">
               {details.level && (
                 <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded border border-white/10">
@@ -353,19 +353,19 @@ export default function CourseDetailPage() {
       </div>
 
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col lg:flex-row gap-8 w-full -mt-10 relative z-20">
-        
+
         {/* Left Column - Main Content */}
         <div className="lg:w-2/3 space-y-8">
-          
+
           {/* About Section */}
           <section className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-100">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-900">
               <BookMarked className="w-5 h-5 text-indigo-600" />
               About this course
             </h2>
-            <div 
-              className="prose prose-indigo max-w-none text-sm text-slate-600 leading-relaxed" 
-              dangerouslySetInnerHTML={{ __html: details.about || details.description || '<p>No description available.</p>' }} 
+            <div
+              className="prose prose-indigo max-w-none text-sm text-slate-600 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: details.about || details.description || '<p>No description available.</p>' }}
             />
           </section>
 
@@ -463,7 +463,7 @@ export default function CourseDetailPage() {
                                 </div>
 
                                 {isLocked ? (
-                                  <button 
+                                  <button
                                     onClick={() => router.push(`/checkout?item_type=course&item_id=${encodeURIComponent(courseId)}`)}
                                     className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 text-xs font-bold transition-all px-2.5 py-1 rounded-md hover:bg-indigo-50 cursor-pointer"
                                     title="Unlock course to access this lesson"
@@ -471,7 +471,7 @@ export default function CourseDetailPage() {
                                     <Lock className="w-3 h-3" /> Unlock
                                   </button>
                                 ) : (
-                                  <Link 
+                                  <Link
                                     href={`/course/${courseId}/${encodeURIComponent(chapter.name)}/${encodeURIComponent(lesson.name)}`}
                                     className="flex items-center gap-1 text-indigo-600 text-xs font-bold opacity-0 group-hover/lesson:opacity-100 transition-all -translate-x-2 group-hover/lesson:translate-x-0"
                                   >
@@ -562,8 +562,8 @@ export default function CourseDetailPage() {
                 {assignments.map((assignment: any) => {
                   const isSubmitted = (assignment.status && assignment.status !== 'Pending') || assignment.submission_count > 0 || assignment._is_submitted;
                   return (
-                    <div 
-                      key={assignment.name} 
+                    <div
+                      key={assignment.name}
                       onClick={() => router.push(`/assignments/${assignment.name}`)}
                       className="group bg-white border border-slate-200 rounded-xl p-5 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer relative overflow-hidden"
                     >
@@ -586,15 +586,15 @@ export default function CourseDetailPage() {
                           <div className="flex flex-col sm:items-end">
                             <span className="text-xs text-slate-400 font-medium">{isInstructor ? 'Action' : 'Status'}</span>
                             {isInstructor ? (
-                                <span className="text-sm font-medium flex items-center gap-1 text-indigo-600 mt-1">
-                                  <Users className="w-3.5 h-3.5" />
-                                  View Submissions
-                                </span>
+                              <span className="text-sm font-medium flex items-center gap-1 text-indigo-600 mt-1">
+                                <Users className="w-3.5 h-3.5" />
+                                View Submissions
+                              </span>
                             ) : (
-                               <span className={`text-sm font-medium flex items-center gap-1 mt-1 ${isSubmitted ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                 {isSubmitted ? <CheckCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                                 {isSubmitted ? 'Submitted' : 'Pending'}
-                               </span>
+                              <span className={`text-sm font-medium flex items-center gap-1 mt-1 ${isSubmitted ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                {isSubmitted ? <CheckCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                                {isSubmitted ? 'Submitted' : 'Pending'}
+                              </span>
                             )}
                           </div>
                           <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all" />
@@ -618,7 +618,7 @@ export default function CourseDetailPage() {
         <div className="lg:w-1/3">
           <div className="sticky top-6 bg-white/80 backdrop-blur-xl border border-slate-200/60 rounded-xl p-1 shadow-lg shadow-indigo-900/5">
             <div className="bg-white rounded-lg p-5 md:p-6">
-              
+
               {/* Course Thumbnail */}
               {details.image ? (
                 <div className="w-full h-40 rounded-lg overflow-hidden mb-5 relative shadow-inner">
@@ -638,17 +638,25 @@ export default function CourseDetailPage() {
 
               {/* Price & CTA */}
               <div className="mb-6">
-                <div className="flex items-end gap-2 mb-2">
-                  <span className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                    {isFree ? 'Free' : `${currencySymbol} ${currentPrice.toLocaleString("en-IN")}`}
-                  </span>
-                  {!isFree && (
-                    <span className="text-slate-400 line-through text-sm font-medium mb-1">
-                      {currencySymbol} {Math.round(currentPrice * 1.5).toLocaleString("en-IN")}
+                {isEnrolled ? (
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Purchased & Enrolled
                     </span>
-                  )}
-                </div>
-                
+                  </div>
+                ) : (
+                  <div className="flex items-end gap-2 mb-2">
+                    <span className="text-3xl font-extrabold text-slate-900 tracking-tight">
+                      {isFree ? 'Free' : `${currencySymbol} ${currentPrice.toLocaleString("en-IN")}`}
+                    </span>
+                    {!isFree && (
+                      <span className="text-slate-400 line-through text-sm font-medium mb-1">
+                        {currencySymbol} {Math.round(currentPrice * 1.5).toLocaleString("en-IN")}
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {isEnrolled && progress && (
                   <div className="mt-4 mb-5 bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <div className="flex justify-between items-center mb-2">
@@ -665,8 +673,8 @@ export default function CourseDetailPage() {
                     )}
                   </div>
                 )}
-                
-                <button 
+
+                <button
                   onClick={() => {
                     if (isEnrolled) {
                       const firstChapter = outline?.find(c => c.lessons && c.lessons.length > 0) || outline?.[0];
@@ -684,37 +692,36 @@ export default function CourseDetailPage() {
                     }
                   }}
                   disabled={enrollLoading}
-                  className={`w-full font-bold py-3.5 px-4 rounded-xl transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 mt-3 flex justify-center items-center gap-2 text-sm disabled:opacity-50 active:scale-95 cursor-pointer ${
-                    isEnrolled
+                  className={`w-full font-bold py-3.5 px-4 rounded-xl transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 mt-3 flex justify-center items-center gap-2 text-sm disabled:opacity-50 active:scale-95 cursor-pointer ${isEnrolled
                       ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-200"
                       : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-200"
-                  }`}
+                    }`}
                 >
                   {enrollLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   {isEnrolled
-                    ? 'Start Learning'
+                    ? 'Continue Learning'
                     : isPaid && !isFree
-                    ? `Buy Now for ${currencySymbol} ${currentPrice.toLocaleString("en-IN")}`
-                    : (enrollLoading ? 'Enrolling...' : 'Enroll for Free')}
+                      ? `Buy Now for ${currencySymbol} ${currentPrice.toLocaleString("en-IN")}`
+                      : (enrollLoading ? 'Enrolling...' : 'Enroll for Free')}
                   <ChevronRight className="w-4 h-4" />
                 </button>
                 {isInstructor && (
-                  <Link 
+                  <Link
                     href={`/course/${courseId}/edit`}
                     className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-lg transition-all mt-3 flex justify-center items-center gap-2 text-sm border border-slate-200"
                   >
                     <Edit className="w-4 h-4" /> Manage / Edit Course
                   </Link>
                 )}
-                
+
                 {/* Quizzes & Questions moved here from Navbar */}
-                <Link 
+                <Link
                   href={`/quizzes`}
                   className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-3 px-4 rounded-lg transition-all mt-3 flex justify-center items-center gap-2 text-sm border border-indigo-100"
                 >
                   <Award className="w-4 h-4" /> Course Quizzes
                 </Link>
-                <Link 
+                <Link
                   href={`/questions`}
                   className="w-full bg-white hover:bg-slate-50 text-slate-700 font-bold py-3 px-4 rounded-lg transition-all mt-3 flex justify-center items-center gap-2 text-sm border border-slate-200"
                 >
@@ -724,12 +731,12 @@ export default function CourseDetailPage() {
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> 30-Day Money-Back Guarantee
                 </p>
               </div>
-              
+
               <hr className="border-slate-100 mb-6" />
 
               {/* Metadata List */}
               <div className="space-y-4">
-                
+
                 {details.instructors && details.instructors.length > 0 && (
                   <div className="mb-5">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5 block">Taught by</span>
@@ -798,7 +805,7 @@ export default function CourseDetailPage() {
           </div>
         </div>
       </main>
-      
+
       <footer className="bg-slate-900 text-slate-300 py-12 text-center mt-auto">
         <div className="max-w-7xl mx-auto px-4">
           <p className="font-medium">© 2026 Stridenex Inc. All rights reserved.</p>

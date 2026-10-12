@@ -273,8 +273,17 @@ export default function BatchDetailsPage() {
                 )}
 
                 <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded border border-white/10">
-                  <Tag className="w-4 h-4 text-rose-400" />
-                  <span>{batchData.paid_batch ? `${batchData.currency || '$'} ${batchData.amount}` : 'Free'}</span>
+                  {isEnrolled ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span className="text-emerald-300 font-semibold">Enrolled & Active</span>
+                    </>
+                  ) : (
+                    <>
+                      <Tag className="w-4 h-4 text-rose-400" />
+                      <span>{batchData.paid_batch ? `${batchData.currency === 'INR' ? '₹' : (batchData.currency || '₹')} ${Number(batchData.amount || 0).toLocaleString('en-IN')}` : 'Free'}</span>
+                    </>
+                  )}
                 </div>
                 
                 {batchData.certification === 1 && (
