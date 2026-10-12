@@ -20,7 +20,12 @@ import {
   Layers,
   ChevronRight,
 } from "lucide-react";
-import { getStudentDashboard, StudentDashboardData } from "@/services/payment.services";
+import { 
+  getStudentDashboard, 
+  getCoursesWithEnrollment, 
+  getBatchesWithEnrollment, 
+  StudentDashboardData 
+} from "@/services/payment.services";
 import { getImageUrl } from "@/services/api.services";
 import { formatDate } from "@/utils/formatters";
 
@@ -50,8 +55,56 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await getStudentDashboard();
-        setData(res);
+        let dashboardData: any = null;
+        try {
+          dashboardData = await getStudentDashboard();
+        } catch (dashErr: any) {
+          console.warn("getStudentDashboard error:", dashErr);
+        }
+
+        const unwrapped = dashboardData && typeof dashboardData === "object"
+          ? (dashboardData.courses || dashboardData.batches ? dashboardData : (dashboardData.message || dashboardData.data || dashboardData))
+          : dashboardData;
+
+        let enrolledCourses = unwrapped?.courses || (Array.isArray(unwrapped) ? unwrapped : []);
+        let enrolledBatches = unwrapped?.batches || [];
+        let enrolledPrograms = unwrapped?.programs || [];
+        let dashboardStats = unwrapped?.stats || null;
+
+        // If courses or batches are empty, fallback to query enrolled courses & batches
+        if (!enrolledCourses.length || !enrolledBatches.length) {
+          try {
+            const [coursesRes, batchesRes] = await Promise.allSettled([
+              getCoursesWithEnrollment(),
+              getBatchesWithEnrollment()
+            ]);
+            if (!enrolledCourses.length && coursesRes.status === "fulfilled" && Array.isArray(coursesRes.value)) {
+              enrolledCourses = coursesRes.value.filter((c: any) => c.is_enrolled);
+            }
+            if (!enrolledBatches.length && batchesRes.status === "fulfilled" && Array.isArray(batchesRes.value)) {
+              enrolledBatches = batchesRes.value.filter((b: any) => b.is_enrolled);
+            }
+          } catch (e) {
+            console.warn("Fallback fetch error:", e);
+          }
+        }
+
+        if (!dashboardStats) {
+          dashboardStats = {
+            enrolled_courses: enrolledCourses.length,
+            completed_courses: enrolledCourses.filter((c: any) => (c.progress || 0) >= 100).length,
+            enrolled_batches: enrolledBatches.length,
+            enrolled_programs: enrolledPrograms.length,
+            certificates_earned: 0,
+          };
+        }
+
+        setData({
+          courses: enrolledCourses,
+          batches: enrolledBatches,
+          programs: enrolledPrograms,
+          stats: dashboardStats,
+        });
       } catch (err: any) {
         setError(err.message || "Failed to fetch student dashboard data");
       } finally {

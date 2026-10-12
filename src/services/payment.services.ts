@@ -19,6 +19,14 @@ const METHOD_PREFIX = "method/lms.lms.stride_lms";
 
 const authHeaders = () => {
   const headers: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+      return headers;
+    }
+  }
   if (API_TOKEN) {
     headers["Authorization"] = `token ${API_TOKEN}`;
   }
@@ -27,26 +35,11 @@ const authHeaders = () => {
 
 const extractData = <T = any>(res: any): T => {
   if (res && typeof res === "object") {
-    if (Array.isArray(res)) {
-      return res as T;
-    }
-    if (Array.isArray(res.data)) {
-      return res.data as T;
-    }
-    if (Array.isArray(res.message)) {
-      return res.message as T;
-    }
-    if (res.message && typeof res.message === "object") {
-      if (Array.isArray(res.message.data)) return res.message.data as T;
-      if (Array.isArray(res.message.batches)) return res.message.batches as T;
-      if (Array.isArray(res.message.courses)) return res.message.courses as T;
-      if ("data" in res.message && res.message.data !== undefined) return res.message.data as T;
-    }
     if ("data" in res && res.data !== undefined) {
       return res.data as T;
     }
-    if (res.message !== undefined) {
-      return res.message as T;
+    if (res.message && typeof res.message === "object" && "data" in res.message && res.message.data !== undefined) {
+      return res.message.data as T;
     }
   }
   return res as T;
@@ -272,5 +265,17 @@ export const getStudentDashboard = async (): Promise<StudentDashboardData> => {
   const res = await apiService.get(`${METHOD_PREFIX}.get_student_dashboard`, {
     headers: authHeaders(),
   });
-  return extractData<StudentDashboardData>(res);
+  const data = extractData<any>(res);
+  if (data && typeof data === "object") {
+    if ("courses" in data || "batches" in data) {
+      return data as StudentDashboardData;
+    }
+    if (data.message && typeof data.message === "object" && ("courses" in data.message || "batches" in data.message)) {
+      return data.message as StudentDashboardData;
+    }
+    if (data.data && typeof data.data === "object" && ("courses" in data.data || "batches" in data.data)) {
+      return data.data as StudentDashboardData;
+    }
+  }
+  return data as StudentDashboardData;
 };
