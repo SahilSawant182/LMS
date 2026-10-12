@@ -44,12 +44,14 @@ const apiRequest = async (config: AxiosRequestConfig) => {
       interface CustomApiError extends Error {
         status?: number;
         response?: { data: unknown };
+        isCustomApiError?: boolean;
       }
       
       const customError: CustomApiError = new Error(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
       
       customError.status = 400; // Mock status
       customError.response = { data: response.data };
+      customError.isCustomApiError = true;
       throw customError;
     }
 
@@ -60,20 +62,52 @@ const apiRequest = async (config: AxiosRequestConfig) => {
 
     return response.data?.message || response.data;
   } catch (error: any) {
-    if (error.status && error.response) {
+    if (error.isCustomApiError) {
       throw error;
     }
-    const errMessage = error.response?.data?.message || error.response?.data?.exc_type || error.message || "An unexpected error occurred.";
-    console.error(`API Error (${config.method} ${config.url}):`, errMessage);
+
+    let errMessage = error.message || "An unexpected error occurred.";
+    const data = error.response?.data;
+
+    if (data) {
+      if (data._server_messages) {
+        try {
+          const serverMsgs = JSON.parse(data._server_messages);
+          if (Array.isArray(serverMsgs) && serverMsgs.length > 0) {
+            const first = typeof serverMsgs[0] === 'string' ? JSON.parse(serverMsgs[0]) : serverMsgs[0];
+            const raw = first?.message || first;
+            if (typeof raw === 'string') {
+              const clean = raw.replace(/<[^>]*>?/gm, '').trim();
+              if (clean) errMessage = clean;
+            }
+          }
+        } catch (e) {}
+      } else if (data.message) {
+        if (typeof data.message === 'string') {
+          errMessage = data.message;
+        } else if (typeof data.message === 'object') {
+          errMessage = data.message.message || JSON.stringify(data.message);
+        }
+      } else if (typeof data.exception === 'string') {
+        const parts = data.exception.split(':');
+        errMessage = parts.length > 1 ? parts.slice(1).join(':').trim() : data.exception;
+      } else if (data.exc_type) {
+        errMessage = String(data.exc_type);
+      }
+    }
+
+    console.error(`API Error (${config.method} ${config.url}):`, errMessage, data);
     
     interface CustomApiError extends Error {
       status?: number;
       response?: any;
+      isCustomApiError?: boolean;
     }
     
     const customError: CustomApiError = new Error(errMessage);
-    customError.status = error.response?.status || 500;
+    customError.status = error.response?.status || error.status || 500;
     customError.response = error.response;
+    customError.isCustomApiError = true;
     throw customError;
   }
 };

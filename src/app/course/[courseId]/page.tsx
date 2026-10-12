@@ -8,6 +8,7 @@ import {
   getAssignmentSubmissions, enrollInCourse,
   getCourseReviewList, createCourseReview, updateCourseReview, deleteCourseReview, LMSCourseReview
 } from '@/services/lms.services';
+import { getCourseWithEnrollment } from '@/services/payment.services';
 import { getImageUrl } from '@/services/api.services';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
@@ -15,7 +16,7 @@ import {
   PlayCircle, Clock, BookOpen, Users, Award,
   Globe, Tags, ChevronRight, Star, CheckCircle2,
   BookMarked, ArrowLeft, Edit, Plus, Loader2, FileText, CheckCircle,
-  MessageSquare, Sparkles, Send, Check, Trash2
+  MessageSquare, Sparkles, Send, Check, Trash2, Lock
 } from 'lucide-react';
 import InlineBlockEditor from '@/components/admin/InlineBlockEditor';
 
@@ -44,6 +45,7 @@ export default function CourseDetailPage() {
   const courseId = params?.courseId as string;
 
   const [details, setDetails] = useState<any>(null);
+  const [enrollmentData, setEnrollmentData] = useState<any>(null);
   const [outline, setOutline] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [progress, setProgress] = useState<any>(null);
@@ -97,7 +99,7 @@ export default function CourseDetailPage() {
   const fetchCourseData = async () => {
     setLoading(true);
     try {
-      const [detailsRes, outlineRes, reviewsRes, lessonsRes, progressRes, assignmentsRes, submissionsRes, courseReviewsRes] = await Promise.allSettled([
+      const [detailsRes, outlineRes, reviewsRes, lessonsRes, progressRes, assignmentsRes, submissionsRes, courseReviewsRes, enrollRes] = await Promise.allSettled([
         getCourseDetails({ course: courseId }),
         getChapters({ course: courseId }),
         getReviews({ course: courseId }),
@@ -105,16 +107,27 @@ export default function CourseDetailPage() {
         getCourseProgress(courseId),
         getAssignments(),
         getAssignmentSubmissions(),
-        getCourseReviewList({ course: courseId })
+        getCourseReviewList({ course: courseId }),
+        getCourseWithEnrollment(courseId)
       ]);
+
+      if (enrollRes.status === 'fulfilled' && enrollRes.value) {
+        const enrollData = enrollRes.value;
+        setEnrollmentData(enrollData);
+        if (enrollData.is_enrolled !== undefined) {
+          setIsEnrolled(Boolean(enrollData.is_enrolled));
+        }
+      }
 
       if (detailsRes.status === 'fulfilled') {
         const d = detailsRes.value?.data || detailsRes.value?.message || detailsRes.value;
         setDetails(d);
-        if (d && d.membership) {
-          setIsEnrolled(true);
-        } else {
-          setIsEnrolled(false);
+        if (enrollRes.status !== 'fulfilled' || !enrollRes.value) {
+          if (d && d.membership) {
+            setIsEnrolled(true);
+          } else {
+            setIsEnrolled(false);
+          }
         }
       } else {
         throw new Error('Failed to fetch course details');
@@ -137,10 +150,33 @@ export default function CourseDetailPage() {
         
         const safeOutline = Array.isArray(outlineArray) ? outlineArray : [];
         
+        const enrollLessonsMap = new Map<string, any>();
+        if (enrollRes.status === 'fulfilled' && enrollRes.value) {
+          const eChapters = (enrollRes.value as any).chapters || [];
+          if (Array.isArray(eChapters)) {
+            eChapters.forEach((ch: any) => {
+              if (Array.isArray(ch.lessons)) {
+                ch.lessons.forEach((l: any) => {
+                  if (l.name) enrollLessonsMap.set(l.name, l);
+                });
+              }
+            });
+          }
+        }
+
         // Merge lessons into their respective chapters
         const mergedOutline = safeOutline.map(chapter => ({
           ...chapter,
-          lessons: lessonsArray.filter(lesson => lesson.chapter === chapter.name)
+          lessons: lessonsArray
+            .filter(lesson => lesson.chapter === chapter.name)
+            .map(lesson => {
+              const fromEnroll = enrollLessonsMap.get(lesson.name);
+              return {
+                ...lesson,
+                is_locked: fromEnroll?.is_locked !== undefined ? fromEnroll.is_locked : lesson.is_locked,
+                include_in_preview: fromEnroll?.include_in_preview !== undefined ? fromEnroll.include_in_preview : lesson.include_in_preview,
+              };
+            })
         }));
         
         setOutline(mergedOutline);
@@ -418,7 +454,16 @@ export default function CourseDetailPage() {
     );
   }
 
-  const isFree = !details.paid_course || !details.course_price || details.course_price === 0;
+  const isPaid = enrollmentData?.is_paid !== undefined
+    ? Boolean(enrollmentData.is_paid)
+    : Boolean(details?.paid_course && Number(details?.course_price) > 0);
+  const currentPrice = enrollmentData?.course_price !== undefined
+    ? Number(enrollmentData.course_price)
+    : Number(details?.course_price || details?.amount_usd || 0);
+  const currencySymbol = (enrollmentData?.currency === "INR" || details?.currency === "INR")
+    ? "₹"
+    : (enrollmentData?.currency || details?.currency || "₹");
+  const isFree = !isPaid || currentPrice === 0;
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
@@ -505,7 +550,7 @@ export default function CourseDetailPage() {
           </section>
 
           {/* Course Outline */}
-          <section className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-100">
+          <section id="curriculum" className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-100">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900">
                 <PlayCircle className="w-5 h-5 text-indigo-600" />
@@ -568,22 +613,54 @@ export default function CourseDetailPage() {
                     <div className="px-5 py-1 bg-white">
                       {chapter.lessons && chapter.lessons.length > 0 ? (
                         <ul className="divide-y divide-slate-100">
-                          {chapter.lessons.map((lesson: any, lIndex: number) => (
-                            <li key={lesson.name || lIndex} className="py-3 flex justify-between items-center group/lesson">
-                              <div className="flex items-center gap-2.5">
-                                <PlayCircle className="w-4 h-4 text-slate-300 group-hover/lesson:text-indigo-500 transition-colors" />
-                                <span className="text-sm text-slate-700 font-medium group-hover/lesson:text-slate-900 transition-colors">
-                                  {lesson.title || lesson.lesson_name || lesson.name}
-                                </span>
-                              </div>
-                              <Link 
-                                href={`/course/${courseId}/${encodeURIComponent(chapter.name)}/${encodeURIComponent(lesson.name)}`}
-                                className="flex items-center gap-1 text-indigo-600 text-xs font-bold opacity-0 group-hover/lesson:opacity-100 transition-all -translate-x-2 group-hover/lesson:translate-x-0"
-                              >
-                                Start <ChevronRight className="w-3 h-3" />
-                              </Link>
-                            </li>
-                          ))}
+                          {chapter.lessons.map((lesson: any, lIndex: number) => {
+                            const isLocked = !isEnrolled && isPaid && !isFree && (lesson.is_locked === true || (!lesson.include_in_preview && lesson.include_in_preview !== 1));
+                            const isPreview = !isEnrolled && Boolean(lesson.include_in_preview === 1 || lesson.include_in_preview === true);
+
+                            return (
+                              <li key={lesson.name || lIndex} className="py-3 flex justify-between items-center group/lesson">
+                                <div className="flex items-center gap-2.5">
+                                  {isLocked ? (
+                                    <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
+                                      <Lock className="w-3 h-3" />
+                                    </div>
+                                  ) : (
+                                    <PlayCircle className="w-4 h-4 text-slate-300 group-hover/lesson:text-indigo-500 transition-colors shrink-0" />
+                                  )}
+                                  <span className={`text-sm font-medium transition-colors ${isLocked ? "text-slate-500" : "text-slate-700 group-hover/lesson:text-slate-900"}`}>
+                                    {lesson.title || lesson.lesson_name || lesson.name}
+                                  </span>
+                                  {isPreview && (
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full ml-1.5 shadow-xs">
+                                      Free Preview
+                                    </span>
+                                  )}
+                                  {isLocked && (
+                                    <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded ml-1.5 hidden sm:inline-flex items-center gap-1">
+                                      <Lock className="w-2.5 h-2.5" /> Locked
+                                    </span>
+                                  )}
+                                </div>
+
+                                {isLocked ? (
+                                  <button 
+                                    onClick={() => router.push(`/checkout?item_type=course&item_id=${encodeURIComponent(courseId)}`)}
+                                    className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 text-xs font-bold transition-all px-2.5 py-1 rounded-md hover:bg-indigo-50 cursor-pointer"
+                                    title="Unlock course to access this lesson"
+                                  >
+                                    <Lock className="w-3 h-3" /> Unlock
+                                  </button>
+                                ) : (
+                                  <Link 
+                                    href={`/course/${courseId}/${encodeURIComponent(chapter.name)}/${encodeURIComponent(lesson.name)}`}
+                                    className="flex items-center gap-1 text-indigo-600 text-xs font-bold opacity-0 group-hover/lesson:opacity-100 transition-all -translate-x-2 group-hover/lesson:translate-x-0"
+                                  >
+                                    {isPreview ? "Preview" : "Start"} <ChevronRight className="w-3 h-3" />
+                                  </Link>
+                                )}
+                              </li>
+                            );
+                          })}
                         </ul>
                       ) : (
                         <p className="text-xs text-slate-400 py-3 italic">No lessons in this chapter.</p>
@@ -1089,9 +1166,13 @@ export default function CourseDetailPage() {
               <div className="mb-6">
                 <div className="flex items-end gap-2 mb-2">
                   <span className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                    {isFree ? 'Free' : `${details.currency || '$'}${details.course_price || details.amount_usd}`}
+                    {isFree ? 'Free' : `${currencySymbol} ${currentPrice.toLocaleString("en-IN")}`}
                   </span>
-                  {!isFree && <span className="text-slate-400 line-through text-sm font-medium mb-1">${(details.course_price * 1.5).toFixed(2)}</span>}
+                  {!isFree && (
+                    <span className="text-slate-400 line-through text-sm font-medium mb-1">
+                      {currencySymbol} {Math.round(currentPrice * 1.5).toLocaleString("en-IN")}
+                    </span>
+                  )}
                 </div>
                 
                 {isEnrolled && progress && (
@@ -1112,12 +1193,36 @@ export default function CourseDetailPage() {
                 )}
                 
                 <button 
-                  onClick={isEnrolled ? undefined : handleEnroll}
+                  onClick={() => {
+                    if (isEnrolled) {
+                      const firstChapter = outline?.find(c => c.lessons && c.lessons.length > 0) || outline?.[0];
+                      const firstLesson = firstChapter?.lessons?.[0];
+                      if (firstChapter && firstLesson) {
+                        router.push(`/course/${courseId}/${encodeURIComponent(firstChapter.name)}/${encodeURIComponent(firstLesson.name)}`);
+                      } else {
+                        const elem = document.getElementById("curriculum");
+                        if (elem) elem.scrollIntoView({ behavior: "smooth" });
+                      }
+                    } else if (isPaid && !isFree) {
+                      router.push(`/checkout?item_type=course&item_id=${encodeURIComponent(courseId)}`);
+                    } else {
+                      handleEnroll();
+                    }
+                  }}
                   disabled={enrollLoading}
-                  className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-lg shadow-indigo-200 transform hover:-translate-y-0.5 mt-3 flex justify-center items-center gap-2 text-sm disabled:opacity-50"
+                  className={`w-full font-bold py-3.5 px-4 rounded-xl transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 mt-3 flex justify-center items-center gap-2 text-sm disabled:opacity-50 active:scale-95 cursor-pointer ${
+                    isEnrolled
+                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-200"
+                      : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-200"
+                  }`}
                 >
                   {enrollLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {isEnrolled ? 'Continue Learning' : (enrollLoading ? 'Enrolling...' : 'Enroll Now')} <ChevronRight className="w-4 h-4" />
+                  {isEnrolled
+                    ? 'Start Learning'
+                    : isPaid && !isFree
+                    ? `Buy Now for ${currencySymbol} ${currentPrice.toLocaleString("en-IN")}`
+                    : (enrollLoading ? 'Enrolling...' : 'Enroll for Free')}
+                  <ChevronRight className="w-4 h-4" />
                 </button>
                 {isInstructor && (
                   <Link 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles } from 'lucide-react';
+import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/services/auth.services';
@@ -244,6 +244,22 @@ export default function Navbar() {
                             className="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
                           >
                             My Dashboard
+                          </Link>
+                          <Link
+                            href="/plans"
+                            onClick={() => setIsDropdownOpen(false)}
+                            className="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            <CreditCard className="w-4 h-4 mr-2 text-gray-400" />
+                            Plans
+                          </Link>
+                          <Link
+                            href="/my-payments"
+                            onClick={() => setIsDropdownOpen(false)}
+                            className="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            <Receipt className="w-4 h-4 mr-2 text-gray-400" />
+                            My Payments
                           </Link>
                           <Link
                             href="/profile"

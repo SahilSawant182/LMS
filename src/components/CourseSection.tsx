@@ -5,20 +5,31 @@ import CourseCard from './CourseCard';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getCourses, Course, deleteCourse } from '../services/lms.services';
+import { getCoursesWithEnrollment } from '../services/payment.services';
 import { getImageUrl } from '../services/api.services';
 import { Plus } from 'lucide-react';
 
 export default function CourseSection() {
   const router = useRouter();
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInstructor, setIsInstructor] = useState(false);
 
   const fetchCourses = async () => {
     try {
-      const response = await getCourses();
-      const data = Array.isArray(response) ? response : (response as any)?.data || (response as any)?.message || [];
+      let data: any[] = [];
+      try {
+        const enrollList = await getCoursesWithEnrollment();
+        if (Array.isArray(enrollList) && enrollList.length > 0) {
+          data = enrollList;
+        }
+      } catch (e) {}
+
+      if (data.length === 0) {
+        const response = await getCourses();
+        data = Array.isArray(response) ? response : (response as any)?.data || (response as any)?.message || [];
+      }
       setCourses(data);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch courses');
@@ -106,7 +117,13 @@ export default function CourseSection() {
                     status={course.status || undefined}
                     cardGradient={course.card_gradient || undefined}
                     description={course.short_introduction || course.description || undefined}
-                    price={course.paid_course ? `${course.currency || '$'} ${course.course_price || 0}` : 'Free'}
+                    price={
+                      course.is_enrolled
+                        ? 'Enrolled'
+                        : course.paid_course || course.is_paid
+                        ? `${course.currency === 'INR' ? '₹' : (course.currency || '₹')} ${Number(course.course_price || 0).toLocaleString('en-IN')}`
+                        : 'Free'
+                    }
                     onEdit={isInstructor ? () => handleEdit(course.name) : undefined}
                     onDelete={isInstructor ? () => handleDelete(course.name) : undefined}
                   />

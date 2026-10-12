@@ -5,6 +5,7 @@ import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { Users, Calendar, Clock, ArrowRight, Search, Trash2, Plus, Edit } from 'lucide-react';
 import { getBatches, deleteBatch } from '@/services/lms.services';
+import { getBatchesWithEnrollment } from '@/services/payment.services';
 import { formatDate } from '@/utils/formatters';
 
 export default function BatchesPage() {
@@ -17,11 +18,20 @@ export default function BatchesPage() {
     const fetchBatches = async () => {
       setLoading(true);
       try {
-        const rawResponse = await getBatches();
-        // Safely extract data whether it's in response.message.data, response.data, or response directly
-        const batchesArray = Array.isArray(rawResponse) 
-          ? rawResponse 
-          : (rawResponse?.message?.data || rawResponse?.data?.message || rawResponse?.data || rawResponse?.message || []);
+        let batchesArray: any[] = [];
+        try {
+          const enrollList = await getBatchesWithEnrollment();
+          if (Array.isArray(enrollList) && enrollList.length > 0) {
+            batchesArray = enrollList;
+          }
+        } catch (e) {}
+
+        if (batchesArray.length === 0) {
+          const rawResponse = await getBatches();
+          batchesArray = Array.isArray(rawResponse) 
+            ? rawResponse 
+            : (rawResponse?.message?.data || rawResponse?.data?.message || rawResponse?.data || rawResponse?.message || []);
+        }
         
         const data = Array.isArray(batchesArray) ? batchesArray : [];
         setBatches(data);
@@ -191,8 +201,18 @@ export default function BatchesPage() {
                     </div>
                   </div>
                   <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-between items-center">
-                    <div className="font-bold text-slate-900">
-                      {batch.paid_batch ? `${batch.currency || '$'} ${batch.amount || 0}` : 'Free'}
+                    <div className="font-bold text-slate-900 flex items-center gap-2">
+                      {batch.is_enrolled ? (
+                        <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                          ✓ Enrolled
+                        </span>
+                      ) : (
+                        <span>
+                          {batch.paid_batch || batch.is_paid
+                            ? `${batch.currency === 'INR' ? '₹' : (batch.currency || '₹')} ${Number(batch.amount || 0).toLocaleString('en-IN')}`
+                            : 'Free'}
+                        </span>
+                      )}
                     </div>
                     <Link 
                       href={`/batch/${batch.name}`}
