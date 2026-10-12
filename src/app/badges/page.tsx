@@ -23,49 +23,6 @@ import {
 import { getBadgeList, LMSBadge } from '@/services/lms.services';
 import { getImageUrl } from '@/services/api.services';
 
-// Sample fallback badges if API is empty or fresh
-const SAMPLE_BADGES: LMSBadge[] = [
-  {
-    name: "BADGE-001",
-    title: "Course Trailblazer",
-    enabled: 1,
-    description: "Awarded for completing the introductory courses with outstanding velocity and dedication.",
-    reference_doctype: "LMS Course",
-    event: "Course Completion",
-    image: "/images/badge-sample-1.png",
-    grant_only_once: 1,
-    user_field: "owner",
-    field_to_check: "progress",
-    condition: '{\n  "published": 1,\n  "progress": 100\n}'
-  },
-  {
-    name: "BADGE-002",
-    title: "About Us Team Member",
-    enabled: 1,
-    description: "Honoring core team members and distinguished platform contributors.",
-    reference_doctype: "About Us Team Member",
-    event: "Manual Assignment",
-    image: "/images/badge-sample-2.png",
-    grant_only_once: 1,
-    user_field: "owner",
-    field_to_check: null,
-    condition: '{\n  "published": 1\n}'
-  },
-  {
-    name: "BADGE-003",
-    title: "Batch Master",
-    enabled: 1,
-    description: "Successfully attended all live lectures and submitted every cohort assignment.",
-    reference_doctype: "LMS Batch",
-    event: "Manual Assignment",
-    image: null,
-    grant_only_once: 1,
-    user_field: "member",
-    field_to_check: "status",
-    condition: '{\n  "status": "Completed"\n}'
-  }
-];
-
 export default function BadgesPage() {
   const [badges, setBadges] = useState<LMSBadge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,16 +38,15 @@ export default function BadgesPage() {
     setError(null);
     try {
       const data = await getBadgeList();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setBadges(data);
       } else {
-        // Use initial sample data as starting catalog if no remote badges yet
-        setBadges(SAMPLE_BADGES);
+        setBadges([]);
       }
     } catch (err: any) {
-      console.warn("Badge API error or unauthenticated, falling back to sample badges:", err);
-      // Fallback to sample badges so UI is always interactive and functional
-      setBadges(SAMPLE_BADGES);
+      console.error("Badge API error:", err);
+      setError(err?.message || "Failed to fetch badges");
+      setBadges([]);
     } finally {
       setLoading(false);
     }
@@ -261,6 +217,22 @@ export default function BadgesPage() {
           <div className="flex flex-col items-center justify-center py-24 bg-white rounded-2xl border border-slate-100 shadow-sm">
             <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
             <p className="text-sm font-semibold text-slate-500 mt-4">Loading achievement badges...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-red-200 flex flex-col items-center p-8">
+            <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center text-red-500 mb-4">
+              <XCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">Unable to Load Badges</h3>
+            <p className="text-sm text-slate-500 max-w-md mb-6">
+              {error}
+            </p>
+            <button
+              onClick={fetchBadges}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" /> Try Again
+            </button>
           </div>
         ) : filteredBadges.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

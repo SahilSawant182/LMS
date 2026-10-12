@@ -6,7 +6,7 @@ import {
   getCourseDetails, getChapters, getLessons, getReviews, 
   createChapter, createLesson, getCourseProgress, getAssignments, 
   getAssignmentSubmissions, enrollInCourse,
-  getCourseReviewList, createCourseReview, updateCourseReview, deleteCourseReview, LMSCourseReview
+  getCourseReviewList, createCourseReview, deleteCourseReview, LMSCourseReview
 } from '@/services/lms.services';
 import { getCourseWithEnrollment } from '@/services/payment.services';
 import { getImageUrl } from '@/services/api.services';
@@ -276,6 +276,10 @@ export default function CourseDetailPage() {
 
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isEnrolled) {
+      setReviewErrorMsg('You must be enrolled in the course to submit a review.');
+      return;
+    }
     if (!reviewText.trim()) {
       setReviewErrorMsg('Please enter your review text.');
       return;
@@ -286,24 +290,13 @@ export default function CourseDetailPage() {
     setReviewSuccessMsg(null);
 
     try {
-      if (userExistingReview && userExistingReview.name) {
-        // Update existing review
-        await updateCourseReview({
-          name: userExistingReview.name,
-          course: courseId,
-          rating: Number(reviewRating),
-          review: reviewText.trim()
-        });
-        setReviewSuccessMsg('Your review has been updated successfully!');
-      } else {
-        // Create new course review
-        await createCourseReview({
-          course: courseId,
-          rating: Number(reviewRating),
-          review: reviewText.trim()
-        });
-        setReviewSuccessMsg('Thank you! Your course review has been submitted.');
-      }
+      // Create new course review (user can only create or delete reviews)
+      await createCourseReview({
+        course: courseId,
+        rating: Number(reviewRating),
+        review: reviewText.trim()
+      });
+      setReviewSuccessMsg('Thank you! Your course review has been submitted.');
 
       // Refresh reviews list
       await fetchCourseData();
@@ -313,9 +306,23 @@ export default function CourseDetailPage() {
       }, 1500);
     } catch (err: any) {
       console.error('Submit review error:', err);
-      setReviewErrorMsg(
-        err.response?.data?.message || err.message || 'Failed to submit review. Please check your connection and login status.'
-      );
+      let msg = err.message || 'Failed to submit review.';
+      if (err.response?.data?._server_messages) {
+        try {
+          const msgs = JSON.parse(err.response.data._server_messages);
+          if (Array.isArray(msgs) && msgs.length > 0) {
+            const parsed = typeof msgs[0] === 'string' ? JSON.parse(msgs[0]) : msgs[0];
+            if (parsed?.message) {
+              msg = parsed.message.replace(/<[^>]*>?/gm, '').trim();
+            }
+          }
+        } catch (e) {}
+      } else if (err.response?.data?.message) {
+        msg = typeof err.response.data.message === 'string' 
+          ? err.response.data.message 
+          : err.response.data.message?.message || JSON.stringify(err.response.data.message);
+      }
+      setReviewErrorMsg(msg);
     } finally {
       setReviewSubmitting(false);
     }
@@ -709,19 +716,14 @@ export default function CourseDetailPage() {
                 <div>
                   {userExistingReview ? (
                     <button
-                      onClick={() => {
-                        setReviewRating(Number(userExistingReview.rating) || 5);
-                        setReviewText(userExistingReview.review || (userExistingReview as any).content || "");
-                        setReviewErrorMsg(null);
-                        setReviewSuccessMsg(null);
-                        setIsReviewModalOpen(true);
-                      }}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-100 transition-colors shadow-2xs"
+                      onClick={() => handleDeleteReview(userExistingReview.name)}
+                      disabled={reviewDeleting}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition-colors shadow-2xs disabled:opacity-50"
                     >
-                      <Edit className="w-3.5 h-3.5" />
-                      Edit Your Review
+                      <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                      {reviewDeleting ? 'Deleting Review...' : 'Delete Your Review'}
                     </button>
-                  ) : (
+                  ) : isEnrolled ? (
                     <button
                       onClick={() => {
                         setReviewRating(5);
@@ -735,6 +737,14 @@ export default function CourseDetailPage() {
                       <Star className="w-3.5 h-3.5 fill-white" />
                       Write a Review
                     </button>
+                  ) : (
+                    <span 
+                      title="You must be enrolled in the course to submit a review"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200 cursor-not-allowed"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                      Enroll to Review
+                    </span>
                   )}
                 </div>
               )}
@@ -861,22 +871,8 @@ export default function CourseDetailPage() {
                           </div>
                         </div>
 
-                        {/* Action buttons (Edit & Delete for student's own review, or Instructor) */}
+                        {/* Action buttons (Delete for student's own review, or Instructor) */}
                         <div className="flex items-center gap-2 shrink-0 ml-2">
-                          {!isInstructor && isCurrentUsers && (
-                            <button
-                              onClick={() => {
-                                setReviewRating(Number(review.rating) || 5);
-                                setReviewText(review.review || review.content || "");
-                                setReviewErrorMsg(null);
-                                setReviewSuccessMsg(null);
-                                setIsReviewModalOpen(true);
-                              }}
-                              className="text-xs text-indigo-600 hover:text-indigo-700 font-bold hover:underline"
-                            >
-                              Edit
-                            </button>
-                          )}
                           {(isCurrentUsers || isInstructor) && (
                             <button
                               onClick={() => handleDeleteReview(review.name)}
@@ -903,18 +899,24 @@ export default function CourseDetailPage() {
                     : "Be the first student to review this course and help others learn!"}
                 </p>
                 {!isInstructor && (
-                  <button
-                    onClick={() => {
-                      setReviewRating(5);
-                      setReviewText('');
-                      setReviewErrorMsg(null);
-                      setReviewSuccessMsg(null);
-                      setIsReviewModalOpen(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors"
-                  >
-                    <Star className="w-3.5 h-3.5 fill-white" /> Write the First Review
-                  </button>
+                  isEnrolled ? (
+                    <button
+                      onClick={() => {
+                        setReviewRating(5);
+                        setReviewText('');
+                        setReviewErrorMsg(null);
+                        setReviewSuccessMsg(null);
+                        setIsReviewModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors"
+                    >
+                      <Star className="w-3.5 h-3.5 fill-white" /> Write the First Review
+                    </button>
+                  ) : (
+                    <p className="text-xs text-amber-700 font-medium bg-amber-50 py-1.5 px-3 rounded-lg inline-block border border-amber-200">
+                      Enroll in this course to be the first to submit a review!
+                    </p>
+                  )
                 )}
               </div>
             )}
@@ -930,10 +932,10 @@ export default function CourseDetailPage() {
                     <div>
                       <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
                         <Sparkles className="w-3.5 h-3.5" />
-                        {userExistingReview ? 'Update Your Feedback' : 'Student Feedback'}
+                        Student Feedback
                       </span>
                       <h3 className="text-lg font-bold mt-1">
-                        {userExistingReview ? 'Edit Course Review' : 'Rate & Review Course'}
+                        Rate & Review Course
                       </h3>
                       <p className="text-xs text-indigo-200 mt-0.5 line-clamp-1">
                         {details?.title || courseId}
@@ -1011,56 +1013,31 @@ export default function CourseDetailPage() {
                   )}
 
                   {/* Action Buttons */}
-                  <div className="pt-2 flex items-center justify-between gap-3 border-t border-slate-100">
-                    {userExistingReview ? (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteReview(userExistingReview.name)}
-                        disabled={reviewDeleting || reviewSubmitting}
-                        className="px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                      >
-                        {reviewDeleting ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            Deleting...
-                          </>
-                        ) : (
-                          <>
-                            <Trash2 className="w-3.5 h-3.5" />
-                            Delete
-                          </>
-                        )}
-                      </button>
-                    ) : (
-                      <div />
-                    )}
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsReviewModalOpen(false)}
-                        className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={reviewSubmitting || reviewDeleting || !reviewText.trim()}
-                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all flex items-center gap-2 disabled:opacity-50"
-                      >
-                        {reviewSubmitting ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            Saving Review...
-                          </>
-                        ) : (
-                          <>
-                            <Send className="w-3.5 h-3.5" />
-                            {userExistingReview ? 'Update Review' : 'Submit Review'}
-                          </>
-                        )}
-                      </button>
-                    </div>
+                  <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setIsReviewModalOpen(false)}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={reviewSubmitting || reviewDeleting || !reviewText.trim()}
+                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {reviewSubmitting ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Submitting Review...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5" />
+                          Submit Review
+                        </>
+                      )}
+                    </button>
                   </div>
                 </form>
               </div>

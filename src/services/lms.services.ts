@@ -719,13 +719,6 @@ export interface CreateCourseReviewPayload {
   review: string;
 }
 
-export interface UpdateCourseReviewPayload {
-  name?: string;
-  course?: string;
-  rating?: number;
-  review?: string;
-}
-
 export const getCourseReviewList = async (filters?: Record<string, any>): Promise<LMSCourseReview[]> => {
   const response = await apiService.get(
     "method/lms.lms.doctype.lms_course_review.lms_course_review.get_course_review_list",
@@ -757,19 +750,6 @@ export const getCourseReview = async (name: string): Promise<LMSCourseReview> =>
 export const createCourseReview = async (payload: CreateCourseReviewPayload) => {
   return apiService.post(
     "method/lms.lms.doctype.lms_course_review.lms_course_review.create_course_review",
-    payload,
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `token ${API_TOKEN}`,
-      },
-    }
-  );
-};
-
-export const updateCourseReview = async (payload: UpdateCourseReviewPayload) => {
-  return apiService.post(
-    "method/lms.lms.doctype.lms_course_review.lms_course_review.update_course_review",
     payload,
     {
       headers: {

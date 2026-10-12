@@ -131,7 +131,25 @@ export default function BatchesPage() {
             </div>
           ) : batches.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {batches.map((batch: any, idx: number) => (
+              {batches.map((batch: any, idx: number) => {
+                const seatsLeft = batch.seats_left !== undefined && batch.seats_left !== null
+                  ? Number(batch.seats_left)
+                  : (batch.seat_count !== undefined && batch.seat_count !== null
+                      ? Math.max(0, Number(batch.seat_count) - Number(batch.enrollment?.total_enrolled || batch.enrolled_students || batch.total_enrolled || 0))
+                      : (batch.seats !== undefined ? Number(batch.seats) : 0));
+                const hasSeats = seatsLeft > 0;
+
+                const isPaid = Boolean(
+                  batch.paid_batch === 1 || 
+                  batch.paid_batch === '1' || 
+                  batch.paid_batch === true || 
+                  batch.is_paid || 
+                  Number(batch.amount || batch.price || batch.batch_price || 0) > 0
+                );
+                const priceAmount = Number(batch.amount || batch.price || batch.batch_price || 0);
+                const currencySymbol = (batch.currency === 'INR' || batch.currency === '₹' || !batch.currency) ? '₹' : batch.currency;
+
+                return (
                 <div key={batch.name || idx} className="relative bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md hover:border-indigo-200 transition-all flex flex-col h-full group">
                   
                   {/* Actions - Shows on Hover */}
@@ -160,9 +178,9 @@ export default function BatchesPage() {
                       <span className="inline-block px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 rounded-md">
                         {batch.category || 'General'}
                       </span>
-                      {batch.seats_left > 0 ? (
+                      {hasSeats ? (
                         <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
-                          {batch.seats_left} seats left
+                          {seatsLeft} seats left
                         </span>
                       ) : (
                         <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded">
@@ -208,8 +226,8 @@ export default function BatchesPage() {
                         </span>
                       ) : (
                         <span>
-                          {batch.paid_batch || batch.is_paid
-                            ? `${batch.currency === 'INR' ? '₹' : (batch.currency || '₹')} ${Number(batch.amount || 0).toLocaleString('en-IN')}`
+                          {isPaid && priceAmount > 0
+                            ? `${currencySymbol} ${priceAmount.toLocaleString('en-IN')}`
                             : 'Free'}
                         </span>
                       )}
@@ -222,7 +240,8 @@ export default function BatchesPage() {
                     </Link>
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
           ) : (
             <div className="text-center py-16 bg-slate-50 rounded-lg border border-dashed border-slate-200">

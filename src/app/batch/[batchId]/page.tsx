@@ -260,7 +260,12 @@ export default function BatchDetailsPage() {
                   <span>{batchCourses.length || batchData.courses?.length || 0} Courses</span>
                 </div>
                 
-                {batchData.enrollment ? (
+                {enrollmentData?.seats_left !== undefined ? (
+                  <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded border border-white/10">
+                    <Users className="w-4 h-4 text-purple-400" />
+                    <span>{enrollmentData.seats_left} seats left</span>
+                  </div>
+                ) : batchData.enrollment ? (
                   <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded border border-white/10">
                     <Users className="w-4 h-4 text-purple-400" />
                     <span>{batchData.enrollment.total_enrolled} / {batchData.enrollment.seat_count} Enrolled</span>
@@ -281,7 +286,7 @@ export default function BatchDetailsPage() {
                   ) : (
                     <>
                       <Tag className="w-4 h-4 text-rose-400" />
-                      <span>{batchData.paid_batch ? `${batchData.currency === 'INR' ? '₹' : (batchData.currency || '₹')} ${Number(batchData.amount || 0).toLocaleString('en-IN')}` : 'Free'}</span>
+                      <span>{isPaid && batchAmount > 0 ? `${currencySymbol} ${batchAmount.toLocaleString('en-IN')}` : 'Free'}</span>
                     </>
                   )}
                 </div>

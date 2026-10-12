@@ -27,11 +27,26 @@ const authHeaders = () => {
 
 const extractData = <T = any>(res: any): T => {
   if (res && typeof res === "object") {
+    if (Array.isArray(res)) {
+      return res as T;
+    }
+    if (Array.isArray(res.data)) {
+      return res.data as T;
+    }
+    if (Array.isArray(res.message)) {
+      return res.message as T;
+    }
+    if (res.message && typeof res.message === "object") {
+      if (Array.isArray(res.message.data)) return res.message.data as T;
+      if (Array.isArray(res.message.batches)) return res.message.batches as T;
+      if (Array.isArray(res.message.courses)) return res.message.courses as T;
+      if ("data" in res.message && res.message.data !== undefined) return res.message.data as T;
+    }
     if ("data" in res && res.data !== undefined) {
       return res.data as T;
     }
-    if (res.message && typeof res.message === "object" && "data" in res.message && res.message.data !== undefined) {
-      return res.message.data as T;
+    if (res.message !== undefined) {
+      return res.message as T;
     }
   }
   return res as T;
@@ -174,7 +189,11 @@ export const getCoursesWithEnrollment = async (): Promise<CourseWithEnrollment[]
   });
   const data = extractData<any>(res);
   if (Array.isArray(data)) return data;
-  if (data && Array.isArray(data.courses)) return data.courses;
+  if (data && typeof data === 'object') {
+    if (Array.isArray(data.courses)) return data.courses;
+    if (Array.isArray(data.data)) return data.data;
+    if (Array.isArray(data.message)) return data.message;
+  }
   return [];
 };
 
@@ -184,7 +203,11 @@ export const getBatchesWithEnrollment = async (): Promise<BatchWithEnrollment[]>
   });
   const data = extractData<any>(res);
   if (Array.isArray(data)) return data;
-  if (data && Array.isArray(data.batches)) return data.batches;
+  if (data && typeof data === 'object') {
+    if (Array.isArray(data.batches)) return data.batches;
+    if (Array.isArray(data.data)) return data.data;
+    if (Array.isArray(data.message)) return data.message;
+  }
   return [];
 };
 
