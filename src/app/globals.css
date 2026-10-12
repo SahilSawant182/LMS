@@ -46,6 +46,17 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+:root {
+  --sidebar-width: 16rem;
+}
+
+@media (min-width: 1024px) {
+  body.has-sidebar {
+    padding-left: var(--sidebar-width, 16rem);
+    transition: padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
 /* Custom Utilities */
 .glass {
   background: rgba(255, 255, 255, 0.7);

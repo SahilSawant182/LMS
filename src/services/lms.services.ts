@@ -108,7 +108,7 @@ export const getEnrolledStudents = async (payload: { batch: string }) => {
 export const getCourseCompletionData = async (payload?: any) => {
   // If payload is required, you can change the parameter and use it in params or data depending on method.
   // Assuming GET requires params, but standard frappe utils often use GET with params.
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_completion_data`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_completion_data`, {
     params: payload,
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -117,7 +117,7 @@ export const getCourseCompletionData = async (payload?: any) => {
 };
 
 export const getCourseDetails = async (payload: GetCourseDetailsPayload) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_details`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_details`, {
     params: payload,
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -126,7 +126,7 @@ export const getCourseDetails = async (payload: GetCourseDetailsPayload) => {
 };
 
 export const getCourseOutline = async (payload?: any) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_outline`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_outline`, {
     params: payload,
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -135,7 +135,7 @@ export const getCourseOutline = async (payload?: any) => {
 };
 
 export const getChapters = async (payload?: any) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_chapters`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_chapters`, {
     params: payload,
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -144,7 +144,7 @@ export const getChapters = async (payload?: any) => {
 };
 
 export const getLesson = async (payload: GetLessonPayload) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_lesson`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_lesson`, {
     params: payload,
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -153,7 +153,7 @@ export const getLesson = async (payload: GetLessonPayload) => {
 };
 
 export const getLessons = async (payload?: any) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_lessons`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_lessons`, {
     params: payload,
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -162,7 +162,7 @@ export const getLessons = async (payload?: any) => {
 };
 
 export const getEnrollments = async (payload?: any) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_enrollments`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_enrollments`, {
     params: payload,
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -171,7 +171,7 @@ export const getEnrollments = async (payload?: any) => {
 };
 
 export const getReviews = async (payload: GetReviewsPayload) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_reviews`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_reviews`, {
     params: payload,
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -181,7 +181,7 @@ export const getReviews = async (payload: GetReviewsPayload) => {
 
 export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
   const nameParam = payload.batch || payload.name;
-  return apiService.get(`method/lms.lms.stride_lms.get_batch_details`, { 
+  return apiService.get(`method/lms.lms.stride_lms.get_batch_details`, {
     params: { batch: nameParam },
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -190,7 +190,7 @@ export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
 };
 
 export const getBatchCourses = async (payload: GetBatchCoursesPayload) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_batch_courses`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_batch_courses`, {
     params: payload,
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -235,7 +235,7 @@ export const getCertificate = async (name: string) => {
 
 export const createCourse = async (data: FormData) => {
   return apiService.post(`method/${API_METHOD_PREFIX}.create_course`, data, {
-    headers: { 
+    headers: {
       'Content-Type': 'multipart/form-data',
       'Authorization': `token ${API_TOKEN}`
     }
@@ -244,7 +244,7 @@ export const createCourse = async (data: FormData) => {
 
 export const updateCourse = async (data: FormData) => {
   return apiService.post(`method/${API_METHOD_PREFIX}.update_course`, data, {
-    headers: { 
+    headers: {
       'Content-Type': 'multipart/form-data',
       'Authorization': `token ${API_TOKEN}`
     }
@@ -270,7 +270,7 @@ export const deleteBatch = async (name: string) => {
 
 export const createChapter = async (data: FormData) => {
   return apiService.post(`method/${API_METHOD_PREFIX}.create_chapter`, data, {
-    headers: { 
+    headers: {
       'Content-Type': 'multipart/form-data',
       'Authorization': `token ${API_TOKEN}`
     }
@@ -279,7 +279,7 @@ export const createChapter = async (data: FormData) => {
 
 export const createLesson = async (data: any) => {
   return apiService.post(`method/${API_METHOD_PREFIX}.create_lesson`, data, {
-    headers: { 
+    headers: {
       'Content-Type': 'application/json',
       'Authorization': `token ${API_TOKEN}`
     }
@@ -295,7 +295,7 @@ export const getQuizzes = async () => {
 };
 
 export const getQuiz = async (name: string) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_quiz`, { 
+  return apiService.get(`method/${API_METHOD_PREFIX}.get_quiz`, {
     params: { name },
     headers: {
       'Authorization': `token ${API_TOKEN}`
@@ -462,7 +462,7 @@ export const createAssignment = async (data: FormData | Record<string, any>) => 
   const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
   const params = isFormData ? data : new URLSearchParams(data as Record<string, string>);
   const contentType = isFormData ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
-  
+
   return apiService.post(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.create_assignment`, params, {
     headers: {
       'Content-Type': contentType,
@@ -475,7 +475,7 @@ export const createAssignmentSubmission = async (data: FormData | Record<string,
   const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
   const params = isFormData ? data : new URLSearchParams(data as Record<string, string>);
   const contentType = isFormData ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
-  
+
   return apiService.post(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.create_assignment_submission`, params, {
     headers: {
       'Content-Type': contentType,
@@ -621,3 +621,258 @@ export const getCourseProgressFiltered = async (filters: { name?: string, member
     headers: { 'Authorization': `token ${API_TOKEN}` }
   });
 };
+
+// ========================
+// LMS Badges
+// ========================
+
+export interface LMSBadge {
+  name?: string;
+  title: string;
+  enabled: number;
+  description?: string | null;
+  reference_doctype?: string | null;
+  event?: string | null;
+  image?: string | null;
+  grant_only_once?: number;
+  user_field?: string | null;
+  field_to_check?: string | null;
+  condition?: string | null;
+  creation?: string;
+  modified?: string;
+  owner?: string;
+}
+
+export interface CreateBadgePayload {
+  title: string;
+  enabled: number;
+  description?: string;
+  reference_doctype?: string;
+  event?: string;
+  image?: string;
+  grant_only_once?: number;
+  user_field?: string;
+  field_to_check?: string | null;
+  condition?: string;
+}
+
+export const createBadge = async (payload: CreateBadgePayload) => {
+  return apiService.post(
+    "method/lms.lms.doctype.lms_badge.lms_badge.create_badge",
+    payload,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `token ${API_TOKEN}`,
+      },
+    }
+  );
+};
+
+export const getBadgeList = async (filters?: Record<string, any>): Promise<LMSBadge[]> => {
+  const response = await apiService.get(
+    "method/lms.lms.doctype.lms_badge.lms_badge.get_badge_list",
+    {
+      params: filters,
+      headers: {
+        Authorization: `token ${API_TOKEN}`,
+      },
+    }
+  );
+  if (Array.isArray(response)) return response;
+  if (response?.data && Array.isArray(response.data)) return response.data;
+  if (response?.message && Array.isArray(response.message)) return response.message;
+  return [];
+};
+
+export const getBadge = async (badge_name: string): Promise<LMSBadge> => {
+  return apiService.get(
+    "method/lms.lms.doctype.lms_badge.lms_badge.get_badge",
+    {
+      params: { name: badge_name },
+      headers: {
+        Authorization: `token ${API_TOKEN}`,
+      },
+    }
+  );
+};
+
+// ========================
+// LMS Course Reviews
+// ========================
+
+export interface LMSCourseReview {
+  name?: string;
+  course: string;
+  rating: number;
+  review: string;
+  user?: string;
+  user_name?: string;
+  owner?: string;
+  creation?: string;
+  modified?: string;
+}
+
+export interface CreateCourseReviewPayload {
+  course: string;
+  rating: number;
+  review: string;
+}
+
+export interface UpdateCourseReviewPayload {
+  name?: string;
+  course?: string;
+  rating?: number;
+  review?: string;
+}
+
+export const getCourseReviewList = async (filters?: Record<string, any>): Promise<LMSCourseReview[]> => {
+  const response = await apiService.get(
+    "method/lms.lms.doctype.lms_course_review.lms_course_review.get_course_review_list",
+    {
+      params: filters,
+      headers: {
+        Authorization: `token ${API_TOKEN}`,
+      },
+    }
+  );
+  if (Array.isArray(response)) return response;
+  if (response?.data && Array.isArray(response.data)) return response.data;
+  if (response?.message && Array.isArray(response.message)) return response.message;
+  return [];
+};
+
+export const getCourseReview = async (name: string): Promise<LMSCourseReview> => {
+  return apiService.get(
+    "method/lms.lms.doctype.lms_course_review.lms_course_review.get_course_review",
+    {
+      params: { name },
+      headers: {
+        Authorization: `token ${API_TOKEN}`,
+      },
+    }
+  );
+};
+
+export const createCourseReview = async (payload: CreateCourseReviewPayload) => {
+  return apiService.post(
+    "method/lms.lms.doctype.lms_course_review.lms_course_review.create_course_review",
+    payload,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `token ${API_TOKEN}`,
+      },
+    }
+  );
+};
+
+export const updateCourseReview = async (payload: UpdateCourseReviewPayload) => {
+  return apiService.post(
+    "method/lms.lms.doctype.lms_course_review.lms_course_review.update_course_review",
+    payload,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `token ${API_TOKEN}`,
+      },
+    }
+  );
+};
+
+export const deleteCourseReview = async (name: string) => {
+  return apiService.post(
+    "method/lms.lms.doctype.lms_course_review.lms_course_review.delete_course_review",
+    { name },
+    {
+      params: { name },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `token ${API_TOKEN}`,
+      },
+    }
+  );
+};
+
+// ==========================================
+// LMS Coupon Services
+// ==========================================
+
+export interface LMSCouponItem {
+  name?: string;
+  item: string;
+}
+
+export interface LMSCoupon {
+  name: string;
+  code: string;
+  discount_type: 'Percentage' | 'Amount' | string;
+  percentage_discount?: number;
+  amount?: number;
+  expires_on?: string;
+  usage_limit?: number;
+  used_count?: number;
+  enabled?: number;
+  owner?: string;
+  creation?: string;
+  modified?: string;
+  applicable_items?: LMSCouponItem[];
+}
+
+export interface CreateLMSCouponPayload {
+  code: string;
+  discount_type: 'Percentage' | 'Amount' | string;
+  percentage_discount?: number;
+  amount?: number;
+  expires_on?: string;
+  usage_limit?: number;
+  enabled?: number;
+  applicable_items?: LMSCouponItem[];
+}
+
+export const getLMSCouponList = async (filters?: Record<string, any>): Promise<LMSCoupon[]> => {
+  const response = await apiService.get(
+    "method/lms.lms.doctype.lms_coupon.lms_coupon.get_lms_coupon_list",
+    {
+      params: filters,
+      headers: {
+        Authorization: `token ${API_TOKEN}`,
+      },
+    }
+  );
+  if (Array.isArray(response)) return response;
+  if (response?.data && Array.isArray(response.data)) return response.data;
+  if (response?.message && Array.isArray(response.message)) return response.message;
+  if (response?.message?.data && Array.isArray(response.message.data)) return response.message.data;
+  return [];
+};
+
+export const getLMSCoupon = async (name: string): Promise<LMSCoupon> => {
+  const response = await apiService.get(
+    "method/lms.lms.doctype.lms_coupon.lms_coupon.get_lms_coupon",
+    {
+      params: { name },
+      headers: {
+        Authorization: `token ${API_TOKEN}`,
+      },
+    }
+  );
+  if (response?.message) return response.message;
+  if (response?.data) return response.data;
+  return response;
+};
+
+export const createLMSCoupon = async (payload: CreateLMSCouponPayload) => {
+  return apiService.post(
+    "method/lms.lms.doctype.lms_coupon.lms_coupon.create_lms_coupon",
+    payload,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `token ${API_TOKEN}`,
+      },
+    }
+  );
+};
+
+

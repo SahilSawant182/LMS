@@ -2,16 +2,41 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getCourseDetails, getChapters, getLessons, getReviews, createChapter, createLesson, getCourseProgress, getAssignments, getAssignmentSubmissions, enrollInCourse } from '@/services/lms.services';
+import { 
+  getCourseDetails, getChapters, getLessons, getReviews, 
+  createChapter, createLesson, getCourseProgress, getAssignments, 
+  getAssignmentSubmissions, enrollInCourse,
+  getCourseReviewList, createCourseReview, updateCourseReview, deleteCourseReview, LMSCourseReview
+} from '@/services/lms.services';
 import { getImageUrl } from '@/services/api.services';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { 
   PlayCircle, Clock, BookOpen, Users, Award,
   Globe, Tags, ChevronRight, Star, CheckCircle2,
-  BookMarked, ArrowLeft, Edit, Plus, Loader2, FileText, CheckCircle
+  BookMarked, ArrowLeft, Edit, Plus, Loader2, FileText, CheckCircle,
+  MessageSquare, Sparkles, Send, Check, Trash2
 } from 'lucide-react';
 import InlineBlockEditor from '@/components/admin/InlineBlockEditor';
+
+// Helper to format review creation timestamp nicely (e.g. 'Oct 12, 2026')
+const formatReviewDate = (dateStr?: string) => {
+  if (!dateStr) return '';
+  try {
+    const cleanStr = dateStr.includes(' ') ? dateStr.replace(' ', 'T') : dateStr;
+    const date = new Date(cleanStr);
+    if (isNaN(date.getTime())) {
+      return dateStr.split(' ')[0] || dateStr;
+    }
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  } catch {
+    return dateStr.split(' ')[0] || dateStr;
+  }
+};
 
 export default function CourseDetailPage() {
   const params = useParams();
@@ -26,6 +51,19 @@ export default function CourseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInstructor, setIsInstructor] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
+  const [currentUserName, setCurrentUserName] = useState<string>('');
+
+  // Course Review Interactive State
+  const [userExistingReview, setUserExistingReview] = useState<LMSCourseReview | null>(null);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState<number>(5);
+  const [reviewText, setReviewText] = useState<string>('');
+  const [hoverRating, setHoverRating] = useState<number>(0);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewDeleting, setReviewDeleting] = useState(false);
+  const [reviewSuccessMsg, setReviewSuccessMsg] = useState<string | null>(null);
+  const [reviewErrorMsg, setReviewErrorMsg] = useState<string | null>(null);
 
   // Curriculum Management State
   const [isAddingChapter, setIsAddingChapter] = useState(false);
@@ -39,30 +77,35 @@ export default function CourseDetailPage() {
 
   useEffect(() => {
     if (!courseId) return;
-    fetchCourseData();
     const checkRoles = () => {
       try {
         const rolesStr = localStorage.getItem("roles");
         if (rolesStr) {
-          const roles = JSON.parse(rolesStr);
-          setIsInstructor(roles.includes("Instructor"));
+          const roles = typeof rolesStr === 'string' && rolesStr.startsWith('[') ? JSON.parse(rolesStr) : rolesStr;
+          setIsInstructor(Array.isArray(roles) ? roles.includes("Instructor") : roles.includes("Instructor"));
         }
+        const email = localStorage.getItem("userEmail") || "";
+        const name = localStorage.getItem("fullName") || "";
+        setCurrentUserEmail(email);
+        setCurrentUserName(name);
       } catch (e) {}
     };
     checkRoles();
+    fetchCourseData();
   }, [courseId]);
 
   const fetchCourseData = async () => {
     setLoading(true);
     try {
-      const [detailsRes, outlineRes, reviewsRes, lessonsRes, progressRes, assignmentsRes, submissionsRes] = await Promise.allSettled([
+      const [detailsRes, outlineRes, reviewsRes, lessonsRes, progressRes, assignmentsRes, submissionsRes, courseReviewsRes] = await Promise.allSettled([
         getCourseDetails({ course: courseId }),
         getChapters({ course: courseId }),
         getReviews({ course: courseId }),
         getLessons({ course: courseId }),
         getCourseProgress(courseId),
         getAssignments(),
-        getAssignmentSubmissions()
+        getAssignmentSubmissions(),
+        getCourseReviewList({ course: courseId })
       ]);
 
       if (detailsRes.status === 'fulfilled') {
@@ -103,12 +146,62 @@ export default function CourseDetailPage() {
         setOutline(mergedOutline);
       }
 
+      // Process course reviews:
+      // 1. Primary: lms.lms.stride_lms.get_reviews returns owner_details (username, full_name, user_image), creation, rating, review, owner
+      let combinedReviews: any[] = [];
       if (reviewsRes.status === 'fulfilled') {
-        const rawReviews = reviewsRes.value;
+        const rawReviews = reviewsRes.value?.data || reviewsRes.value;
         const reviewsArray = Array.isArray(rawReviews)
           ? rawReviews
-          : (rawReviews?.message?.data || rawReviews?.data?.message || rawReviews?.data || rawReviews?.message || []);
-        setReviews(Array.isArray(reviewsArray) ? reviewsArray : []);
+          : (rawReviews?.message?.data || rawReviews?.data?.message || rawReviews?.message || rawReviews?.data || []);
+        if (Array.isArray(reviewsArray) && reviewsArray.length > 0) {
+          combinedReviews = reviewsArray;
+        }
+      }
+
+      // 2. Secondary: getCourseReviewList returns document doctype info (with doc `name` for updates)
+      let docReviews: any[] = [];
+      if (courseReviewsRes.status === 'fulfilled') {
+        const val: any = courseReviewsRes.value;
+        const listData: any = val?.data || val;
+        const unwrappedList = Array.isArray(listData)
+          ? listData
+          : (listData?.message?.data || listData?.data?.message || listData?.data || listData?.message || []);
+        if (Array.isArray(unwrappedList) && unwrappedList.length > 0) {
+          docReviews = unwrappedList;
+        }
+      }
+
+      // Attach doc `name` to matching review if present
+      if (combinedReviews.length > 0 && docReviews.length > 0) {
+        combinedReviews = combinedReviews.map(r => {
+          if (r.name) return r;
+          const match = docReviews.find(dr => 
+            (dr.owner && r.owner && dr.owner === r.owner) ||
+            (dr.review && r.review && dr.review === r.review)
+          );
+          return match ? { ...r, name: match.name } : r;
+        });
+      } else if (combinedReviews.length === 0 && docReviews.length > 0) {
+        combinedReviews = docReviews;
+      }
+
+      setReviews(combinedReviews);
+
+      // Check if current user already submitted a review
+      const currentEmail = localStorage.getItem("userEmail") || "";
+      const currentName = localStorage.getItem("fullName") || "";
+      const existing = combinedReviews.find(
+        (r: any) =>
+          (currentEmail && (r.owner === currentEmail || r.user === currentEmail || r.owner_details?.username === currentEmail)) ||
+          (currentName && (r.owner_details?.full_name === currentName || r.user_name === currentName))
+      );
+      if (existing) {
+        setUserExistingReview(existing);
+        setReviewRating(Number(existing.rating) || 5);
+        setReviewText(existing.review || existing.content || "");
+      } else {
+        setUserExistingReview(null);
       }
 
       if (progressRes.status === 'fulfilled') {
@@ -142,6 +235,93 @@ export default function CourseDetailPage() {
       setError(err.message || 'An error occurred loading the course.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewText.trim()) {
+      setReviewErrorMsg('Please enter your review text.');
+      return;
+    }
+
+    setReviewSubmitting(true);
+    setReviewErrorMsg(null);
+    setReviewSuccessMsg(null);
+
+    try {
+      if (userExistingReview && userExistingReview.name) {
+        // Update existing review
+        await updateCourseReview({
+          name: userExistingReview.name,
+          course: courseId,
+          rating: Number(reviewRating),
+          review: reviewText.trim()
+        });
+        setReviewSuccessMsg('Your review has been updated successfully!');
+      } else {
+        // Create new course review
+        await createCourseReview({
+          course: courseId,
+          rating: Number(reviewRating),
+          review: reviewText.trim()
+        });
+        setReviewSuccessMsg('Thank you! Your course review has been submitted.');
+      }
+
+      // Refresh reviews list
+      await fetchCourseData();
+      setTimeout(() => {
+        setIsReviewModalOpen(false);
+        setReviewSuccessMsg(null);
+      }, 1500);
+    } catch (err: any) {
+      console.error('Submit review error:', err);
+      setReviewErrorMsg(
+        err.response?.data?.message || err.message || 'Failed to submit review. Please check your connection and login status.'
+      );
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  const handleDeleteReview = async (reviewName?: string) => {
+    let targetName = reviewName || userExistingReview?.name;
+
+    if (!targetName) {
+      const match = reviews.find(
+        (r: any) =>
+          r.name &&
+          ((currentUserEmail && (r.owner === currentUserEmail || r.user === currentUserEmail || r.owner_details?.username === currentUserEmail)) ||
+          (currentUserName && (r.owner_details?.full_name === currentUserName || r.user_name === currentUserName)))
+      );
+      if (match?.name) {
+        targetName = match.name;
+      }
+    }
+
+    if (!targetName) {
+      alert('Review document identifier not found. Please refresh the page and try again.');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this course review?')) {
+      return;
+    }
+
+    setReviewDeleting(true);
+    try {
+      await deleteCourseReview(targetName);
+      setIsReviewModalOpen(false);
+      setUserExistingReview(null);
+      setReviewText('');
+      setReviewRating(5);
+      await fetchCourseData();
+    } catch (err: any) {
+      console.error('Delete review error:', err);
+      alert(err.response?.data?.message || err.message || 'Failed to delete review.');
+    } finally {
+      setReviewDeleting(false);
     }
   };
 
@@ -432,37 +612,383 @@ export default function CourseDetailPage() {
             )}
           </section>
 
-          {/* Student Reviews */}
-          <section className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-100">
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
-              <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
-              Student Reviews
-            </h2>
+          {/* Student Reviews Section */}
+          <section className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900">
+                  <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+                  Course Reviews & Ratings
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  {isInstructor 
+                    ? "Instructor View: Monitor learner feedback and course satisfaction." 
+                    : "Share your experience and help fellow students choose."}
+                </p>
+              </div>
+
+              {/* Student Review Action Button */}
+              {!isInstructor && (
+                <div>
+                  {userExistingReview ? (
+                    <button
+                      onClick={() => {
+                        setReviewRating(Number(userExistingReview.rating) || 5);
+                        setReviewText(userExistingReview.review || (userExistingReview as any).content || "");
+                        setReviewErrorMsg(null);
+                        setReviewSuccessMsg(null);
+                        setIsReviewModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-100 transition-colors shadow-2xs"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      Edit Your Review
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setReviewRating(5);
+                        setReviewText('');
+                        setReviewErrorMsg(null);
+                        setReviewSuccessMsg(null);
+                        setIsReviewModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs font-bold shadow-md shadow-amber-500/20 transition-all hover:scale-[1.02]"
+                    >
+                      <Star className="w-3.5 h-3.5 fill-white" />
+                      Write a Review
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Average Rating Summary Banner */}
+            {reviews.length > 0 && (
+              <div className="mb-6 p-4 rounded-xl bg-slate-50 border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="text-3xl font-black text-slate-900 leading-none">
+                    {(
+                      reviews.reduce((acc: number, r: any) => acc + (Number(r.rating) || 5), 0) / reviews.length
+                    ).toFixed(1)}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1 text-amber-400">
+                      {[1, 2, 3, 4, 5].map((star) => {
+                        const avg = reviews.reduce((acc: number, r: any) => acc + (Number(r.rating) || 5), 0) / reviews.length;
+                        return (
+                          <Star
+                            key={star}
+                            className={`w-4 h-4 ${star <= Math.round(avg) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">
+                      Based on {reviews.length} learner {reviews.length === 1 ? 'review' : 'reviews'}
+                    </p>
+                  </div>
+                </div>
+
+                {isInstructor && (
+                  <span className="self-start sm:self-auto text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                    Instructor Review Dashboard
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Reviews Grid */}
             {reviews.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2">
-                {reviews.map((review: any, index: number) => (
-                  <div key={index} className="bg-slate-50 p-5 rounded-lg border border-slate-100 relative">
-                    <div className="flex items-center gap-1 text-amber-400 mb-2">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className={`w-3.5 h-3.5 ${i < Math.round(review.rating || 5) ? 'fill-current' : 'text-slate-300'}`} />
-                      ))}
-                    </div>
-                    <p className="text-slate-600 text-xs mb-3 italic leading-relaxed">"{review.review || review.content}"</p>
-                    <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
-                      <div className="w-6 h-6 rounded bg-indigo-100 text-indigo-700 flex items-center justify-center">
-                        {(review.user_name || review.owner || 'U')[0].toUpperCase()}
+                {reviews.map((review: any, index: number) => {
+                  const authorName = review.owner_details?.full_name || review.owner_details?.username || review.user_name || review.owner || 'Student';
+                  const authorUsername = review.owner_details?.username || (review.owner && review.owner.includes('@') ? review.owner.split('@')[0] : null);
+                  const authorImage = review.owner_details?.user_image ? getImageUrl(review.owner_details.user_image) : null;
+                  const creationDate = formatReviewDate(review.creation);
+                  const initialChar = (authorName.trim() || 'S')[0].toUpperCase();
+
+                  const isCurrentUsers = (currentUserEmail && (review.owner === currentUserEmail || review.user === currentUserEmail || review.owner_details?.username === currentUserEmail)) ||
+                    (currentUserName && (review.owner_details?.full_name === currentUserName || review.user_name === currentUserName));
+
+                  return (
+                    <div 
+                      key={review.name || `${review.owner}-${index}`} 
+                      className={`p-5 rounded-2xl border transition-all duration-200 relative flex flex-col justify-between shadow-2xs ${
+                        isCurrentUsers 
+                          ? 'bg-indigo-50/40 border-indigo-200/90 shadow-xs' 
+                          : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-md'
+                      }`}
+                    >
+                      <div>
+                        {/* Rating header & Badges */}
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-0.5 text-amber-400">
+                              {[...Array(5)].map((_, i) => (
+                                <Star 
+                                  key={i} 
+                                  className={`w-3.5 h-3.5 ${i < Math.round(Number(review.rating) || 5) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} 
+                                />
+                              ))}
+                            </div>
+                            <span className="text-xs font-bold text-slate-800 ml-1 px-1.5 py-0.5 bg-amber-50 rounded-md border border-amber-200/60 text-amber-900">
+                              {(Number(review.rating) || 5).toFixed(1)}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {creationDate && (
+                              <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {creationDate}
+                              </span>
+                            )}
+                            {isCurrentUsers && (
+                              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                Your Review
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Review Content */}
+                        <p className="text-slate-700 text-xs sm:text-sm mb-4 leading-relaxed whitespace-pre-wrap font-normal">
+                          "{review.review || review.content}"
+                        </p>
                       </div>
-                      {review.user_name || review.owner}
+
+                      {/* Author Info footer */}
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs mt-auto">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {authorImage ? (
+                            <img
+                              src={authorImage}
+                              alt={authorName}
+                              className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0 shadow-2xs"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-2xs">
+                              {initialChar}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 truncate text-xs">
+                              {authorName}
+                            </p>
+                            {authorUsername && authorUsername !== authorName && (
+                              <p className="text-[10px] text-slate-400 truncate">
+                                @{authorUsername}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Action buttons (Edit & Delete for student's own review, or Instructor) */}
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          {!isInstructor && isCurrentUsers && (
+                            <button
+                              onClick={() => {
+                                setReviewRating(Number(review.rating) || 5);
+                                setReviewText(review.review || review.content || "");
+                                setReviewErrorMsg(null);
+                                setReviewSuccessMsg(null);
+                                setIsReviewModalOpen(true);
+                              }}
+                              className="text-xs text-indigo-600 hover:text-indigo-700 font-bold hover:underline"
+                            >
+                              Edit
+                            </button>
+                          )}
+                          {(isCurrentUsers || isInstructor) && (
+                            <button
+                              onClick={() => handleDeleteReview(review.name)}
+                              disabled={reviewDeleting}
+                              title="Delete review"
+                              className="text-slate-400 hover:text-rose-600 transition-colors p-1 rounded-md hover:bg-rose-50 flex items-center justify-center disabled:opacity-50"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
-              <div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-200">
-                <p className="text-sm text-slate-500 font-medium">Be the first to review this course!</p>
+              <div className="text-center py-10 bg-slate-50/70 rounded-2xl border border-dashed border-slate-200">
+                <MessageSquare className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                <h3 className="text-sm font-bold text-slate-800">No reviews yet for this course</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
+                  {isInstructor 
+                    ? "As learners complete lessons and engage with the curriculum, their reviews will appear here." 
+                    : "Be the first student to review this course and help others learn!"}
+                </p>
+                {!isInstructor && (
+                  <button
+                    onClick={() => {
+                      setReviewRating(5);
+                      setReviewText('');
+                      setReviewErrorMsg(null);
+                      setReviewSuccessMsg(null);
+                      setIsReviewModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors"
+                  >
+                    <Star className="w-3.5 h-3.5 fill-white" /> Write the First Review
+                  </button>
+                )}
               </div>
             )}
           </section>
+
+          {/* Student Review Modal (Create / Update) */}
+          {isReviewModalOpen && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100 animate-fade-in-up">
+                {/* Modal Header */}
+                <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-6 text-white relative">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        {userExistingReview ? 'Update Your Feedback' : 'Student Feedback'}
+                      </span>
+                      <h3 className="text-lg font-bold mt-1">
+                        {userExistingReview ? 'Edit Course Review' : 'Rate & Review Course'}
+                      </h3>
+                      <p className="text-xs text-indigo-200 mt-0.5 line-clamp-1">
+                        {details?.title || courseId}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setIsReviewModalOpen(false)}
+                      className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleReviewSubmit} className="p-6 space-y-5">
+                  {/* Rating Selector */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      Your Rating (1 to 5 Stars)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onMouseEnter={() => setHoverRating(star)}
+                          onMouseLeave={() => setHoverRating(0)}
+                          onClick={() => setReviewRating(star)}
+                          className="p-1 text-2xl transition-transform hover:scale-125 focus:outline-none"
+                        >
+                          <Star
+                            className={`w-8 h-8 ${
+                              star <= (hoverRating || reviewRating)
+                                ? 'fill-amber-400 text-amber-400'
+                                : 'text-slate-200'
+                            }`}
+                          />
+                        </button>
+                      ))}
+                      <span className="ml-2 text-sm font-bold text-slate-800">
+                        {hoverRating || reviewRating} / 5
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Review Text Area */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Your Review & Thoughts
+                    </label>
+                    <textarea
+                      rows={4}
+                      required
+                      value={reviewText}
+                      onChange={(e) => setReviewText(e.target.value)}
+                      placeholder="Share what you liked, what you learned, or tips for future students..."
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-xs font-medium text-slate-800 transition-all"
+                    />
+                  </div>
+
+                  {/* Success & Error Messages */}
+                  {reviewSuccessMsg && (
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{reviewSuccessMsg}</span>
+                    </div>
+                  )}
+
+                  {reviewErrorMsg && (
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                      <span className="font-bold">Error:</span>
+                      <span>{reviewErrorMsg}</span>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="pt-2 flex items-center justify-between gap-3 border-t border-slate-100">
+                    {userExistingReview ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteReview(userExistingReview.name)}
+                        disabled={reviewDeleting || reviewSubmitting}
+                        className="px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {reviewDeleting ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Deleting...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <div />
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsReviewModalOpen(false)}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={reviewSubmitting || reviewDeleting || !reviewText.trim()}
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {reviewSubmitting ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Saving Review...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-3.5 h-3.5" />
+                            {userExistingReview ? 'Update Review' : 'Submit Review'}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
           {/* Course Assignments */}
           <section className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-100">
