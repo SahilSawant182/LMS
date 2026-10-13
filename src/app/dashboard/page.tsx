@@ -28,7 +28,8 @@ import {
   Eye,
   ShieldCheck,
   Briefcase,
-  AlertCircle
+  AlertCircle,
+  Wallet
 } from "lucide-react";
 import {
   getStudentDashboard,
@@ -40,15 +41,17 @@ import {
 } from "@/services/payment.services";
 import { getImageUrl } from "@/services/api.services";
 import { formatDate } from "@/utils/formatters";
+import InstructorPayoutsTab from "@/components/instructor/InstructorPayoutsTab";
 
 type StudentTab = "courses" | "batches" | "programs";
-type InstructorTab = "courses" | "batches" | "sales";
+type InstructorTab = "courses" | "batches" | "sales" | "payouts";
 
 export default function DashboardPage() {
   const router = useRouter();
   const [studentData, setStudentData] = useState<StudentDashboardData | null>(null);
   const [instructorData, setInstructorData] = useState<InstructorDashboardData | null>(null);
   const [isInstructorRole, setIsInstructorRole] = useState(false);
+  const [isAdminRole, setIsAdminRole] = useState(false);
   const [dashboardMode, setDashboardMode] = useState<"student" | "instructor">("student");
   const [studentTab, setStudentTab] = useState<StudentTab>("courses");
   const [instructorTab, setInstructorTab] = useState<InstructorTab>("courses");
@@ -59,10 +62,21 @@ export default function DashboardPage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const apiKey = localStorage.getItem("apiKey");
+      const apiSecret = localStorage.getItem("apiSecret");
       const email = localStorage.getItem("userEmail") || "";
       setUserEmail(email);
 
-      if (!apiKey) {
+      if (
+        !apiKey ||
+        !apiSecret ||
+        apiKey === "undefined" ||
+        apiKey === "null" ||
+        apiSecret === "undefined" ||
+        apiSecret === "null"
+      ) {
+        localStorage.removeItem("apiKey");
+        localStorage.removeItem("apiSecret");
+        window.dispatchEvent(new Event("auth-changed"));
         router.push("/login");
         return;
       }
@@ -79,9 +93,31 @@ export default function DashboardPage() {
             setIsInstructorRole(true);
             setDashboardMode("instructor"); // Default to Instructor Studio for instructors!
           }
+          const isAdmin = roles.some((r: string) =>
+            ["Administrator", "System Manager"].includes(r)
+          );
+          setIsAdminRole(isAdmin);
         }
       } catch (e) { }
     }
+
+    const handleAuthError = (err: any) => {
+      const isAuthErr =
+        err?.status === 401 ||
+        err?.response?.status === 401 ||
+        err?.message?.includes("AuthenticationError") ||
+        err?.message?.includes("Authentication required") ||
+        err?.response?.data?.message?.status === 401;
+
+      if (isAuthErr) {
+        localStorage.removeItem("apiKey");
+        localStorage.removeItem("apiSecret");
+        window.dispatchEvent(new Event("auth-changed"));
+        router.push("/login");
+        return true;
+      }
+      return false;
+    };
 
     const fetchAllDashboardData = async () => {
       setLoading(true);
@@ -92,7 +128,8 @@ export default function DashboardPage() {
         let sData: any = null;
         try {
           sData = await getStudentDashboard();
-        } catch (e) {
+        } catch (e: any) {
+          if (handleAuthError(e)) return;
           console.warn("Student dashboard fetch error:", e);
         }
 
@@ -146,11 +183,13 @@ export default function DashboardPage() {
             setIsInstructorRole(true);
             setDashboardMode("instructor");
           }
-        } catch (iErr) {
+        } catch (iErr: any) {
+          if (handleAuthError(iErr)) return;
           console.warn("Instructor dashboard fetch error:", iErr);
         }
 
       } catch (err: any) {
+        if (handleAuthError(err)) return;
         setError(err.message || "Failed to load dashboard data");
       } finally {
         setLoading(false);
@@ -429,10 +468,10 @@ export default function DashboardPage() {
             </div>
 
             {/* Instructor Tabs Navigation */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-1 mb-6 flex gap-1 max-w-xl">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-1 mb-6 flex flex-wrap sm:flex-nowrap gap-1 max-w-3xl">
               <button
                 onClick={() => setInstructorTab("courses")}
-                className={`flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${instructorTab === "courses"
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${instructorTab === "courses"
                     ? "bg-slate-900 text-white shadow-sm"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
@@ -443,7 +482,7 @@ export default function DashboardPage() {
 
               <button
                 onClick={() => setInstructorTab("batches")}
-                className={`flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${instructorTab === "batches"
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${instructorTab === "batches"
                     ? "bg-slate-900 text-white shadow-sm"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
@@ -454,13 +493,25 @@ export default function DashboardPage() {
 
               <button
                 onClick={() => setInstructorTab("sales")}
-                className={`flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${instructorTab === "sales"
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${instructorTab === "sales"
                     ? "bg-slate-900 text-white shadow-sm"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
               >
                 <DollarSign className="w-4 h-4" />
                 <span>Recent Sales ({recentSales.length})</span>
+              </button>
+
+              <button
+                onClick={() => setInstructorTab("payouts")}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  instructorTab === "payouts"
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                }`}
+              >
+                <Wallet className="w-4 h-4 text-emerald-400" />
+                <span>Payouts & Commission</span>
               </button>
             </div>
 
@@ -737,6 +788,11 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* ── SUBTAB 4: INSTRUCTOR PAYOUTS & COMMISSIONS ── */}
+            {instructorTab === "payouts" && (
+              <InstructorPayoutsTab isAdmin={isAdminRole} instructorEmail={userEmail} />
             )}
           </div>
         ) : (

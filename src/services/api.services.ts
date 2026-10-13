@@ -98,6 +98,14 @@ const apiRequest = async (config: AxiosRequestConfig) => {
 
     console.error(`API Error (${config.method} ${config.url}):`, errMessage, data);
     
+    if (error.response?.status === 401 && !isAuthRoute) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("apiKey");
+        localStorage.removeItem("apiSecret");
+        window.dispatchEvent(new Event("auth-changed"));
+      }
+    }
+
     interface CustomApiError extends Error {
       status?: number;
       response?: any;
