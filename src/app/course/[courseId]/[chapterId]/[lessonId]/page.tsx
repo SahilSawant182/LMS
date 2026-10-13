@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getLesson, getChapters, getLessons, getCourseProgress, createCourseProgress } from '@/services/lms.services';
+import { getLesson, getChapters, getLessons, getCourseProgress, createCourseProgress, getCourse } from '@/services/lms.services';
 import { getCourseWithEnrollment } from '@/services/payment.services';
 import { CourseWithEnrollment } from '@/types/payment.types';
 import Navbar from '@/components/Navbar';
@@ -18,7 +18,8 @@ import {
   Award, 
   ArrowRight, 
   Play, 
-  Loader2 
+  Loader2,
+  PanelLeft
 } from 'lucide-react';
 
 export default function LessonPage() {
@@ -44,10 +45,49 @@ export default function LessonPage() {
   const [isInstructor, setIsInstructor] = useState(false);
   const [updatingProgress, setUpdatingProgress] = useState(false);
   const [isCompletedLocally, setIsCompletedLocally] = useState(false);
+  const [isCurriculumSidebarOpen, setIsCurriculumSidebarOpen] = useState(true);
+
+  // Automatically shrink the navigation sidebar when opening a particular lesson
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lms_sidebar_expanded', 'false');
+      window.dispatchEvent(new CustomEvent('sidebar-toggle', { detail: { expanded: false } }));
+      document.body.classList.add('has-sidebar');
+      document.documentElement.style.setProperty('--sidebar-width', '5rem');
+    }
+  }, []);
+
+  const checkInstructorRole = (cDataObj?: any, cDetails?: any): boolean => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const rolesStr = localStorage.getItem('roles') || '';
+      const roles = rolesStr.startsWith('[') ? JSON.parse(rolesStr) : rolesStr;
+      const hasRole = Array.isArray(roles)
+        ? roles.some((r: string) => ['Instructor', 'Administrator', 'System Manager', 'Course Creator'].includes(r))
+        : ['Instructor', 'Administrator', 'System Manager', 'Course Creator'].some(r => rolesStr.includes(r));
+      if (hasRole) return true;
+      if (localStorage.getItem('isInstructor') === 'true') return true;
+      
+      const email = localStorage.getItem('userEmail') || localStorage.getItem('user_email') || '';
+      if (email) {
+        if (cDataObj?.owner === email || cDataObj?.owner === 'Administrator') return true;
+        if (cDetails?.owner === email || cDetails?.owner === 'Administrator') return true;
+        if (Array.isArray(cDataObj?.instructors) && cDataObj.instructors.some((i: any) => 
+          i.instructor === email || i.owner === email || i.name === email || i.username === email
+        )) return true;
+        if (Array.isArray(cDetails?.instructors) && cDetails.instructors.some((i: any) => 
+          i.instructor === email || i.owner === email || i.name === email || i.username === email
+        )) return true;
+      }
+    } catch (e) {}
+    return false;
+  };
 
   useEffect(() => {
-    setUserEmail(localStorage.getItem('userEmail') || localStorage.getItem('user_email') || '');
-    setIsInstructor(localStorage.getItem('roles')?.includes('Instructor') || false);
+    const currentEmail = localStorage.getItem('userEmail') || localStorage.getItem('user_email') || '';
+    setUserEmail(currentEmail);
+    const initialInstructor = checkInstructorRole();
+    setIsInstructor(initialInstructor);
     
     if (!courseId || !chapterId || !lessonId) return;
 
@@ -56,12 +96,13 @@ export default function LessonPage() {
       setError(null);
       setIsPaywallLocked(false);
       try {
-        const [lessonRes, chaptersRes, lessonsRes, progressRes, courseEnrollRes] = await Promise.allSettled([
+        const [lessonRes, chaptersRes, lessonsRes, progressRes, courseEnrollRes, courseRes] = await Promise.allSettled([
           getLesson({ course: courseId, chapter: chapterId, name: lessonId }),
           getChapters({ course: courseId }),
           getLessons({ course: courseId }),
           getCourseProgress(courseId),
-          getCourseWithEnrollment(courseId)
+          getCourseWithEnrollment(courseId),
+          getCourse(courseId)
         ]);
 
         let cData: CourseWithEnrollment | null = null;
@@ -69,6 +110,13 @@ export default function LessonPage() {
           cData = courseEnrollRes.value;
           setCourseData(cData);
         }
+
+        const courseObj = courseRes.status === 'fulfilled'
+          ? (courseRes.value?.data || courseRes.value?.message?.data || courseRes.value?.message || courseRes.value)
+          : null;
+
+        const instructorUser = checkInstructorRole(cData, courseObj);
+        setIsInstructor(instructorUser);
 
         // 1. Check if lesson is paywalled
         let paywalled = false;
@@ -90,7 +138,9 @@ export default function LessonPage() {
             paywalled = true;
             if (msg) paywallMsg = msg;
           } else {
-            throw new Error(err?.message || 'Failed to load lesson content');
+            if (!instructorUser) {
+              throw new Error(err?.message || 'Failed to load lesson content');
+            }
           }
         } else {
           const val = lessonRes.value;
@@ -108,9 +158,52 @@ export default function LessonPage() {
           }
         }
 
-        if (paywalled) {
+        // CRITICAL REQUIREMENT: For instructor, lessons CANNOT be locked. Lessons can be locked ONLY for student!
+        if (instructorUser) {
+          paywalled = false;
+          setIsPaywallLocked(false);
+
+          // If lessonRes failed with 403 / enrollment required, recover lesson content from courseObj or lessonsRes
+          let fallbackLesson: any = null;
+          if (courseObj && Array.isArray(courseObj.chapters)) {
+            for (const ch of courseObj.chapters) {
+              if (Array.isArray(ch.lessons)) {
+                const found = ch.lessons.find((l: any) => l.name === lessonId || l.title === lessonId);
+                if (found) {
+                  fallbackLesson = found;
+                  break;
+                }
+              }
+            }
+          }
+          if (!fallbackLesson && cData && Array.isArray((cData as any).chapters)) {
+            for (const ch of (cData as any).chapters) {
+              if (Array.isArray(ch.lessons)) {
+                const found = ch.lessons.find((l: any) => l.name === lessonId || l.title === lessonId);
+                if (found) {
+                  fallbackLesson = found;
+                  break;
+                }
+              }
+            }
+          }
+          if (!fallbackLesson && lessonsRes.status === 'fulfilled') {
+            const rawLe = lessonsRes.value;
+            const leArray = Array.isArray(rawLe) ? rawLe : (rawLe?.message?.data || rawLe?.data || rawLe?.message || []);
+            if (Array.isArray(leArray)) {
+              fallbackLesson = leArray.find((l: any) => l.name === lessonId || l.title === lessonId);
+            }
+          }
+
+          if (fallbackLesson) {
+            setLessonData((prev: any) => ({ ...fallbackLesson, ...(prev || {}) }));
+            setError(null);
+          }
+        } else if (paywalled) {
           setIsPaywallLocked(true);
           setPaywallMessage(paywallMsg);
+        } else {
+          setIsPaywallLocked(false);
         }
 
         // 2. Build outline with locked / preview indicators
@@ -125,33 +218,41 @@ export default function LessonPage() {
           });
         }
 
-        if (chaptersRes.status === 'fulfilled' && lessonsRes.status === 'fulfilled') {
-          const rawCh = chaptersRes.value;
-          const rawLe = lessonsRes.value;
-          const chArray = Array.isArray(rawCh) ? rawCh : (rawCh?.message?.data || rawCh?.data || rawCh?.message || []);
-          const leArray = Array.isArray(rawLe) ? rawLe : (rawLe?.message?.data || rawLe?.data || rawLe?.message || []);
-          
-          const mapped = chArray.map((c: any) => ({
+        const rawCh = (courseObj && Array.isArray(courseObj.chapters) && courseObj.chapters.length > 0)
+          ? courseObj.chapters
+          : (chaptersRes.status === 'fulfilled' ? chaptersRes.value : []);
+        const rawLe = lessonsRes.status === 'fulfilled' ? lessonsRes.value : [];
+        const chArray = Array.isArray(rawCh) ? rawCh : (rawCh?.message?.data || rawCh?.data || rawCh?.message || []);
+        const leArray = Array.isArray(rawLe) ? rawLe : (rawLe?.message?.data || rawLe?.data || rawLe?.message || []);
+
+        const mapped = chArray.map((c: any) => {
+          let chLessons: any[] = Array.isArray(c.lessons) ? c.lessons : [];
+          if (chLessons.length === 0 && leArray.length > 0) {
+            chLessons = leArray.filter((l: any) => l.chapter === c.name);
+          }
+
+          return {
             ...c,
-            lessons: leArray
-              .filter((l: any) => l.chapter === c.name)
-              .map((l: any) => {
-                const fromEnroll = enrollLessonsMap.get(l.name);
-                const isLessonLocked = fromEnroll?.is_locked !== undefined 
+            lessons: chLessons.map((l: any) => {
+              const fromEnroll = enrollLessonsMap.get(l.name);
+              // For instructor, lessons CANNOT be locked. Lessons can be locked ONLY for student!
+              const isLessonLocked = instructorUser
+                ? false
+                : (fromEnroll?.is_locked !== undefined 
                   ? Boolean(fromEnroll.is_locked)
-                  : Boolean(cData?.is_paid && !cData?.is_enrolled && !l.include_in_preview);
-                
-                return {
-                  ...l,
-                  is_locked: isLessonLocked,
-                  include_in_preview: fromEnroll?.include_in_preview !== undefined 
-                    ? Number(fromEnroll.include_in_preview) 
-                    : Number(l.include_in_preview || 0)
-                };
-              })
-          }));
-          setOutline(mapped);
-        }
+                  : Boolean(cData?.is_paid && !cData?.is_enrolled && !l.include_in_preview));
+              
+              return {
+                ...l,
+                is_locked: isLessonLocked,
+                include_in_preview: fromEnroll?.include_in_preview !== undefined 
+                  ? Number(fromEnroll.include_in_preview) 
+                  : Number(l.include_in_preview || 0)
+              };
+            })
+          };
+        });
+        setOutline(mapped);
 
         if (progressRes.status === 'fulfilled') {
           const rawProgress = progressRes.value;
@@ -218,7 +319,7 @@ export default function LessonPage() {
     chapterName: c.name, 
     lessonName: l.name,
     title: l.title || l.lesson_name || l.name,
-    isLocked: Boolean(l.is_locked),
+    isLocked: isInstructor ? false : Boolean(l.is_locked),
     isPreview: Number(l.include_in_preview) === 1
   })));
   
@@ -241,8 +342,8 @@ export default function LessonPage() {
       <Navbar />
 
       <div className="flex-grow flex overflow-hidden h-[calc(100vh-80px)]">
-        {/* Professional Dark Sidebar */}
-        <aside className="w-80 bg-slate-900 border-r border-slate-800 overflow-y-auto hidden md:flex flex-col shadow-xl z-10 relative">
+        {/* Professional Dark Sidebar (Curriculum Outline) */}
+        <aside className={`${isCurriculumSidebarOpen ? 'w-80' : 'w-0 hidden'} bg-slate-900 border-r border-slate-800 overflow-y-auto hidden md:flex flex-col shadow-xl z-10 relative transition-all duration-300`}>
           <div className="p-6 border-b border-slate-800 bg-slate-900 sticky top-0 z-20">
             <Link href={`/course/${courseId}`} className="inline-flex items-center text-xs font-semibold text-slate-400 hover:text-white transition-colors mb-4">
               <ArrowLeft className="w-3.5 h-3.5 mr-1" />
@@ -275,7 +376,7 @@ export default function LessonPage() {
                 <ul className="space-y-1">
                   {chapter.lessons?.map((l: any, lIndex: number) => {
                     const isActive = l.name === lessonId && chapter.name === chapterId;
-                    const isLessonLocked = Boolean(l.is_locked);
+                    const isLessonLocked = isInstructor ? false : Boolean(l.is_locked);
                     const isLessonPreview = Number(l.include_in_preview) === 1;
                     const isCompleted = 
                       progress?.data?.records?.some((r: any) => (r.lesson === l.name || r.lesson === l.title || r.lesson === l.lesson_name) && r.status === 'Complete') || 
@@ -310,13 +411,13 @@ export default function LessonPage() {
                             {lIndex + 1}. {l.title || l.lesson_name || l.name}
                           </span>
 
-                          {isLessonPreview && !courseData?.is_enrolled && (
+                          {isLessonPreview && !courseData?.is_enrolled && !isInstructor && (
                             <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex-shrink-0">
                               Preview
                             </span>
                           )}
 
-                          {isLessonLocked && (
+                          {isLessonLocked && !isInstructor && (
                             <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-amber-500/10 text-amber-400/90 border border-amber-500/20 flex-shrink-0">
                               Locked
                             </span>
@@ -337,21 +438,38 @@ export default function LessonPage() {
           <div className="absolute top-0 inset-x-0 h-80 bg-gradient-to-b from-indigo-50 to-transparent pointer-events-none -z-10" />
           
           {/* Header Banner */}
-          <div className="bg-white border-b border-slate-200 px-8 py-5 shadow-sm sticky top-0 z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-md border border-indigo-100">
-                  {chapterId}
-                </span>
-                {isPaywallLocked && (
-                  <span className="bg-amber-50 text-amber-700 px-2.5 py-1 rounded-md border border-amber-200 flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-amber-600" /> Locked Lesson
+          <div className="bg-white border-b border-slate-200 px-6 py-4 shadow-sm sticky top-0 z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsCurriculumSidebarOpen(prev => !prev)}
+                className="hidden md:inline-flex items-center gap-1.5 p-2 px-2.5 text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200 text-xs font-semibold cursor-pointer shrink-0"
+                title={isCurriculumSidebarOpen ? "Collapse Course Outline" : "Expand Course Outline"}
+                aria-label="Toggle Course Outline"
+              >
+                <PanelLeft className="w-4 h-4" />
+                <span>{isCurriculumSidebarOpen ? "Collapse Outline" : "Outline"}</span>
+              </button>
+
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-md border border-indigo-100">
+                    {chapterId}
                   </span>
-                )}
+                  {isPaywallLocked && !isInstructor && (
+                    <span className="bg-amber-50 text-amber-700 px-2.5 py-1 rounded-md border border-amber-200 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-amber-600" /> Locked Lesson
+                    </span>
+                  )}
+                  {isInstructor && (
+                    <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-md border border-emerald-200 flex items-center gap-1 font-bold">
+                      <Sparkles className="w-3 h-3 text-emerald-600" /> Instructor Access
+                    </span>
+                  )}
+                </div>
+                <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">
+                  {lessonDisplayTitle}
+                </h1>
               </div>
-              <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
-                {lessonDisplayTitle}
-              </h1>
             </div>
             
             <div className="flex items-center gap-3">
@@ -373,7 +491,7 @@ export default function LessonPage() {
           </div>
 
           {/* Conditional Rendering: Paywall Card VS Unlocked Content */}
-          {isPaywallLocked ? (
+          {isPaywallLocked && !isInstructor ? (
             <div className="max-w-3xl mx-auto p-4 md:p-8 w-full flex-grow flex items-center justify-center">
               <div className="relative w-full bg-white rounded-3xl shadow-[0_20px_50px_rgba(8,112,184,0.08)] border border-slate-200/80 p-8 md:p-12 text-center overflow-hidden">
                 {/* Top decorative gradient bar */}

@@ -58,8 +58,12 @@ export default function Navbar() {
   useEffect(() => {
     checkAuth();
     if (typeof window !== "undefined") {
+      // Check if current route is a particular lesson page (/course/[courseId]/[chapterId]/[lessonId])
+      const isLessonRoute = pathname ? /^\/course\/[^/]+\/[^/]+\/[^/]+(?:\/.*)?$/.test(pathname) : false;
+
       const saved = localStorage.getItem("lms_sidebar_expanded");
-      const expanded = saved !== null ? saved === "true" : true;
+      // If user opens a particular lesson, automatically shrink the sidebar (expanded = false)
+      const expanded = isLessonRoute ? false : (saved !== null ? saved === "true" : true);
       setIsSidebarExpanded(expanded);
       updateSidebarWidth(expanded);
 
@@ -79,7 +83,7 @@ export default function Navbar() {
         window.removeEventListener("auth-changed", checkAuth);
       };
     }
-  }, []);
+  }, [pathname]);
 
   const toggleSidebar = () => {
     if (typeof window !== "undefined") {

@@ -62,26 +62,26 @@ export default function EnrollmentsPage() {
       <Navbar />
 
       {/* Hero Section */}
-      <div className="relative overflow-hidden bg-slate-900 text-white pt-16 pb-24">
+      <div className="relative overflow-hidden bg-slate-900 text-white pt-8 pb-14">
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
-          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-indigo-600/20 blur-3xl"></div>
-          <div className="absolute top-20 -left-20 w-72 h-72 rounded-full bg-blue-500/10 blur-3xl"></div>
+          <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-indigo-600/20 blur-3xl"></div>
+          <div className="absolute top-20 -left-20 w-60 h-60 rounded-full bg-blue-500/10 blur-3xl"></div>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
-          <span className="inline-block px-3 py-1 mb-4 text-xs font-semibold tracking-wide text-indigo-300 uppercase bg-indigo-900/50 border border-indigo-700/50 rounded-md backdrop-blur-sm">
+          <span className="inline-block px-2.5 py-0.5 mb-2 text-[11px] font-semibold tracking-wide text-indigo-300 uppercase bg-indigo-900/50 border border-indigo-700/50 rounded-md backdrop-blur-sm">
             Administration
           </span>
-          <h1 className="text-3xl md:text-5xl font-extrabold mb-4 tracking-tight text-white">
+          <h1 className="text-2xl md:text-3xl font-extrabold mb-1.5 tracking-tight text-white">
             Course Enrollments
           </h1>
-          <p className="text-lg text-indigo-100/80 max-w-2xl mx-auto font-light">
+          <p className="text-xs md:text-sm text-indigo-100/80 max-w-2xl mx-auto font-light">
             Monitor and manage active student enrollments across all courses.
           </p>
         </div>
       </div>
 
-      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full -mt-12 relative z-20">
+      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full -mt-6 relative z-20">
         {loading ? (
           <div className="flex justify-center items-center py-20 bg-white rounded-xl shadow-sm border border-slate-100">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>

@@ -43,35 +43,35 @@ export default function QuizzesPage() {
       <Navbar />
       
       {/* Hero Header Area */}
-      <div className="relative overflow-hidden bg-slate-900 text-white pt-10 pb-16 px-4 sm:px-6 lg:px-8">
+      <div className="relative overflow-hidden bg-slate-900 text-white pt-6 pb-10 px-4 sm:px-6 lg:px-8">
         {/* Decorative background elements */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-indigo-600/20 blur-3xl"></div>
-          <div className="absolute top-20 -left-20 w-72 h-72 rounded-full bg-blue-500/10 blur-3xl"></div>
+          <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-indigo-600/20 blur-3xl"></div>
+          <div className="absolute top-20 -left-20 w-60 h-60 rounded-full bg-blue-500/10 blur-3xl"></div>
         </div>
 
         <div className="max-w-7xl mx-auto relative z-10 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-white">
+            <h1 className="text-2xl font-extrabold tracking-tight text-white">
               Assessments
             </h1>
-            <p className="text-indigo-100 mt-2 text-sm max-w-2xl">
+            <p className="text-indigo-100 mt-1 text-xs sm:text-sm max-w-2xl">
               Browse and take available quizzes to test your knowledge.
             </p>
           </div>
           <div>
             <Link 
               href="/quizzes/create-question" 
-              className="inline-flex items-center px-4 py-2 bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-medium rounded-lg shadow-sm transition-colors border border-indigo-400/50"
+              className="inline-flex items-center px-3.5 py-2 bg-indigo-500 hover:bg-indigo-400 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors border border-indigo-400/50"
             >
-              <svg className="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+              <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
               Create Question
             </Link>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {loading ? (
           <div className="flex justify-center items-center h-40">
             <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>

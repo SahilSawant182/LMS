@@ -85,31 +85,31 @@ export default function ProgramsPage() {
         <Navbar />
 
         {/* ── Hero ── */}
-        <div className="bg-slate-900 text-white pt-16 pb-20 relative overflow-hidden">
+        <div className="bg-slate-900 text-white pt-8 pb-12 relative overflow-hidden">
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-indigo-600/20 blur-3xl" />
-            <div className="absolute top-20 -left-24 w-72 h-72 rounded-full bg-violet-500/10 blur-3xl" />
+            <div className="absolute -top-40 -right-40 w-[400px] h-[400px] rounded-full bg-indigo-600/20 blur-3xl" />
+            <div className="absolute top-20 -left-24 w-60 h-60 rounded-full bg-violet-500/10 blur-3xl" />
           </div>
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
-            <div className="inline-flex items-center gap-2 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full px-4 py-1.5 text-sm font-semibold mb-5">
-              <Sparkles className="w-4 h-4" />
+            <div className="inline-flex items-center gap-1.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full px-3 py-1 text-xs font-semibold mb-3">
+              <Sparkles className="w-3.5 h-3.5" />
               Guided Learning Experiences
             </div>
-            <h1 className="text-4xl md:text-5xl font-extrabold mb-3 tracking-tight">
+            <h1 className="text-2xl md:text-3xl font-extrabold mb-2 tracking-tight">
               Learning{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-violet-400">
                 Paths
               </span>
             </h1>
-            <p className="text-indigo-200 max-w-2xl mx-auto text-base mb-0">
+            <p className="text-indigo-200 max-w-2xl mx-auto text-xs md:text-sm mb-0">
               Structured programs that guide you through multiple courses in sequence.
             </p>
           </div>
         </div>
 
         {/* ── Main ── */}
-        <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
 
           {/* Stats Cards */}
           {!loading && !error && programs.length > 0 && (

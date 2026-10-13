@@ -82,23 +82,23 @@ export default function BatchesPage() {
       <Navbar />
 
       {/* Hero Section */}
-      <div className="bg-slate-900 text-white pt-16 pb-24 relative overflow-hidden">
+      <div className="bg-slate-900 text-white pt-8 pb-14 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
-          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-indigo-600/20 blur-3xl"></div>
-          <div className="absolute top-20 -left-20 w-72 h-72 rounded-full bg-blue-500/10 blur-3xl"></div>
+          <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-indigo-600/20 blur-3xl"></div>
+          <div className="absolute top-20 -left-20 w-60 h-60 rounded-full bg-blue-500/10 blur-3xl"></div>
         </div>
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
-          <h1 className="text-3xl md:text-5xl font-extrabold mb-4 tracking-tight">
+          <h1 className="text-2xl md:text-3xl font-extrabold mb-2 tracking-tight">
             Explore Learning <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-sky-400">Batches</span>
           </h1>
-          <p className="text-indigo-100 max-w-2xl mx-auto text-lg mb-8">
+          <p className="text-indigo-100 max-w-2xl mx-auto text-xs md:text-sm mb-2">
             Join curated cohorts of learners, follow structured timelines, and achieve your goals together with expert instructors.
           </p>
         </div>
       </div>
 
-      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full -mt-12 relative z-20">
+      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full -mt-6 relative z-20">
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 md:p-8 mb-8">
           
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">

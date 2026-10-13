@@ -90,26 +90,26 @@ export default function BadgesPage() {
       <Navbar />
 
       {/* Hero Banner */}
-      <div className="bg-slate-900 text-white pt-12 pb-20 relative overflow-hidden">
+      <div className="bg-slate-900 text-white pt-6 pb-12 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
-          <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-amber-500/15 blur-3xl"></div>
-          <div className="absolute top-10 -left-20 w-80 h-80 rounded-full bg-indigo-500/15 blur-3xl"></div>
+          <div className="absolute -top-32 -right-32 w-80 h-80 rounded-full bg-amber-500/15 blur-3xl"></div>
+          <div className="absolute top-10 -left-20 w-60 h-60 rounded-full bg-indigo-500/15 blur-3xl"></div>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-semibold mb-4 border border-amber-500/30">
-                <Medal className="w-4 h-4 text-amber-400" />
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-semibold mb-2 border border-amber-500/30">
+                <Medal className="w-3.5 h-3.5 text-amber-400" />
                 Achievement System
               </div>
-              <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight">
+              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
                 Badges &{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-300 to-yellow-200">
                   Achievements
                 </span>
               </h1>
-              <p className="text-slate-300 max-w-2xl text-base md:text-lg mt-3">
+              <p className="text-slate-300 max-w-2xl text-xs md:text-sm mt-1.5">
                 Recognizing student dedication, milestone mastery, and active cohort engagement across the platform.
               </p>
             </div>
@@ -119,9 +119,9 @@ export default function BadgesPage() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <Link
                   href="/badges/create"
-                  className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 hover:scale-[1.02] transition-all duration-200"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 hover:scale-[1.02] transition-all duration-200"
                 >
-                  <Plus className="w-5 h-5" />
+                  <Plus className="w-4 h-4" />
                   Create New Badge
                 </Link>
               </div>
@@ -129,24 +129,24 @@ export default function BadgesPage() {
           </div>
 
           {/* Quick Metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-10">
-            <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-              <p className="text-xs text-slate-400 font-medium">Total Badges</p>
-              <p className="text-2xl font-black text-white mt-1">{badges.length}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+            <div className="bg-white/5 backdrop-blur-md rounded-xl p-3 border border-white/10">
+              <p className="text-[11px] text-slate-400 font-medium">Total Badges</p>
+              <p className="text-xl font-bold text-white mt-0.5">{badges.length}</p>
             </div>
-            <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-              <p className="text-xs text-slate-400 font-medium">Active Badges</p>
-              <p className="text-2xl font-black text-emerald-400 mt-1">{activeCount}</p>
+            <div className="bg-white/5 backdrop-blur-md rounded-xl p-3 border border-white/10">
+              <p className="text-[11px] text-slate-400 font-medium">Active Badges</p>
+              <p className="text-xl font-bold text-emerald-400 mt-0.5">{activeCount}</p>
             </div>
-            <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-              <p className="text-xs text-slate-400 font-medium">Assignment Events</p>
-              <p className="text-2xl font-black text-amber-300 mt-1">
+            <div className="bg-white/5 backdrop-blur-md rounded-xl p-3 border border-white/10">
+              <p className="text-[11px] text-slate-400 font-medium">Assignment Events</p>
+              <p className="text-xl font-bold text-amber-300 mt-0.5">
                 {uniqueEvents.length || 2}
               </p>
             </div>
-            <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-              <p className="text-xs text-slate-400 font-medium">Role Access</p>
-              <p className="text-sm font-bold text-indigo-300 mt-2">
+            <div className="bg-white/5 backdrop-blur-md rounded-xl p-3 border border-white/10">
+              <p className="text-[11px] text-slate-400 font-medium">Role Access</p>
+              <p className="text-xs font-bold text-indigo-300 mt-1">
                 {isInstructor ? 'Instructor (Admin)' : 'Learner View'}
               </p>
             </div>
@@ -155,7 +155,7 @@ export default function BadgesPage() {
       </div>
 
       {/* Main Content Area */}
-      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full -mt-8 relative z-20">
+      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full -mt-6 relative z-20">
         {/* Controls Bar */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 md:p-6 mb-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

@@ -116,13 +116,15 @@ export const getCourseCompletionData = async (payload?: any) => {
   });
 };
 
-export const getCourseDetails = async (payload: GetCourseDetailsPayload) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_details`, {
-    params: payload,
-    headers: {
-      'Authorization': `token ${API_TOKEN}`
-    }
+export const getCourse = async (name: string) => {
+  return apiService.get("method/lms.lms.stride_lms.get_course", {
+    params: { name }
   });
+};
+
+export const getCourseDetails = async (payload: GetCourseDetailsPayload | { name?: string; course?: string }) => {
+  const courseName = (payload as any).name || (payload as any).course;
+  return getCourse(courseName);
 };
 
 export const getCourseOutline = async (payload?: any) => {
@@ -233,20 +235,67 @@ export const getCertificate = async (name: string) => {
   });
 };
 
-export const createCourse = async (data: FormData) => {
-  return apiService.post(`method/${API_METHOD_PREFIX}.create_course`, data, {
+export interface CreateCoursePayload {
+  title: string;
+  course?: string;
+  course_name?: string;
+  name?: string;
+  short_introduction?: string;
+  description?: string;
+  published?: number;
+  video_link?: string;
+  tags?: string;
+  category?: string;
+  image?: string;
+  card_gradient?: string;
+  upcoming?: number;
+  featured?: number;
+  disable_self_learning?: number;
+  enforce_lesson_completion?: number;
+  paid_course?: number;
+  paid_certificate?: number;
+  enable_certification?: number;
+  course_price?: number;
+  currency?: string;
+  amount_usd?: number;
+}
+
+export const createCourse = async (data: CreateCoursePayload | FormData | any) => {
+  const token = typeof window !== "undefined" && localStorage.getItem("apiKey") && localStorage.getItem("apiSecret")
+    ? `token ${localStorage.getItem("apiKey")}:${localStorage.getItem("apiSecret")}`
+    : `token ${API_TOKEN}`;
+
+  if (typeof window !== "undefined" && data instanceof FormData) {
+    return apiService.post("method/lms.lms.stride_lms.create_course", data, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': token
+      }
+    });
+  }
+  return apiService.post("method/lms.lms.stride_lms.create_course", data, {
     headers: {
-      'Content-Type': 'multipart/form-data',
-      'Authorization': `token ${API_TOKEN}`
+      'Authorization': token
     }
   });
 };
 
-export const updateCourse = async (data: FormData) => {
-  return apiService.post(`method/${API_METHOD_PREFIX}.update_course`, data, {
+export const updateCourse = async (data: CreateCoursePayload | FormData | any) => {
+  const token = typeof window !== "undefined" && localStorage.getItem("apiKey") && localStorage.getItem("apiSecret")
+    ? `token ${localStorage.getItem("apiKey")}:${localStorage.getItem("apiSecret")}`
+    : `token ${API_TOKEN}`;
+
+  if (typeof window !== "undefined" && data instanceof FormData) {
+    return apiService.post("method/lms.lms.stride_lms.update_course", data, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': token
+      }
+    });
+  }
+  return apiService.post("method/lms.lms.stride_lms.update_course", data, {
     headers: {
-      'Content-Type': 'multipart/form-data',
-      'Authorization': `token ${API_TOKEN}`
+      'Authorization': token
     }
   });
 };

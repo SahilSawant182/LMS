@@ -208,35 +208,35 @@ export default function BatchDetailsPage() {
       <Navbar />
 
       {/* Hero Section */}
-      <div className="relative overflow-hidden bg-slate-900 text-white pt-16 pb-24">
+      <div className="relative overflow-hidden bg-slate-900 text-white pt-8 pb-14">
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
-          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-indigo-600/20 blur-3xl"></div>
-          <div className="absolute top-20 -left-20 w-72 h-72 rounded-full bg-blue-500/10 blur-3xl"></div>
+          <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-indigo-600/20 blur-3xl"></div>
+          <div className="absolute top-10 -left-20 w-60 h-60 rounded-full bg-blue-500/10 blur-3xl"></div>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="mb-6">
+          <div className="mb-3">
             <Link 
               href="/" 
-              className="inline-flex items-center gap-2 text-sm font-medium text-indigo-200 hover:text-white transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-200 hover:text-white transition-colors"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-3.5 h-3.5" />
               Back to Home
             </Link>
           </div>
-          <div className="flex flex-col lg:flex-row justify-between items-start gap-8">
+          <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
             <div className="max-w-3xl">
-              <span className="inline-block px-3 py-1 mb-4 text-xs font-semibold tracking-wide text-indigo-300 uppercase bg-indigo-900/50 border border-indigo-700/50 rounded-md backdrop-blur-sm">
+              <span className="inline-block px-2.5 py-0.5 mb-2 text-[11px] font-semibold tracking-wide text-indigo-300 uppercase bg-indigo-900/50 border border-indigo-700/50 rounded-md backdrop-blur-sm">
                 {batchData.category || 'Batch'}
               </span>
-              <h1 className="text-3xl md:text-4xl font-extrabold mb-4 leading-tight tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-indigo-200">
+              <h1 className="text-2xl md:text-3xl font-extrabold mb-2 leading-tight tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-indigo-200">
                 {batchData.title || batchData.name || batchId}
               </h1>
-              <p className="text-base md:text-lg text-indigo-100/80 mb-6 max-w-2xl font-light">
+              <p className="text-xs md:text-sm text-indigo-100/80 mb-4 max-w-2xl font-light">
                 {batchData.description || 'Enroll in this batch to access a curated set of courses designed for your career.'}
               </p>
 
-              <div className="flex flex-wrap items-center gap-3 text-sm font-medium">
+              <div className="flex flex-wrap items-center gap-2.5 text-xs font-medium">
                 {batchData.start_date && (
                   <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded border border-white/10">
                     <Calendar className="w-4 h-4 text-sky-400" />
@@ -386,7 +386,7 @@ export default function BatchDetailsPage() {
         </div>
       </div>
 
-      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full -mt-12 relative z-20">
+      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full -mt-6 relative z-20">
         {false && batchData.video_link && (
           <section className="mb-8 rounded-xl overflow-hidden shadow-sm border border-slate-100 bg-black flex justify-center w-full">
             {(batchData.video_link.endsWith('.mp4') || batchData.video_link.endsWith('.webm') || batchData.video_link.includes('.mp4')) ? (

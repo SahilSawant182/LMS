@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  getCourseDetails, getChapters, getLessons, getReviews, 
+  getCourse, getCourseDetails, getChapters, getLessons, getReviews, 
   createChapter, createLesson, getCourseProgress, getAssignments, 
   getAssignmentSubmissions, enrollInCourse,
   getCourseReviewList, createCourseReview, deleteCourseReview, LMSCourseReview
@@ -39,6 +39,22 @@ const formatReviewDate = (dateStr?: string) => {
   }
 };
 
+// Helper to resolve video embed url for YouTube or video providers
+const getEmbedUrl = (link?: string | null) => {
+  if (!link) return null;
+  const trimmed = link.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes('youtube.com/embed/')) return trimmed;
+  const matchWatch = trimmed.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+  if (matchWatch && matchWatch[1]) {
+    return `https://www.youtube.com/embed/${matchWatch[1]}`;
+  }
+  if (/^[a-zA-Z0-9_-]{8,15}$/.test(trimmed)) {
+    return `https://www.youtube.com/embed/${trimmed}`;
+  }
+  return trimmed;
+};
+
 export default function CourseDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -67,6 +83,9 @@ export default function CourseDetailPage() {
   const [reviewSuccessMsg, setReviewSuccessMsg] = useState<string | null>(null);
   const [reviewErrorMsg, setReviewErrorMsg] = useState<string | null>(null);
 
+  // Video Preview State
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+
   // Curriculum Management State
   const [isAddingChapter, setIsAddingChapter] = useState(false);
   const [newChapterTitle, setNewChapterTitle] = useState('');
@@ -81,11 +100,13 @@ export default function CourseDetailPage() {
     if (!courseId) return;
     const checkRoles = () => {
       try {
-        const rolesStr = localStorage.getItem("roles");
-        if (rolesStr) {
-          const roles = typeof rolesStr === 'string' && rolesStr.startsWith('[') ? JSON.parse(rolesStr) : rolesStr;
-          setIsInstructor(Array.isArray(roles) ? roles.includes("Instructor") : roles.includes("Instructor"));
-        }
+        const rolesStr = localStorage.getItem("roles") || "";
+        const roles = rolesStr.startsWith('[') ? JSON.parse(rolesStr) : rolesStr;
+        const hasInstructorRole = Array.isArray(roles)
+          ? roles.some((r: string) => ["Instructor", "Administrator", "System Manager"].includes(r))
+          : (rolesStr.includes("Instructor") || rolesStr.includes("Administrator") || rolesStr.includes("System Manager"));
+        const flag = hasInstructorRole || localStorage.getItem("isInstructor") === "true";
+        setIsInstructor(Boolean(flag));
         const email = localStorage.getItem("userEmail") || "";
         const name = localStorage.getItem("fullName") || "";
         setCurrentUserEmail(email);
@@ -100,7 +121,7 @@ export default function CourseDetailPage() {
     setLoading(true);
     try {
       const [detailsRes, outlineRes, reviewsRes, lessonsRes, progressRes, assignmentsRes, submissionsRes, courseReviewsRes, enrollRes] = await Promise.allSettled([
-        getCourseDetails({ course: courseId }),
+        getCourse(courseId),
         getChapters({ course: courseId }),
         getReviews({ course: courseId }),
         getLessons({ course: courseId }),
@@ -111,6 +132,16 @@ export default function CourseDetailPage() {
         getCourseWithEnrollment(courseId)
       ]);
 
+      let currentIsInstructor = false;
+      const rolesStr = typeof window !== 'undefined' ? (localStorage.getItem("roles") || "") : "";
+      const roles = rolesStr.startsWith('[') ? JSON.parse(rolesStr) : rolesStr;
+      const hasInstructorRole = Array.isArray(roles)
+        ? roles.some((r: string) => ["Instructor", "Administrator", "System Manager", "Course Creator"].includes(r))
+        : (rolesStr.includes("Instructor") || rolesStr.includes("Administrator") || rolesStr.includes("System Manager"));
+      if (hasInstructorRole || (typeof window !== 'undefined' && localStorage.getItem("isInstructor") === "true")) {
+        currentIsInstructor = true;
+      }
+
       if (enrollRes.status === 'fulfilled' && enrollRes.value) {
         const enrollData = enrollRes.value;
         setEnrollmentData(enrollData);
@@ -120,8 +151,22 @@ export default function CourseDetailPage() {
       }
 
       if (detailsRes.status === 'fulfilled') {
-        const d = detailsRes.value?.data || detailsRes.value?.message || detailsRes.value;
+        const d = detailsRes.value?.data || detailsRes.value?.message?.data || detailsRes.value?.message || detailsRes.value;
         setDetails(d);
+        const currentEmail = localStorage.getItem("userEmail") || "";
+        if (d?.instructors && Array.isArray(d.instructors) && currentEmail) {
+          const isAssignedInstructor = d.instructors.some((i: any) => 
+            i.instructor === currentEmail || i.owner === currentEmail || i.name === currentEmail || i.username === currentEmail
+          );
+          if (isAssignedInstructor) {
+            currentIsInstructor = true;
+            setIsInstructor(true);
+          }
+        }
+        if (d?.owner && (d.owner === currentEmail || d.owner === "Administrator")) {
+          currentIsInstructor = true;
+          setIsInstructor(true);
+        }
         if (enrollRes.status !== 'fulfilled' || !enrollRes.value) {
           if (d && d.membership) {
             setIsEnrolled(true);
@@ -142,27 +187,67 @@ export default function CourseDetailPage() {
         lessonsArray = Array.isArray(unwrapped) ? unwrapped : [];
       }
 
-      if (outlineRes.status === 'fulfilled') {
+      const enrollLessonsMap = new Map<string, any>();
+      if (enrollRes.status === 'fulfilled' && enrollRes.value) {
+        const eChapters = (enrollRes.value as any).chapters || [];
+        if (Array.isArray(eChapters)) {
+          eChapters.forEach((ch: any) => {
+            if (Array.isArray(ch.lessons)) {
+              ch.lessons.forEach((l: any) => {
+                if (l.name) enrollLessonsMap.set(l.name, l);
+              });
+            }
+          });
+        }
+      }
+
+      const courseObj = detailsRes.status === 'fulfilled'
+        ? (detailsRes.value?.data || detailsRes.value?.message?.data || detailsRes.value?.message || detailsRes.value)
+        : null;
+
+      // Prioritize chapters with nested lessons from get_course API
+      if (courseObj && Array.isArray(courseObj.chapters) && courseObj.chapters.length > 0) {
+        const sortedChapters = [...courseObj.chapters].sort((a: any, b: any) => {
+          if (a.idx !== undefined && b.idx !== undefined && a.idx !== b.idx) {
+            return a.idx - b.idx;
+          }
+          return String(a.name || a.title || '').localeCompare(String(b.name || b.title || ''), undefined, { numeric: true });
+        });
+
+        const mergedOutline = sortedChapters.map(chapter => {
+          let chLessons: any[] = Array.isArray(chapter.lessons) ? chapter.lessons : [];
+          if (chLessons.length === 0 && lessonsArray.length > 0) {
+            chLessons = lessonsArray.filter((l: any) => l.chapter === chapter.name);
+          }
+
+          const sortedLessons = [...chLessons].sort((a: any, b: any) => {
+            if (a.idx !== undefined && b.idx !== undefined && a.idx !== b.idx) {
+              return a.idx - b.idx;
+            }
+            return String(a.name || a.title || '').localeCompare(String(b.name || b.title || ''), undefined, { numeric: true });
+          });
+
+          return {
+            ...chapter,
+            lessons: sortedLessons.map(lesson => {
+              const fromEnroll = enrollLessonsMap.get(lesson.name);
+              return {
+                ...lesson,
+                is_locked: currentIsInstructor ? false : (fromEnroll?.is_locked !== undefined ? fromEnroll.is_locked : lesson.is_locked),
+                include_in_preview: fromEnroll?.include_in_preview !== undefined ? fromEnroll.include_in_preview : lesson.include_in_preview,
+              };
+            })
+          };
+        });
+
+        setOutline(mergedOutline);
+      } else if (outlineRes.status === 'fulfilled') {
         const rawOutline = outlineRes.value;
         const outlineArray = Array.isArray(rawOutline)
           ? rawOutline
           : (rawOutline?.message?.data || rawOutline?.data?.message || rawOutline?.data || rawOutline?.message || []);
 
         const safeOutline = Array.isArray(outlineArray) ? outlineArray : [];
-
-        const enrollLessonsMap = new Map<string, any>();
-        if (enrollRes.status === 'fulfilled' && enrollRes.value) {
-          const eChapters = (enrollRes.value as any).chapters || [];
-          if (Array.isArray(eChapters)) {
-            eChapters.forEach((ch: any) => {
-              if (Array.isArray(ch.lessons)) {
-                ch.lessons.forEach((l: any) => {
-                  if (l.name) enrollLessonsMap.set(l.name, l);
-                });
-              }
-            });
-          }
-        }
 
         // Merge lessons into their respective chapters
         const mergedOutline = safeOutline.map(chapter => ({
@@ -173,7 +258,7 @@ export default function CourseDetailPage() {
               const fromEnroll = enrollLessonsMap.get(lesson.name);
               return {
                 ...lesson,
-                is_locked: fromEnroll?.is_locked !== undefined ? fromEnroll.is_locked : lesson.is_locked,
+                is_locked: currentIsInstructor ? false : (fromEnroll?.is_locked !== undefined ? fromEnroll.is_locked : lesson.is_locked),
                 include_in_preview: fromEnroll?.include_in_preview !== undefined ? fromEnroll.include_in_preview : lesson.include_in_preview,
               };
             })
@@ -472,66 +557,107 @@ export default function CourseDetailPage() {
     : (enrollmentData?.currency || details?.currency || "₹");
   const isFree = !isPaid || currentPrice === 0;
 
+  const gradientMap: Record<string, string> = {
+    Blue: "from-blue-950 via-slate-900 to-indigo-950",
+    Red: "from-rose-950 via-slate-900 to-red-950",
+    Purple: "from-purple-950 via-slate-900 to-indigo-950",
+    Green: "from-emerald-950 via-slate-900 to-teal-950",
+    Orange: "from-amber-950 via-slate-900 to-orange-950",
+    Emerald: "from-emerald-950 via-slate-900 to-teal-950",
+    Amber: "from-amber-950 via-slate-900 to-yellow-950",
+    Indigo: "from-indigo-950 via-slate-900 to-slate-950",
+    Teal: "from-teal-950 via-slate-900 to-slate-950",
+  };
+  const heroGradientClass = (details?.card_gradient && gradientMap[details.card_gradient])
+    ? gradientMap[details.card_gradient]
+    : "from-slate-900 via-indigo-950 to-slate-900";
+
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
       <Navbar />
 
       {/* Modern Hero Section */}
-      <div className="relative overflow-hidden bg-slate-900 text-white pt-10 pb-20">
+      <div className={`relative overflow-hidden bg-gradient-to-r ${heroGradientClass} text-white pt-6 pb-12 transition-all duration-300`}>
         {/* Decorative background elements */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
-          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-indigo-600/20 blur-3xl"></div>
-          <div className="absolute top-20 -left-20 w-72 h-72 rounded-full bg-blue-500/10 blur-3xl"></div>
+          <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-indigo-600/20 blur-3xl"></div>
+          <div className="absolute top-10 -left-20 w-60 h-60 rounded-full bg-blue-500/10 blur-3xl"></div>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between">
             <Link
               href="/"
-              className="inline-flex items-center gap-2 text-sm font-medium text-indigo-200 hover:text-white transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-200 hover:text-white transition-colors"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-3.5 h-3.5" />
               Back to Courses
             </Link>
 
             {isInstructor && (
               <Link
                 href={`/course/${courseId}/edit`}
-                className="inline-flex items-center gap-2 text-sm font-semibold text-white bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg backdrop-blur-sm transition-all"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg backdrop-blur-sm transition-all"
               >
-                <Edit className="w-4 h-4" />
+                <Edit className="w-3.5 h-3.5" />
                 Edit Course
               </Link>
             )}
           </div>
           <div className="max-w-3xl">
-            {details.category && (
-              <span className="inline-block px-3 py-1 mb-4 text-xs font-semibold tracking-wide text-indigo-300 uppercase bg-indigo-900/50 border border-indigo-700/50 rounded-md backdrop-blur-sm">
-                {details.category}
-              </span>
-            )}
-            <h1 className="text-3xl md:text-4xl font-extrabold mb-3 leading-tight tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-indigo-200">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              {details.category && (
+                <span className="inline-block px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-indigo-300 uppercase bg-indigo-900/50 border border-indigo-700/50 rounded-md backdrop-blur-sm">
+                  {details.category}
+                </span>
+              )}
+              {details.tags && typeof details.tags === 'string' && (
+                details.tags.split(',').map((tag: string, idx: number) => {
+                  const clean = tag.trim();
+                  if (!clean) return null;
+                  return (
+                    <span key={idx} className="inline-block px-2 py-0.5 text-[11px] font-medium text-indigo-200/90 bg-white/10 border border-white/10 rounded-md backdrop-blur-sm">
+                      #{clean}
+                    </span>
+                  );
+                })
+              )}
+            </div>
+
+            <h1 className="text-2xl md:text-3xl font-extrabold mb-1.5 leading-tight tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-indigo-200">
               {details.title || details.course_name || courseId}
             </h1>
-            <p className="text-base md:text-lg text-indigo-100/80 mb-5 max-w-2xl font-light">
+            <p className="text-sm md:text-base text-indigo-100/80 mb-3 max-w-2xl font-light">
               {details.short_introduction || 'Learn the skills you need for your career with comprehensive lessons and expert guidance.'}
             </p>
 
-            <div className="flex flex-wrap items-center gap-3 text-sm font-medium">
+            <div className="flex flex-wrap items-center gap-2.5 text-xs font-medium">
+              {details.rating && Number(details.rating) > 0 && (
+                <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-2.5 py-1 rounded border border-white/10">
+                  <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                  <span>{Number(details.rating).toFixed(1)} Rating</span>
+                </div>
+              )}
+              {details.enrollments !== undefined && (
+                <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-2.5 py-1 rounded border border-white/10">
+                  <Users className="w-3.5 h-3.5 text-sky-400" />
+                  <span>{details.enrollments} Learners</span>
+                </div>
+              )}
               {details.level && (
-                <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded border border-white/10">
-                  <Star className="w-4 h-4 text-amber-400" />
+                <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-2.5 py-1 rounded border border-white/10">
+                  <Star className="w-3.5 h-3.5 text-amber-400" />
                   <span>{details.level}</span>
                 </div>
               )}
               {details.duration && (
-                <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded border border-white/10">
-                  <Clock className="w-4 h-4 text-sky-400" />
+                <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-2.5 py-1 rounded border border-white/10">
+                  <Clock className="w-3.5 h-3.5 text-sky-400" />
                   <span>{details.duration}</span>
                 </div>
               )}
-              <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded border border-white/10">
-                <BookOpen className="w-4 h-4 text-emerald-400" />
+              <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-2.5 py-1 rounded border border-white/10">
+                <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
                 <span>{details.lessons || 0} Lessons</span>
               </div>
             </div>
@@ -539,7 +665,7 @@ export default function CourseDetailPage() {
         </div>
       </div>
 
-      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col lg:flex-row gap-8 w-full -mt-10 relative z-20">
+      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col lg:flex-row gap-8 w-full -mt-6 relative z-20">
 
         {/* Left Column - Main Content */}
         <div className="lg:w-2/3 space-y-8">
@@ -621,8 +747,8 @@ export default function CourseDetailPage() {
                       {chapter.lessons && chapter.lessons.length > 0 ? (
                         <ul className="divide-y divide-slate-100">
                           {chapter.lessons.map((lesson: any, lIndex: number) => {
-                            const isLocked = !isEnrolled && isPaid && !isFree && (lesson.is_locked === true || (!lesson.include_in_preview && lesson.include_in_preview !== 1));
-                            const isPreview = !isEnrolled && Boolean(lesson.include_in_preview === 1 || lesson.include_in_preview === true);
+                            const isLocked = !isInstructor && !isEnrolled && isPaid && !isFree && (lesson.is_locked === true || (!lesson.include_in_preview && lesson.include_in_preview !== 1));
+                            const isPreview = !isInstructor && !isEnrolled && Boolean(lesson.include_in_preview === 1 || lesson.include_in_preview === true);
 
                             return (
                               <li key={lesson.name || lIndex} className="py-3 flex justify-between items-center group/lesson">
@@ -662,7 +788,7 @@ export default function CourseDetailPage() {
                                     href={`/course/${courseId}/${encodeURIComponent(chapter.name)}/${encodeURIComponent(lesson.name)}`}
                                     className="flex items-center gap-1 text-indigo-600 text-xs font-bold opacity-0 group-hover/lesson:opacity-100 transition-all -translate-x-2 group-hover/lesson:translate-x-0"
                                   >
-                                    {isPreview ? "Preview" : "Start"} <ChevronRight className="w-3 h-3" />
+                                    {isInstructor ? "Start Lesson" : (isPreview ? "Preview" : "Start")} <ChevronRight className="w-3 h-3" />
                                   </Link>
                                 )}
                               </li>
@@ -1122,20 +1248,45 @@ export default function CourseDetailPage() {
           <div className="sticky top-6 bg-white/80 backdrop-blur-xl border border-slate-200/60 rounded-xl p-1 shadow-lg shadow-indigo-900/5">
             <div className="bg-white rounded-lg p-5 md:p-6">
 
-              {/* Course Thumbnail */}
+              {/* Course Thumbnail & Video Preview */}
               {details.image ? (
-                <div className="w-full h-40 rounded-lg overflow-hidden mb-5 relative shadow-inner">
-                  <img src={getImageUrl(details.image)} alt="Course Thumbnail" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-12 h-12 bg-white/30 backdrop-blur-md rounded-full flex items-center justify-center cursor-pointer hover:bg-white/40 transition-colors">
-                      <PlayCircle className="w-6 h-6 text-white" />
+                <div 
+                  onClick={() => {
+                    if (details.video_link) setIsVideoModalOpen(true);
+                  }}
+                  className={`w-full h-44 rounded-xl overflow-hidden mb-5 relative shadow-inner group ${details.video_link ? 'cursor-pointer' : ''}`}
+                >
+                  <img src={getImageUrl(details.image)} alt="Course Thumbnail" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
+                  {details.video_link ? (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-12 h-12 bg-white/30 backdrop-blur-md rounded-full flex items-center justify-center group-hover:bg-indigo-600 group-hover:scale-110 transition-all shadow-lg">
+                        <PlayCircle className="w-6 h-6 text-white" />
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
+                  {details.video_link && (
+                    <div className="absolute bottom-2.5 left-3 text-[11px] font-bold text-white bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow-sm">
+                      <PlayCircle className="w-3.5 h-3.5 text-indigo-400" />
+                      Watch Preview Video
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="w-full h-36 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-lg mb-5 flex items-center justify-center shadow-inner">
+                <div 
+                  onClick={() => {
+                    if (details.video_link) setIsVideoModalOpen(true);
+                  }}
+                  className={`w-full h-36 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl mb-5 flex items-center justify-center shadow-inner relative group ${details.video_link ? 'cursor-pointer' : ''}`}
+                >
                   <BookOpen className="w-10 h-10 text-indigo-300" />
+                  {details.video_link && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-12 h-12 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                        <PlayCircle className="w-6 h-6" />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1244,21 +1395,25 @@ export default function CourseDetailPage() {
                   <div className="mb-5">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5 block">Taught by</span>
                     <div className="space-y-2.5">
-                      {details.instructors.map((instructor: any, i: number) => (
-                        <div key={i} className="flex items-center gap-2.5">
-                          {instructor.user_image ? (
-                            <img src={getImageUrl(instructor.user_image)} alt={instructor.full_name} className="w-8 h-8 rounded-full object-cover border border-slate-100" />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-sm text-xs">
-                              {instructor.first_name ? instructor.first_name.charAt(0) : 'I'}
+                      {details.instructors.map((instructor: any, i: number) => {
+                        const instrName = instructor.full_name || instructor.instructor_name || instructor.instructor || instructor.name || 'Instructor';
+                        const initial = (instructor.first_name || instrName).charAt(0).toUpperCase();
+                        return (
+                          <div key={instructor.name || i} className="flex items-center gap-2.5">
+                            {instructor.user_image ? (
+                              <img src={getImageUrl(instructor.user_image)} alt={instrName} className="w-8 h-8 rounded-full object-cover border border-slate-100" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-sm text-xs">
+                                {initial}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-900 text-sm leading-tight truncate">{instrName}</p>
+                              <p className="text-[11px] text-slate-500">Instructor</p>
                             </div>
-                          )}
-                          <div>
-                            <p className="font-bold text-slate-900 text-sm leading-tight">{instructor.full_name}</p>
-                            <p className="text-[11px] text-slate-500">Instructor</p>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1308,6 +1463,35 @@ export default function CourseDetailPage() {
           </div>
         </div>
       </main>
+
+      {/* Video Preview Modal */}
+      {isVideoModalOpen && details.video_link && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden border border-slate-700 animate-fade-in-up">
+            <div className="p-4 flex items-center justify-between border-b border-slate-800 text-white">
+              <h3 className="font-bold text-sm flex items-center gap-2 truncate">
+                <PlayCircle className="w-5 h-5 text-indigo-400 shrink-0" />
+                <span>Course Preview: {details.title}</span>
+              </h3>
+              <button
+                onClick={() => setIsVideoModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="relative pt-[56.25%] w-full bg-black">
+              <iframe
+                src={getEmbedUrl(details.video_link) || ''}
+                title="Course Preview Video"
+                className="absolute inset-0 w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="bg-slate-900 text-slate-300 py-12 text-center mt-auto">
         <div className="max-w-7xl mx-auto px-4">

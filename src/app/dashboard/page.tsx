@@ -203,39 +203,39 @@ export default function DashboardPage() {
       <Navbar />
 
       {/* ── Modern Hero Header ── */}
-      <div className="bg-slate-900 text-white pt-10 pb-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      <div className="bg-slate-900 text-white pt-6 pb-14 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
         {/* Ambient Glows */}
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none"></div>
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-60 h-60 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none"></div>
 
         <div className="max-w-7xl mx-auto relative z-10">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
             <div>
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-1.5">
                 {isInstructorRole && dashboardMode === "instructor" ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    <Briefcase className="w-3.5 h-3.5" />
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <Briefcase className="w-3 h-3" />
                     Instructor Sales Studio
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    <Sparkles className="w-3.5 h-3.5" />
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    <Sparkles className="w-3 h-3" />
                     Student Learning Portal
                   </span>
                 )}
                 {isInstructorRole && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-300 bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-300 bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
                     <ShieldCheck className="w-3 h-3 text-emerald-400" /> Verified Instructor
                   </span>
                 )}
               </div>
 
-              <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
+              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
                 {isInstructorRole && dashboardMode === "instructor"
                   ? "Instructor & Sales Dashboard"
                   : `Welcome back${userEmail ? `, ${userEmail.split("@")[0]}` : ""}!`}
               </h1>
-              <p className="text-indigo-200/80 mt-1.5 text-sm sm:text-base max-w-2xl font-light">
+              <p className="text-indigo-200/80 mt-1 text-xs sm:text-sm max-w-2xl font-light">
                 {isInstructorRole && dashboardMode === "instructor"
                   ? "Manage your authored courses, track enrollment metrics, monitor sales revenue, and launch cohorts."
                   : "Track your enrolled courses, continue learning, and manage your certificates."}

@@ -149,14 +149,14 @@ export default function ProgramDetailPage() {
           )}
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/80 via-slate-900/90 to-violet-900/60 pointer-events-none" />
 
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-16 relative z-10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-10 relative z-10">
             {/* Breadcrumb */}
-            <nav className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <nav className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <Link
                 href="/programs"
-                className="inline-flex items-center gap-1.5 text-indigo-300 hover:text-white transition-colors text-sm font-medium"
+                className="inline-flex items-center gap-1.5 text-indigo-300 hover:text-white transition-colors text-xs font-medium"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-3.5 h-3.5" />
                 All Learning Paths
               </Link>
               

@@ -89,15 +89,15 @@ export default function AssignmentsPage() {
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
       <Navbar />
 
-      <div className="bg-slate-900 text-white py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      <div className="bg-slate-900 text-white pt-6 pb-10 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none"></div>
         <div className="max-w-7xl mx-auto relative z-10">
-          <h1 className="text-3xl font-extrabold mb-2">My Assignments</h1>
-          <p className="text-indigo-200">Track and submit your course assignments.</p>
+          <h1 className="text-2xl font-extrabold mb-1">My Assignments</h1>
+          <p className="text-indigo-200 text-xs sm:text-sm">Track and submit your course assignments.</p>
         </div>
       </div>
 
-      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full -mt-8 relative z-20">
+      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full -mt-6 relative z-20">
         <section className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-100">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">

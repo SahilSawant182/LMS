@@ -50,27 +50,27 @@ export default function CertificatesPage() {
       <Navbar />
 
       {/* Hero Section */}
-      <div className="bg-slate-900 text-white pt-16 pb-24 relative overflow-hidden">
+      <div className="bg-slate-900 text-white pt-8 pb-14 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
-          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-amber-500/10 blur-3xl"></div>
-          <div className="absolute top-20 -left-20 w-72 h-72 rounded-full bg-yellow-500/10 blur-3xl"></div>
+          <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-amber-500/10 blur-3xl"></div>
+          <div className="absolute top-20 -left-20 w-60 h-60 rounded-full bg-yellow-500/10 blur-3xl"></div>
         </div>
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
-          <div className="inline-flex items-center justify-center p-3 bg-amber-500/20 rounded-full mb-6 ring-4 ring-amber-500/10">
-            <Award className="w-8 h-8 text-amber-400" />
+          <div className="inline-flex items-center justify-center p-2 bg-amber-500/20 rounded-full mb-3 ring-2 ring-amber-500/10">
+            <Award className="w-5 h-5 text-amber-400" />
           </div>
-          <h1 className="text-3xl md:text-5xl font-extrabold mb-4 tracking-tight">
+          <h1 className="text-2xl md:text-3xl font-extrabold mb-1.5 tracking-tight">
             Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-300">Certificates</span>
           </h1>
-          <p className="text-slate-300 max-w-2xl mx-auto text-lg mb-8">
+          <p className="text-slate-300 max-w-2xl mx-auto text-xs md:text-sm mb-2">
             View and manage the certificates you've earned from completing courses and batches.
           </p>
         </div>
       </div>
 
       {/* Main Content */}
-      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full -mt-12 relative z-20">
+      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full -mt-6 relative z-20">
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 md:p-8 mb-8 min-h-[400px]">
           
           <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-4">

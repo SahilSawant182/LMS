@@ -10,7 +10,8 @@ import { getCourseDetails } from '@/services/lms.services';
 
 export default function EditCoursePage() {
   const params = useParams();
-  const courseName = params.courseId as string;
+  const rawCourseName = params.courseId as string;
+  const courseName = decodeURIComponent(rawCourseName || '');
   
   const [initialData, setInitialData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -25,10 +26,27 @@ export default function EditCoursePage() {
         if (data) {
           setInitialData({
             name: data.name || courseName,
+            course: data.name || courseName,
+            course_name: data.name || courseName,
             title: data.title || '',
             short_introduction: data.short_introduction || '',
             description: data.description || '',
-            published: data.published || 0,
+            published: data.published ?? 0,
+            video_link: data.video_link || '',
+            tags: data.tags || '',
+            category: data.category || 'Business',
+            image: data.image || '',
+            card_gradient: data.card_gradient || 'Blue',
+            upcoming: data.upcoming ?? 0,
+            featured: data.featured ?? 1,
+            disable_self_learning: data.disable_self_learning ?? 0,
+            enforce_lesson_completion: data.enforce_lesson_completion ?? 0,
+            paid_course: data.paid_course ?? (Number(data.course_price || 0) > 0 ? 1 : 0),
+            paid_certificate: data.paid_certificate ?? 0,
+            enable_certification: data.enable_certification ?? 1,
+            course_price: data.course_price !== undefined ? data.course_price : 0,
+            currency: data.currency || 'INR',
+            amount_usd: data.amount_usd !== undefined ? data.amount_usd : 0,
           });
         } else {
           setError('Course not found');
@@ -52,7 +70,7 @@ export default function EditCoursePage() {
       
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full mt-16">
         <div className="mb-6 flex items-center">
-          <Link href={`/course/${courseName}`} className="flex items-center text-slate-500 hover:text-indigo-600 transition-colors font-medium">
+          <Link href={`/course/${encodeURIComponent(courseName)}`} className="flex items-center text-slate-500 hover:text-indigo-600 transition-colors font-medium">
             <ChevronLeft className="w-5 h-5 mr-1" />
             Back to Course
           </Link>
@@ -67,7 +85,7 @@ export default function EditCoursePage() {
             {error}
           </div>
         ) : (
-          <CourseForm initialData={initialData} isEditing={true} />
+          <CourseForm key={initialData?.name || courseName} initialData={initialData} isEditing={true} />
         )}
       </main>
       

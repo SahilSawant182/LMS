@@ -177,15 +177,15 @@ export default function CertificateEvaluationsPage() {
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
       <Navbar />
       
-      <div className="bg-slate-900 text-white py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      <div className="bg-slate-900 text-white pt-6 pb-10 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none"></div>
         <div className="max-w-7xl mx-auto relative z-10">
-          <h1 className="text-3xl md:text-4xl font-extrabold mb-3">Certificate Evaluations</h1>
-          <p className="text-indigo-200">Create, manage, and track student evaluations seamlessly.</p>
+          <h1 className="text-2xl font-extrabold mb-1">Certificate Evaluations</h1>
+          <p className="text-indigo-200 text-xs sm:text-sm">Create, manage, and track student evaluations seamlessly.</p>
         </div>
       </div>
 
-      <main className="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full -mt-8 relative z-20">
+      <main className="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full -mt-6 relative z-20">
         
         {/* Tabs */}
         <div className="flex space-x-2 bg-white p-2 rounded-xl shadow-sm border border-slate-100 mb-8 w-fit mx-auto md:mx-0">
