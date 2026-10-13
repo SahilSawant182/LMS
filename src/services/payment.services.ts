@@ -279,3 +279,88 @@ export const getStudentDashboard = async (): Promise<StudentDashboardData> => {
   }
   return data as StudentDashboardData;
 };
+
+
+export interface InstructorDashboardData {
+  is_instructor: boolean;
+  instructor?: string;
+  stats: {
+    total_revenue: number;
+    total_students: number;
+    total_courses: number;
+    published_courses: number;
+    draft_courses: number;
+    total_batches: number;
+  };
+  courses: Array<{
+    name: string;
+    title: string;
+    image: string | null;
+    published: boolean;
+    paid_course: boolean;
+    price: number;
+    currency: string;
+    category?: string;
+    short_introduction?: string;
+    enrollments_count: number;
+    revenue: number;
+    lessons_count: number;
+    rating: number;
+    created_at: string;
+  }>;
+  batches: Array<{
+    name: string;
+    title: string;
+    description?: string;
+    start_date?: string;
+    end_date?: string;
+    start_time?: string;
+    end_time?: string;
+    medium?: string;
+    seat_count: number;
+    enrolled_count: number;
+    seats_left?: number;
+    is_sold_out: boolean;
+    paid_batch: boolean;
+    amount: number;
+    currency: string;
+    revenue: number;
+    published: boolean;
+    created_at: string;
+  }>;
+  recent_sales: Array<{
+    payment_name: string;
+    payment_id?: string;
+    member: string;
+    student_name: string;
+    item_type: "Course" | "Batch";
+    item_name: string;
+    amount: number;
+    currency: string;
+    created_at: string;
+    progress?: number;
+  }>;
+}
+
+/**
+ * 10) Instructor / Creator Sales Dashboard
+ * Endpoint: GET /api/method/lms.lms.stride_lms.get_instructor_dashboard
+ */
+export const getInstructorDashboard = async (): Promise<InstructorDashboardData> => {
+  const res = await apiService.get(`${METHOD_PREFIX}.get_instructor_dashboard`, {
+    headers: authHeaders(),
+  });
+  const data = extractData<any>(res);
+  if (data && typeof data === "object") {
+    if ("stats" in data && ("courses" in data || "is_instructor" in data)) {
+      return data as InstructorDashboardData;
+    }
+    if (data.message && typeof data.message === "object" && "stats" in data.message) {
+      return data.message as InstructorDashboardData;
+    }
+    if (data.data && typeof data.data === "object" && "stats" in data.data) {
+      return data.data as InstructorDashboardData;
+    }
+  }
+  return data as InstructorDashboardData;
+};
