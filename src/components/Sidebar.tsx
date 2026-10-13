@@ -21,7 +21,8 @@ import {
   X,
   Ticket,
   Percent,
-  Tags
+  Tags,
+  UserCheck
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -140,6 +141,14 @@ export default function Sidebar({
       name: 'Evaluations', 
       href: '/certificate-evaluations', 
       icon: ClipboardCheck, 
+      instructorOnly: true 
+    },
+    { 
+      name: 'Course Evaluators', 
+      href: '/course-evaluators', 
+      icon: UserCheck, 
+      badge: 'Staff', 
+      badgeColor: 'bg-violet-100 text-violet-700 font-semibold',
       instructorOnly: true 
     },
   ];

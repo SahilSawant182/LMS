@@ -32,6 +32,26 @@ import {
 } from 'lucide-react';
 import { getLMSCouponList, getLMSCoupon, LMSCoupon } from '@/services/lms.services';
 
+const formatDateDDMMYYYY = (dateStr?: string | null): string => {
+  if (!dateStr) return '';
+  const clean = dateStr.trim();
+  const match = clean.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    return `${day}-${month}-${year}`;
+  }
+  try {
+    const d = new Date(clean.replace(' ', 'T'));
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}-${month}-${year}`;
+    }
+  } catch {}
+  return dateStr;
+};
+
 export default function CouponsPage() {
   const [coupons, setCoupons] = useState<LMSCoupon[]>([]);
   const [loading, setLoading] = useState(true);
@@ -415,7 +435,7 @@ export default function CouponsPage() {
                         <div className="min-w-0">
                           <p className="text-[10px] text-slate-400 uppercase font-bold">Expires</p>
                           <p className="font-semibold text-slate-700 truncate">
-                            {coupon.expires_on ? coupon.expires_on : 'Never'}
+                            {coupon.expires_on ? formatDateDDMMYYYY(coupon.expires_on) : 'Never'}
                           </p>
                         </div>
                       </div>
@@ -561,7 +581,7 @@ export default function CouponsPage() {
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
                   <span className="text-slate-400 font-semibold block uppercase text-[10px]">Expires On</span>
-                  <span className="font-bold text-slate-800">{selectedCoupon.expires_on || 'Never'}</span>
+                  <span className="font-bold text-slate-800">{selectedCoupon.expires_on ? formatDateDDMMYYYY(selectedCoupon.expires_on) : 'Never'}</span>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
                   <span className="text-slate-400 font-semibold block uppercase text-[10px]">Usage Limit</span>

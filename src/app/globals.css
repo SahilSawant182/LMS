@@ -88,3 +88,16 @@ body {
   background-color: rgba(255, 255, 255, 0.2);
 }
 
+/* Date Input Uppercase Format (DD/MM/YYYY) */
+input[type="date"] {
+  text-transform: uppercase;
+}
+input[type="date"]::-webkit-datetime-edit,
+input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field {
+  text-transform: uppercase;
+}
+

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard } from 'lucide-react';
+import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/services/auth.services';
@@ -247,6 +247,14 @@ export default function Navbar() {
                               >
                                 <Sparkles className="w-4 h-4 text-indigo-500" />
                                 Create Badge
+                              </Link>
+                              <Link
+                                href="/course-evaluators"
+                                onClick={() => setIsDropdownOpen(false)}
+                                className="flex items-center gap-2 px-4 py-2 text-xs text-violet-700 hover:bg-violet-50 transition-colors font-semibold"
+                              >
+                                <UserCheck className="w-4 h-4 text-violet-600" />
+                                Course Evaluators
                               </Link>
                             </>
                           )}

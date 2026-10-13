@@ -438,8 +438,9 @@ export default function CreateCouponPage() {
                   <input
                     type="date"
                     value={expiresOn}
+                    placeholder="DD/MM/YYYY"
                     onChange={(e) => setExpiresOn(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-sm font-medium text-slate-800"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-sm font-medium text-slate-800 uppercase"
                   />
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1">

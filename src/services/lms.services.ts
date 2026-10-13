@@ -972,4 +972,133 @@ export const deleteCategory = async (category: string): Promise<any> => {
   );
 };
 
+// ==========================================
+// Course Evaluator Services (Instructor Role)
+// ==========================================
+
+export interface CourseEvaluatorScheduleItem {
+  day: string;
+  start_time: string;
+  end_time: string;
+}
+
+export interface CourseEvaluatorItem {
+  name: string;
+  evaluator: string;
+  full_name?: string | null;
+  username?: string | null;
+  user_image?: string | null;
+  unavailable_from?: string | null;
+  unavailable_to?: string | null;
+  schedule?: CourseEvaluatorScheduleItem[];
+  creation?: string;
+  modified?: string;
+}
+
+export interface CreateCourseEvaluatorPayload {
+  evaluator: string;
+  unavailable_from?: string | null;
+  unavailable_to?: string | null;
+  schedule: CourseEvaluatorScheduleItem[];
+}
+
+export interface UpdateCourseEvaluatorPayload {
+  name: string;
+  evaluator: string;
+  unavailable_from?: string | null;
+  unavailable_to?: string | null;
+  schedule: CourseEvaluatorScheduleItem[];
+}
+
+export const getCourseEvaluatorList = async (): Promise<any> => {
+  const headers: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+  return apiService.get(
+    "method/lms.lms.doctype.course_evaluator.course_evaluator.get_course_evaluator_list",
+    { headers }
+  );
+};
+
+export const createCourseEvaluator = async (
+  payload: CreateCourseEvaluatorPayload
+): Promise<any> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+  return apiService.post(
+    "method/lms.lms.doctype.course_evaluator.course_evaluator.create_course_evaluator",
+    payload,
+    { headers }
+  );
+};
+
+export const updateCourseEvaluator = async (
+  payload: UpdateCourseEvaluatorPayload
+): Promise<any> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+  return apiService.post(
+    "method/lms.lms.doctype.course_evaluator.course_evaluator.update_course_evaluator",
+    payload,
+    { headers }
+  );
+};
+
+export const deleteCourseEvaluator = async (
+  evaluatorOrName: string
+): Promise<any> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+  return apiService.post(
+    "method/lms.lms.doctype.course_evaluator.course_evaluator.delete_course_evaluator",
+    { evaluator: evaluatorOrName, name: evaluatorOrName },
+    {
+      params: { evaluator: evaluatorOrName, name: evaluatorOrName },
+      headers,
+    }
+  );
+};
+
 export * from './payment.services';
+
