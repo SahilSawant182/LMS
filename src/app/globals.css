@@ -31,29 +31,32 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #020617;
-    --foreground: #f8fafc;
-  }
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --sidebar-width: 16rem;
 }
 
 body {
-  background: var(--background);
+  background: #ffffff;
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-:root {
-  --sidebar-width: 16rem;
-}
-
 @media (min-width: 1024px) {
   body.has-sidebar {
     padding-left: var(--sidebar-width, 16rem);
     transition: padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  body.has-sidebar:has(.no-sidebar-page),
+  body.has-sidebar:has(#login-page),
+  body.has-sidebar:has(#signup-page),
+  body.has-sidebar:has(#forgot-password-page) {
+    padding-left: 0 !important;
+    transition: none !important;
   }
 }
 

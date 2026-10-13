@@ -24,6 +24,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
+      document.body.classList.remove("has-sidebar");
+      document.documentElement.style.removeProperty("--sidebar-width");
       if (localStorage.getItem("apiKey")) {
         router.push("/dashboard");
       }
@@ -51,16 +53,21 @@ export default function LoginPage() {
       const res = await login({ usr: email, pwd: password });
       console.log("Login API success:", res);
       
-      if (res?.key_details) {
-        localStorage.setItem("apiKey", res.key_details.api_key);
-        localStorage.setItem("apiSecret", res.key_details.api_secret);
-        localStorage.setItem("fullName", res.full_name || "");
-        localStorage.setItem("userEmail", res.user || "");
-        localStorage.setItem("roles", JSON.stringify(res.roles || []));
-        
-        // Notify Navbar of auth state change
-        window.dispatchEvent(new Event("auth-changed"));
+      const keyDetails = res?.key_details || res?.message?.key_details || res?.data?.key_details;
+      const fullName = res?.full_name || res?.message?.full_name || res?.data?.full_name;
+      const user = res?.user || res?.message?.user || res?.data?.user || email;
+      const roles = res?.roles || res?.message?.roles || res?.data?.roles || [];
+
+      if (keyDetails?.api_key) {
+        localStorage.setItem("apiKey", keyDetails.api_key);
+        localStorage.setItem("apiSecret", keyDetails.api_secret || "");
       }
+      if (fullName) localStorage.setItem("fullName", fullName);
+      if (user) localStorage.setItem("userEmail", user);
+      if (roles) localStorage.setItem("roles", JSON.stringify(roles));
+      
+      // Notify Navbar of auth state change
+      window.dispatchEvent(new Event("auth-changed"));
       
       router.push("/dashboard");
     } catch (err: any) {
@@ -94,7 +101,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex w-full bg-white">
+    <div id="login-page" className="min-h-screen flex w-full bg-white no-sidebar-page">
       {/* Left side - Image & Overlay */}
       <div className="hidden lg:flex w-1/2 relative bg-indigo-900 items-center justify-center">
         <div

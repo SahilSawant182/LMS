@@ -57,6 +57,13 @@ export default function SignupPage() {
   const [mobileMsg, setMobileMsg] = useState({ text: "", type: "" });
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      document.body.classList.remove("has-sidebar");
+      document.documentElement.style.removeProperty("--sidebar-width");
+    }
+  }, []);
+
+  useEffect(() => {
     let interval: NodeJS.Timeout;
     if (emailResendTimer > 0) {
       interval = setInterval(() => setEmailResendTimer((prev) => prev - 1), 1000);
@@ -217,7 +224,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex w-full bg-white">
+    <div id="signup-page" className="min-h-screen flex w-full bg-white no-sidebar-page">
       {/* Left side - Image & Overlay */}
       <div className="hidden lg:flex w-1/2 relative bg-indigo-900 items-center justify-center">
         <div

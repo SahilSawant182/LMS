@@ -39,11 +39,15 @@ export default function Navbar() {
   const checkAuth = () => {
     if (typeof window !== "undefined") {
       const apiKey = localStorage.getItem("apiKey");
-      if (apiKey) {
-        setUserName(localStorage.getItem("fullName") || "Learner");
-        setUserEmail(localStorage.getItem("userEmail") || "");
+      const userEmail = localStorage.getItem("userEmail") || localStorage.getItem("user");
+      const fullName = localStorage.getItem("fullName");
+
+      if (apiKey || userEmail) {
+        setUserName(fullName || userEmail?.split("@")[0] || "Learner");
+        setUserEmail(userEmail || "");
         setIsAuthenticated(true);
-        setIsInstructor(localStorage.getItem("roles")?.includes("Instructor") || false);
+        const roles = localStorage.getItem("roles");
+        setIsInstructor(roles?.includes("Instructor") || false);
       } else {
         setIsAuthenticated(false);
         setIsInstructor(false);
@@ -69,6 +73,8 @@ export default function Navbar() {
       window.addEventListener("sidebar-toggle", handleSidebarEvent);
       window.addEventListener("auth-changed", checkAuth);
       return () => {
+        document.body.classList.remove("has-sidebar");
+        document.documentElement.style.removeProperty("--sidebar-width");
         window.removeEventListener("sidebar-toggle", handleSidebarEvent);
         window.removeEventListener("auth-changed", checkAuth);
       };
@@ -97,6 +103,8 @@ export default function Navbar() {
         console.error("Logout API failed:", err);
       }
       localStorage.clear();
+      document.body.classList.remove("has-sidebar");
+      document.documentElement.style.removeProperty("--sidebar-width");
       setIsAuthenticated(false);
       window.dispatchEvent(new Event("auth-changed"));
       router.push("/login");

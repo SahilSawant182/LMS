@@ -10,6 +10,13 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      document.body.classList.remove("has-sidebar");
+      document.documentElement.style.removeProperty("--sidebar-width");
+    }
+  }, []);
+
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -29,7 +36,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex w-full bg-white">
+    <div id="forgot-password-page" className="min-h-screen flex w-full bg-white no-sidebar-page">
       {/* Left side - Image & Overlay */}
       <div className="hidden lg:flex w-1/2 relative bg-indigo-900 items-center justify-center">
         <div
