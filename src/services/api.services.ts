@@ -96,6 +96,18 @@ const apiRequest = async (config: AxiosRequestConfig) => {
       }
     }
 
+    // Clean up internal Python tracebacks or method lookup errors
+    if (
+      typeof errMessage === 'string' &&
+      (errMessage.includes('Failed to get method for command') ||
+       errMessage.includes('has no attribute') ||
+       errMessage.includes('Traceback (most recent call last)') ||
+       errMessage.includes('AttributeError') ||
+       errMessage.includes('frappe.exceptions.'))
+    ) {
+      errMessage = "The requested server operation failed. The required method is not configured on the backend.";
+    }
+
     console.error(`API Error (${config.method} ${config.url}):`, errMessage, data);
     
     interface CustomApiError extends Error {

@@ -746,6 +746,246 @@ export const getBadge = async (badge_name: string): Promise<LMSBadge> => {
   );
 };
 
+// ==========================================
+// LMS Badge Assignment Services
+// ==========================================
+
+export interface LMSBadgeAssignment {
+  name: string;
+  member: string;
+  badge: string;
+  issued_on: string;
+  badge_title?: string;
+  badge_image?: string | null;
+  creation?: string;
+  modified?: string;
+}
+
+export interface CreateBadgeAssignmentPayload {
+  member: string;
+  badge: string;
+  issued_on: string;
+}
+
+export interface UpdateBadgeAssignmentPayload {
+  name: string;
+  member: string;
+  badge: string;
+  issued_on: string;
+}
+
+export const getBadgeAssignmentList = async (filters?: { member?: string; badge?: string }): Promise<LMSBadgeAssignment[]> => {
+  const headers: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+
+  // 1. Primary call: whitelisted RPC method
+  try {
+    const res = await apiService.get(
+      "method/lms.lms.doctype.lms_badge_assignment.lms_badge_assignment.get_badge_assignment_list",
+      {
+        params: filters,
+        headers,
+      }
+    );
+    let list: LMSBadgeAssignment[] = [];
+    if (Array.isArray(res)) {
+      list = res;
+    } else if (res && typeof res === "object") {
+      if (Array.isArray(res.data)) list = res.data;
+      else if (Array.isArray(res.message)) list = res.message;
+      else if (res.message && typeof res.message === "object" && Array.isArray(res.message.data)) list = res.message.data;
+      else if (res.data && typeof res.data === "object" && Array.isArray(res.data.data)) list = res.data.data;
+    }
+    if (list.length > 0) return list;
+  } catch (err) {
+    console.warn("get_badge_assignment_list primary call failed", err);
+  }
+
+  // 1b. If custom token header failed or returned 0, retry without custom token header (allowing cookie session)
+  if (headers["Authorization"]) {
+    try {
+      const res = await apiService.get(
+        "method/lms.lms.doctype.lms_badge_assignment.lms_badge_assignment.get_badge_assignment_list",
+        {
+          params: filters,
+        }
+      );
+      let list: LMSBadgeAssignment[] = [];
+      if (Array.isArray(res)) {
+        list = res;
+      } else if (res && typeof res === "object") {
+        if (Array.isArray(res.data)) list = res.data;
+        else if (Array.isArray(res.message)) list = res.message;
+        else if (res.message && typeof res.message === "object" && Array.isArray(res.message.data)) list = res.message.data;
+      }
+      if (list.length > 0) return list;
+    } catch (cookieErr) {
+      console.warn("get_badge_assignment_list cookie fallback failed", cookieErr);
+    }
+  }
+
+  // 2. Fallback to Frappe standard resource API
+  try {
+    const resourceParams: Record<string, any> = {
+      fields: JSON.stringify(["name", "member", "badge", "issued_on", "creation", "modified"]),
+      limit_page_length: 100,
+      order_by: "creation desc",
+    };
+    if (filters?.member) {
+      resourceParams.filters = JSON.stringify([["LMS Badge Assignment", "member", "=", filters.member]]);
+    }
+    const fallbackRes = await apiService.get("resource/LMS Badge Assignment", {
+      params: resourceParams,
+      headers,
+    });
+    if (Array.isArray(fallbackRes?.data)) return fallbackRes.data;
+    if (Array.isArray(fallbackRes)) return fallbackRes;
+  } catch (fallbackErr) {
+    console.error("Failed to load badge assignments via resource", fallbackErr);
+  }
+
+  return [];
+};
+
+export const getBadgeAssignment = async (name: string): Promise<LMSBadgeAssignment | null> => {
+  const headers: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+
+  try {
+    const res = await apiService.get(
+      "method/lms.lms.doctype.lms_badge_assignment.lms_badge_assignment.get_badge_assignment",
+      {
+        params: { name },
+        headers,
+      }
+    );
+    return res?.data || res?.message || res;
+  } catch (err) {
+    const fallbackRes = await apiService.get(`resource/LMS Badge Assignment/${name}`, { headers });
+    return fallbackRes?.data || fallbackRes;
+  }
+};
+
+export const createBadgeAssignment = async (payload: CreateBadgeAssignmentPayload): Promise<any> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+
+  try {
+    return await apiService.post(
+      "method/lms.lms.doctype.lms_badge_assignment.lms_badge_assignment.create_badge_assignment",
+      payload,
+      { headers }
+    );
+  } catch (err) {
+    console.warn("create_badge_assignment method failed, falling back to resource/LMS Badge Assignment:", err);
+    const fallbackRes = await apiService.post(
+      "resource/LMS Badge Assignment",
+      {
+        member: payload.member,
+        badge: payload.badge,
+        issued_on: payload.issued_on,
+      },
+      { headers }
+    );
+    return fallbackRes?.data || fallbackRes;
+  }
+};
+
+export const updateBadgeAssignment = async (payload: UpdateBadgeAssignmentPayload): Promise<any> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+
+  try {
+    return await apiService.post(
+      "method/lms.lms.doctype.lms_badge_assignment.lms_badge_assignment.update_badge_assignment",
+      payload,
+      { headers }
+    );
+  } catch (err) {
+    console.warn("update_badge_assignment method failed, falling back to resource/LMS Badge Assignment:", err);
+    const fallbackRes = await apiService.put(
+      `resource/LMS Badge Assignment/${payload.name}`,
+      {
+        member: payload.member,
+        badge: payload.badge,
+        issued_on: payload.issued_on,
+      },
+      { headers }
+    );
+    return fallbackRes?.data || fallbackRes;
+  }
+};
+
+export const deleteBadgeAssignment = async (name: string): Promise<any> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+
+  try {
+    return await apiService.post(
+      "method/lms.lms.doctype.lms_badge_assignment.lms_badge_assignment.delete_badge_assignment",
+      { name },
+      {
+        params: { name },
+        headers,
+      }
+    );
+  } catch (err) {
+    console.warn("delete_badge_assignment method failed, falling back to resource/LMS Badge Assignment:", err);
+    return await apiService.delete(`resource/LMS Badge Assignment/${name}`, { headers });
+  }
+};
+
 // ========================
 // LMS Course Reviews
 // ========================
