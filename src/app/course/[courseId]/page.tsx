@@ -19,6 +19,7 @@ import {
   MessageSquare, Sparkles, Send, Check, Trash2, Lock
 } from 'lucide-react';
 import InlineBlockEditor from '@/components/admin/InlineBlockEditor';
+import Pagination from '@/components/ui/Pagination';
 
 // Helper to format review creation timestamp nicely (e.g. 'Oct 12, 2026')
 const formatReviewDate = (dateStr?: string) => {
@@ -82,6 +83,21 @@ export default function CourseDetailPage() {
   const [reviewDeleting, setReviewDeleting] = useState(false);
   const [reviewSuccessMsg, setReviewSuccessMsg] = useState<string | null>(null);
   const [reviewErrorMsg, setReviewErrorMsg] = useState<string | null>(null);
+
+  // Review Pagination State
+  const [reviewPage, setReviewPage] = useState<number>(1);
+  const REVIEWS_PER_PAGE = 4;
+  const totalReviewPages = Math.max(1, Math.ceil(reviews.length / REVIEWS_PER_PAGE));
+  const paginatedReviews = reviews.slice(
+    (reviewPage - 1) * REVIEWS_PER_PAGE,
+    reviewPage * REVIEWS_PER_PAGE
+  );
+
+  useEffect(() => {
+    if (reviewPage > totalReviewPages) {
+      setReviewPage(totalReviewPages);
+    }
+  }, [totalReviewPages, reviewPage]);
 
   // Video Preview State
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
@@ -913,8 +929,9 @@ export default function CourseDetailPage() {
 
             {/* Reviews Grid */}
             {reviews.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {reviews.map((review: any, index: number) => {
+              <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {paginatedReviews.map((review: any, index: number) => {
                   const authorName = review.owner_details?.full_name || review.owner_details?.username || review.user_name || review.owner || 'Student';
                   const authorUsername = review.owner_details?.username || (review.owner && review.owner.includes('@') ? review.owner.split('@')[0] : null);
                   const authorImage = review.owner_details?.user_image ? getImageUrl(review.owner_details.user_image) : null;
@@ -1014,6 +1031,18 @@ export default function CourseDetailPage() {
                     </div>
                   );
                 })}
+              </div>
+
+                {/* Course Reviews Pagination */}
+                <Pagination
+                  currentPage={reviewPage}
+                  totalPages={totalReviewPages}
+                  onPageChange={setReviewPage}
+                  totalItems={reviews.length}
+                  pageSize={REVIEWS_PER_PAGE}
+                  itemName="reviews"
+                  hideOnSinglePage={true}
+                />
               </div>
             ) : (
               <div className="text-center py-10 bg-slate-50/70 rounded-2xl border border-dashed border-slate-200">

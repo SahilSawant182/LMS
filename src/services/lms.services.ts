@@ -912,4 +912,64 @@ export const createLMSCoupon = async (payload: CreateLMSCouponPayload) => {
   );
 };
 
+export const getCategoryList = async (): Promise<any> => {
+  const headers: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+  return apiService.get(
+    "method/lms.lms.doctype.lms_category.lms_category.get_category_list",
+    { headers }
+  );
+};
+
+export const createCategory = async (payload: { category: string }): Promise<any> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+  return apiService.post(
+    "method/lms.lms.doctype.lms_category.lms_category.create_category",
+    payload,
+    { headers }
+  );
+};
+
+export const deleteCategory = async (category: string): Promise<any> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+  return apiService.post(
+    "method/lms.lms.doctype.lms_category.lms_category.delete_category",
+    { category, name: category },
+    { headers }
+  );
+};
+
 export * from './payment.services';

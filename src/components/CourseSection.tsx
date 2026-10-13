@@ -8,6 +8,7 @@ import { getCourses, Course, deleteCourse } from '../services/lms.services';
 import { getCoursesWithEnrollment } from '../services/payment.services';
 import { getImageUrl } from '../services/api.services';
 import { Plus } from 'lucide-react';
+import Pagination from './ui/Pagination';
 
 export default function CourseSection() {
   const router = useRouter();
@@ -15,6 +16,21 @@ export default function CourseSection() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInstructor, setIsInstructor] = useState(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const COURSES_PER_PAGE = 8;
+  const totalPages = Math.max(1, Math.ceil(courses.length / COURSES_PER_PAGE));
+  const paginatedCourses = courses.slice(
+    (currentPage - 1) * COURSES_PER_PAGE,
+    currentPage * COURSES_PER_PAGE
+  );
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
 
   const fetchCourses = async () => {
     try {
@@ -101,36 +117,49 @@ export default function CourseSection() {
             <p>No courses found at the moment.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {courses.map((course, index) => (
-              <div key={course.name || index} className="animate-fade-in-up" style={{ animationDelay: `${index * 0.15}s` }}>
-                <Link href={`/course/${course.name}`} className="block h-full transition-transform hover:-translate-y-1 duration-300">
-                  <CourseCard 
-                    image={getImageUrl(course.image)}
-                    providerLogo={getImageUrl(course.instructors?.[0]?.user_image)}
-                    providerName={course.instructors?.[0]?.full_name}
-                    title={course.title || course.name}
-                    rating={course.rating}
-                    enrollments={course.enrollments}
-                    category={course.category || undefined}
-                    lessons={course.lessons}
-                    status={course.status || undefined}
-                    cardGradient={course.card_gradient || undefined}
-                    description={course.short_introduction || course.description || undefined}
-                    isEnrolled={Boolean(course.is_enrolled)}
-                    price={
-                      course.is_enrolled
-                        ? 'Enrolled'
-                        : course.paid_course || course.is_paid
-                        ? `${course.currency === 'INR' ? '₹' : (course.currency || '₹')} ${Number(course.course_price || 0).toLocaleString('en-IN')}`
-                        : 'Free'
-                    }
-                    onEdit={isInstructor ? () => handleEdit(course.name) : undefined}
-                    onDelete={isInstructor ? () => handleDelete(course.name) : undefined}
-                  />
-                </Link>
-              </div>
-            ))}
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+              {paginatedCourses.map((course, index) => (
+                <div key={course.name || index} className="animate-fade-in-up" style={{ animationDelay: `${index * 0.15}s` }}>
+                  <Link href={`/course/${course.name}`} className="block h-full transition-transform hover:-translate-y-1 duration-300">
+                    <CourseCard 
+                      image={getImageUrl(course.image)}
+                      providerLogo={getImageUrl(course.instructors?.[0]?.user_image)}
+                      providerName={course.instructors?.[0]?.full_name}
+                      title={course.title || course.name}
+                      rating={course.rating}
+                      enrollments={course.enrollments}
+                      category={course.category || undefined}
+                      lessons={course.lessons}
+                      status={course.status || undefined}
+                      cardGradient={course.card_gradient || undefined}
+                      description={course.short_introduction || course.description || undefined}
+                      isEnrolled={Boolean(course.is_enrolled)}
+                      price={
+                        course.is_enrolled
+                          ? 'Enrolled'
+                          : course.paid_course || course.is_paid
+                          ? `${course.currency === 'INR' ? '₹' : (course.currency || '₹')} ${Number(course.course_price || 0).toLocaleString('en-IN')}`
+                          : 'Free'
+                      }
+                      onEdit={isInstructor ? () => handleEdit(course.name) : undefined}
+                      onDelete={isInstructor ? () => handleDelete(course.name) : undefined}
+                    />
+                  </Link>
+                </div>
+              ))}
+            </div>
+
+            {/* Courses Pagination Controls */}
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              totalItems={courses.length}
+              pageSize={COURSES_PER_PAGE}
+              itemName="courses"
+              hideOnSinglePage={true}
+            />
           </div>
         )}
         

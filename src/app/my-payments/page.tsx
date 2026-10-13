@@ -22,6 +22,7 @@ import {
 import Navbar from "@/components/Navbar";
 import { getMyPayments } from "@/services/payment.services";
 import { PaymentHistoryItem } from "@/types/payment.types";
+import Pagination from "@/components/ui/Pagination";
 
 export default function MyPaymentsPage() {
   const router = useRouter();
@@ -29,6 +30,8 @@ export default function MyPaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAYMENTS_PER_PAGE = 8;
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -81,6 +84,18 @@ export default function MyPaymentsPage() {
     const coupon = (p.coupon_code || "").toLowerCase();
     return doc.includes(q) || name.includes(q) || payId.includes(q) || coupon.includes(q);
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAYMENTS_PER_PAGE));
+  const paginatedPayments = filtered.slice(
+    (currentPage - 1) * PAYMENTS_PER_PAGE,
+    currentPage * PAYMENTS_PER_PAGE
+  );
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
 
   // Calculate summary metrics
   const totalSpent = payments.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
@@ -189,7 +204,10 @@ export default function MyPaymentsPage() {
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
               placeholder="Search by course name or transaction ID..."
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all"
             />
@@ -258,7 +276,7 @@ export default function MyPaymentsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filtered.map((item) => (
+                  {paginatedPayments.map((item) => (
                     <tr key={item.name} className="hover:bg-slate-50/50 transition-colors">
                       <td className="py-4 px-6">
                         <p className="font-mono font-bold text-slate-900 text-xs">{item.name}</p>
@@ -339,7 +357,7 @@ export default function MyPaymentsPage() {
 
             {/* Mobile Card View */}
             <div className="lg:hidden divide-y divide-slate-100">
-              {filtered.map((item) => (
+              {paginatedPayments.map((item) => (
                 <div key={item.name} className="p-5 space-y-3">
                   <div className="flex justify-between items-start">
                     <div>
@@ -385,6 +403,19 @@ export default function MyPaymentsPage() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50/40">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={filtered.length}
+                pageSize={PAYMENTS_PER_PAGE}
+                itemName="payments"
+                hideOnSinglePage={true}
+              />
             </div>
           </div>
         )}

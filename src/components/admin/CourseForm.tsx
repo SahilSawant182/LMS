@@ -8,7 +8,7 @@ import {
   Palette, Tag, ShieldCheck, Clock, Trash2, ArrowLeft,
   CheckCircle2, Lock
 } from 'lucide-react';
-import { createCourse, updateCourse, deleteCourse, getMasterData, CreateCoursePayload } from '@/services/lms.services';
+import { createCourse, updateCourse, deleteCourse, getMasterData, getCategoryList, CreateCoursePayload } from '@/services/lms.services';
 import { uploadFile, getImageUrl } from '@/services/api.services';
 
 interface CourseFormProps {
@@ -125,11 +125,25 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
     }
   }, [initialData]);
 
-  // Fetch categories from master data
+  // Fetch categories dynamically
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const catList = await getMasterData('LMS Category');
+        let catList: string[] = [];
+        try {
+          const res = await getCategoryList();
+          const items = Array.isArray(res) 
+            ? res 
+            : (res?.data?.categories || res?.message?.data?.categories || res?.message?.categories || res?.message?.data || res?.data || []);
+          if (Array.isArray(items)) {
+            catList = items.map((i: any) => typeof i === 'string' ? i : (i.category || i.name || i.title || '')).filter(Boolean);
+          }
+        } catch (e) {}
+
+        if (catList.length === 0) {
+          catList = await getMasterData('LMS Category');
+        }
+
         if (Array.isArray(catList) && catList.length > 0) {
           const merged = Array.from(new Set([...catList.filter(Boolean), ...DEFAULT_CATEGORIES]));
           setCategories(merged);
