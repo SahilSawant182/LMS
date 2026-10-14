@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/services/auth.services';
 import Sidebar from '@/components/Sidebar';
+import NotificationBell from '@/components/notifications/NotificationBell';
 
 export default function Navbar() {
   const router = useRouter();
@@ -199,9 +200,7 @@ export default function Navbar() {
 
               {isAuthenticated ? (
                 <div className="flex items-center space-x-3 relative">
-                  <button className="text-gray-500 hover:text-indigo-600 p-1.5 rounded-full hover:bg-gray-50 transition-colors">
-                    <Bell className="w-4 h-4" />
-                  </button>
+                  <NotificationBell />
 
                   <div className="relative" ref={dropdownRef}>
                     <button
