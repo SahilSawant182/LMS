@@ -1340,5 +1340,397 @@ export const deleteCourseEvaluator = async (
   );
 };
 
+// ==========================================
+// LMS Programming Exercise & Submission Services
+// ==========================================
+export * from '../types/programming_exercise.types';
+import {
+  LMSProgrammingExercise,
+  CreateProgrammingExercisePayload,
+  LMSProgrammingExerciseSubmission,
+  CreateProgrammingExerciseSubmissionPayload,
+} from '../types/programming_exercise.types';
+
+const getProgrammingAuthHeaders = (contentType = "application/json") => {
+  const headers: Record<string, string> = {
+    "Content-Type": contentType,
+  };
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+  return headers;
+};
+
+const normalizeExercise = (item: any): LMSProgrammingExercise => {
+  if (!item) return item;
+  let testCases = item.test_cases;
+  if (typeof testCases === 'string') {
+    try {
+      testCases = JSON.parse(testCases);
+    } catch {
+      testCases = [];
+    }
+  }
+  const normalizedTestCases = Array.isArray(testCases)
+    ? testCases.map((tc: any) => {
+        const out = tc?.expected_output !== undefined ? String(tc.expected_output) : (tc?.output !== undefined ? String(tc.output) : '');
+        return {
+          input: tc?.input !== undefined ? String(tc.input) : (tc?.test_input !== undefined ? String(tc.test_input) : ''),
+          output: out,
+          expected_output: out,
+          explanation: tc?.explanation !== undefined ? String(tc.explanation) : undefined,
+        };
+      })
+    : [];
+
+  return {
+    ...item,
+    test_cases: normalizedTestCases,
+  };
+};
+
+export const getProgrammingExercises = async (params?: { [key: string]: any }): Promise<LMSProgrammingExercise[]> => {
+  const headers = getProgrammingAuthHeaders();
+
+  // Fetch list of exercises using standard DocType resource endpoint
+  try {
+    const resourceRes = await apiService.get("resource/LMS Programming Exercise", {
+      params: {
+        fields: JSON.stringify(["name", "title", "language", "problem_statement", "test_cases", "creation", "modified", "owner"]),
+        limit_page_length: 100,
+        order_by: "creation desc",
+        ...params,
+      },
+      headers,
+    });
+    const items = resourceRes?.data || resourceRes?.message || resourceRes;
+    if (Array.isArray(items)) {
+      return items.map(normalizeExercise);
+    }
+  } catch (resourceErr) {
+    console.error("Resource fetch for LMS Programming Exercise failed:", resourceErr);
+  }
+
+  return [];
+};
+
+export const getProgrammingExercise = async (name: string): Promise<LMSProgrammingExercise | null> => {
+  if (!name || typeof name !== 'string') return null;
+  const headers = getProgrammingAuthHeaders();
+
+  // 1. Primary RPC method with mandatory 'name' positional argument
+  try {
+    const res = await apiService.get(
+      "method/lms.lms.doctype.lms_programming_exercise.lms_programming_exercise.get_programming_exercise",
+      {
+        params: { name },
+        headers,
+      }
+    );
+    let item = res?.data || res?.message || res;
+    if (Array.isArray(item)) item = item[0];
+    if (item?.data && !Array.isArray(item.data)) item = item.data;
+    if (item?.exercise) item = item.exercise;
+    if (item && (item.name || item.title)) {
+      return normalizeExercise(item);
+    }
+  } catch (err) {
+    console.warn("get_programming_exercise GET failed, trying POST with name:", err);
+    try {
+      const postRes = await apiService.post(
+        "method/lms.lms.doctype.lms_programming_exercise.lms_programming_exercise.get_programming_exercise",
+        { name },
+        { headers, params: { name } }
+      );
+      let item = postRes?.data || postRes?.message || postRes;
+      if (Array.isArray(item)) item = item[0];
+      if (item?.data && !Array.isArray(item.data)) item = item.data;
+      if (item?.exercise) item = item.exercise;
+      if (item && (item.name || item.title)) {
+        return normalizeExercise(item);
+      }
+    } catch (postErr) {
+      console.warn("get_programming_exercise POST failed, trying resource fallback:", postErr);
+    }
+  }
+
+  // 2. Resource fallback
+  try {
+    const resourceRes = await apiService.get(`resource/LMS Programming Exercise/${encodeURIComponent(name)}`, {
+      headers,
+    });
+    const item = resourceRes?.data || resourceRes?.message || resourceRes;
+    if (item && (item.name || item.title)) {
+      return normalizeExercise(item);
+    }
+  } catch (resourceErr) {
+    console.error(`Resource fallback for LMS Programming Exercise ${name} failed:`, resourceErr);
+  }
+
+  return null;
+};
+
+export const createProgrammingExercise = async (
+  payload: CreateProgrammingExercisePayload
+): Promise<any> => {
+  const headers = getProgrammingAuthHeaders();
+
+  // Normalize test_cases as an array of objects for Frappe child table
+  let testCasesArray: any[] = [];
+  if (Array.isArray(payload.test_cases)) {
+    testCasesArray = payload.test_cases.map((tc: any) => {
+      const out = tc?.expected_output !== undefined ? String(tc.expected_output) : (tc?.output !== undefined ? String(tc.output) : '');
+      return {
+        input: typeof tc === 'object' && tc?.input !== undefined ? String(tc.input) : String(tc),
+        output: out,
+        expected_output: out,
+        explanation: typeof tc === 'object' && tc?.explanation !== undefined ? String(tc.explanation) : undefined,
+      };
+    });
+  } else if (typeof payload.test_cases === 'string') {
+    try {
+      const parsed = JSON.parse(payload.test_cases);
+      testCasesArray = Array.isArray(parsed)
+        ? parsed.map((tc: any) => {
+            const out = tc?.expected_output !== undefined ? String(tc.expected_output) : (tc?.output !== undefined ? String(tc.output) : '');
+            return {
+              input: typeof tc === 'object' && tc?.input !== undefined ? String(tc.input) : String(tc),
+              output: out,
+              expected_output: out,
+              explanation: typeof tc === 'object' && tc?.explanation !== undefined ? String(tc.explanation) : undefined,
+            };
+          })
+        : [];
+    } catch {
+      testCasesArray = [];
+    }
+  }
+
+  const cleanPayload = {
+    title: payload.title,
+    problem_statement: payload.problem_statement,
+    language: payload.language,
+    test_cases: testCasesArray,
+  };
+
+  // 1. Primary RPC method
+  try {
+    const res = await apiService.post(
+      "method/lms.lms.doctype.lms_programming_exercise.lms_programming_exercise.create_programming_exercise",
+      cleanPayload,
+      { headers }
+    );
+    return res?.data || res?.message || res;
+  } catch (err) {
+    console.warn("create_programming_exercise primary call failed, trying fallback:", err);
+    // 2. Resource fallback - must pass test_cases as array of objects, never stringified!
+    const res = await apiService.post(
+      "resource/LMS Programming Exercise",
+      cleanPayload,
+      { headers }
+    );
+    return res?.data || res?.message || res;
+  }
+};
+
+export const deleteProgrammingExercise = async (name: string): Promise<any> => {
+  if (!name) return;
+  const headers = getProgrammingAuthHeaders();
+
+  // 1. Primary RPC method
+  try {
+    const res = await apiService.post(
+      "method/lms.lms.doctype.lms_programming_exercise.lms_programming_exercise.delete_programming_exercise",
+      { name },
+      {
+        params: { name },
+        headers,
+      }
+    );
+    return res?.data || res?.message || res;
+  } catch (err) {
+    console.warn("delete_programming_exercise primary call failed, trying resource DELETE:", err);
+    // 2. Resource fallback
+    const res = await apiService.delete(`resource/LMS Programming Exercise/${encodeURIComponent(name)}`, {
+      headers,
+    });
+    return res?.data || res?.message || res;
+  }
+};
+
+export const getProgrammingExerciseSubmissionList = async (
+  filters?: { exercise?: string; member?: string; status?: string; [key: string]: any }
+): Promise<LMSProgrammingExerciseSubmission[]> => {
+  const headers = getProgrammingAuthHeaders();
+
+  // 1. Primary RPC method
+  try {
+    const res = await apiService.get(
+      "method/lms.lms.doctype.lms_programming_exercise.lms_programming_exercise.get_programming_exercise_submission_list",
+      { params: filters, headers }
+    );
+    let list: LMSProgrammingExerciseSubmission[] | null = null;
+    if (Array.isArray(res)) {
+      list = res;
+    } else if (res && typeof res === "object") {
+      // Handles { status: "success", count: 1, data: [...] }
+      if (Array.isArray(res.data)) {
+        list = res.data;
+      } else if (res.message && typeof res.message === "object" && Array.isArray(res.message.data)) {
+        list = res.message.data;
+      } else if (Array.isArray(res.message)) {
+        list = res.message;
+      } else if (res.data && typeof res.data === "object" && Array.isArray(res.data.data)) {
+        list = res.data.data;
+      } else if (Array.isArray(res.submissions)) {
+        list = res.submissions;
+      } else if (res.message && typeof res.message === "object" && Array.isArray(res.message.submissions)) {
+        list = res.message.submissions;
+      }
+    }
+    if (list !== null) return list;
+  } catch (err) {
+    console.warn("get_programming_exercise_submission_list primary call failed:", err);
+  }
+
+  // 2. Resource fallback
+  try {
+    const resourceParams: Record<string, any> = {
+      fields: JSON.stringify(["name", "exercise", "member", "code", "language", "status", "creation", "modified", "owner"]),
+      limit_page_length: 100,
+      order_by: "creation desc",
+    };
+    if (filters?.exercise) {
+      resourceParams.filters = JSON.stringify([["LMS Programming Exercise Submission", "exercise", "=", filters.exercise]]);
+    } else if (filters?.member) {
+      resourceParams.filters = JSON.stringify([["LMS Programming Exercise Submission", "member", "=", filters.member]]);
+    }
+    const resourceRes = await apiService.get("resource/LMS Programming Exercise Submission", {
+      params: resourceParams,
+      headers,
+    });
+    const items = resourceRes?.data || resourceRes?.message || resourceRes;
+    if (Array.isArray(items)) return items;
+  } catch (resourceErr) {
+    console.error("Resource fallback for submissions failed:", resourceErr);
+  }
+
+  return [];
+};
+
+export const getProgrammingExerciseSubmission = async (
+  name: string
+): Promise<LMSProgrammingExerciseSubmission | null> => {
+  if (!name) return null;
+  const headers = getProgrammingAuthHeaders();
+
+  // 1. Primary RPC method
+  try {
+    const res = await apiService.get(
+      "method/lms.lms.doctype.lms_programming_exercise.lms_programming_exercise.get_programming_exercise_submission",
+      {
+        params: { name },
+        headers,
+      }
+    );
+    let item: any = res;
+    if (item && typeof item === "object") {
+      if (item.data && typeof item.data === "object" && !Array.isArray(item.data)) {
+        item = item.data;
+      } else if (item.message && typeof item.message === "object") {
+        item = item.message.data || item.message.submission || item.message;
+      } else if (item.submission) {
+        item = item.submission;
+      }
+    }
+    if (Array.isArray(item)) item = item[0];
+    if (item && (item.name || item.exercise)) return item;
+  } catch (err) {
+    console.warn("get_programming_exercise_submission primary call failed:", err);
+  }
+
+  // 2. Resource fallback
+  try {
+    const resourceRes = await apiService.get(
+      `resource/LMS Programming Exercise Submission/${encodeURIComponent(name)}`,
+      { headers }
+    );
+    let item = resourceRes?.data || resourceRes?.message || resourceRes;
+    if (Array.isArray(item)) item = item[0];
+    if (item && (item.name || item.exercise)) return item;
+  } catch (resourceErr) {
+    console.error(`Resource fallback for submission ${name} failed:`, resourceErr);
+  }
+
+  return null;
+};
+
+export const createProgrammingExerciseSubmission = async (
+  payload: CreateProgrammingExerciseSubmissionPayload
+): Promise<any> => {
+  const headers = getProgrammingAuthHeaders();
+
+  // 1. Primary RPC method
+  try {
+    const res = await apiService.post(
+      "method/lms.lms.doctype.lms_programming_exercise.lms_programming_exercise.create_programming_exercise_submission",
+      payload,
+      { headers }
+    );
+    return res?.data || res?.message || res;
+  } catch (err) {
+    console.warn("create_programming_exercise_submission primary call failed, trying fallback:", err);
+    // 2. Resource fallback
+    const res = await apiService.post(
+      "resource/LMS Programming Exercise Submission",
+      {
+        exercise: payload.exercise,
+        code: payload.code,
+        language: payload.language || "Python",
+        member: payload.member || (typeof window !== "undefined" ? localStorage.getItem("userEmail") : ""),
+        status: payload.status || "Submitted",
+      },
+      { headers }
+    );
+    return res?.data || res?.message || res;
+  }
+};
+
+export const deleteProgrammingExerciseSubmission = async (
+  name: string
+): Promise<any> => {
+  if (!name) return;
+  const headers = getProgrammingAuthHeaders();
+
+  // 1. Primary RPC method
+  try {
+    const res = await apiService.post(
+      "method/lms.lms.doctype.lms_programming_exercise.lms_programming_exercise.delete_programming_exercise_submission",
+      { name },
+      {
+        params: { name },
+        headers,
+      }
+    );
+    return res?.data || res?.message || res;
+  } catch (err) {
+    console.warn("delete_programming_exercise_submission primary call failed, trying resource DELETE:", err);
+    // 2. Resource fallback
+    const res = await apiService.delete(
+      `resource/LMS Programming Exercise Submission/${encodeURIComponent(name)}`,
+      { headers }
+    );
+    return res?.data || res?.message || res;
+  }
+};
+
 export * from './payment.services';
+
 

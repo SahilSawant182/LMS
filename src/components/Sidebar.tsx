@@ -22,7 +22,8 @@ import {
   Ticket,
   Percent,
   Tags,
-  UserCheck
+  UserCheck,
+  Code2
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -52,18 +53,30 @@ export default function Sidebar({
   const [isInstructor, setIsInstructor] = useState<boolean>(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
+  const checkInstructor = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const rolesStr = localStorage.getItem('roles') || '';
+      const roles = rolesStr.startsWith('[') ? JSON.parse(rolesStr) : rolesStr;
+      const hasRole = Array.isArray(roles)
+        ? roles.some((r: string) => ['Instructor', 'Administrator', 'System Manager', 'Course Creator'].includes(r))
+        : ['Instructor', 'Administrator', 'System Manager', 'Course Creator'].some((r: string) => rolesStr.includes(r));
+      if (hasRole) return true;
+      if (localStorage.getItem('isInstructor') === 'true') return true;
+    } catch {}
+    return false;
+  };
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('lms_sidebar_expanded');
       if (saved !== null) {
         setInternalExpanded(saved === 'true');
       }
-      const roles = localStorage.getItem('roles') || '';
-      setIsInstructor(roles.includes('Instructor'));
+      setIsInstructor(checkInstructor());
 
       const handleAuthChange = () => {
-        const updatedRoles = localStorage.getItem('roles') || '';
-        setIsInstructor(updatedRoles.includes('Instructor'));
+        setIsInstructor(checkInstructor());
       };
 
       window.addEventListener('auth-changed', handleAuthChange);
@@ -88,7 +101,13 @@ export default function Sidebar({
 
   const mainNavItems: NavItem[] = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Explore Courses', href: '/', icon: BookOpen },
+    { 
+      name: 'Programming Exercises', 
+      href: '/programming-exercises', 
+      icon: Code2, 
+      badge: 'Code', 
+      badgeColor: 'bg-indigo-600 text-white font-bold' 
+    },
     { name: 'Programs', href: '/programs', icon: GraduationCap },
     { name: 'Batches', href: '/batches', icon: Users },
   ];
@@ -107,6 +126,22 @@ export default function Sidebar({
   ];
 
   const instructorNavItems: NavItem[] = [
+    { 
+      name: 'Programming Exercises', 
+      href: '/programming-exercises', 
+      icon: Code2, 
+      badge: 'Manage', 
+      badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
+      instructorOnly: true 
+    },
+    { 
+      name: 'Create Exercise', 
+      href: '/programming-exercises/create', 
+      icon: PlusCircle, 
+      badge: 'Action', 
+      badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
+      instructorOnly: true 
+    },
     { 
       name: 'Categories', 
       href: '/categories', 
@@ -262,7 +297,7 @@ export default function Sidebar({
       >
         {/* Sidebar Header with StrideNex Logo */}
         <div className="h-20 flex items-center justify-between px-4 border-b border-slate-100">
-          <Link href="/" className="flex items-center group py-2">
+          <Link href="/dashboard" className="flex items-center group py-2">
             {isExpanded ? (
               <img
                 src="/images/Logo.png"
