@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   BookOpen,
   Users,
@@ -29,7 +29,8 @@ import {
   ShieldCheck,
   Briefcase,
   AlertCircle,
-  Wallet
+  Wallet,
+  BarChart3
 } from "lucide-react";
 import {
   getStudentDashboard,
@@ -42,22 +43,39 @@ import {
 import { getImageUrl } from "@/services/api.services";
 import { formatDate } from "@/utils/formatters";
 import InstructorPayoutsTab from "@/components/instructor/InstructorPayoutsTab";
+import InstructorSalesReportTab from "@/components/instructor/InstructorSalesReportTab";
 
 type StudentTab = "courses" | "batches" | "programs";
-type InstructorTab = "courses" | "batches" | "sales" | "payouts";
+type InstructorTab = "courses" | "batches" | "sales" | "payouts" | "reports";
 
-export default function DashboardPage() {
+export function DashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [studentData, setStudentData] = useState<StudentDashboardData | null>(null);
   const [instructorData, setInstructorData] = useState<InstructorDashboardData | null>(null);
   const [isInstructorRole, setIsInstructorRole] = useState(false);
   const [isAdminRole, setIsAdminRole] = useState(false);
-  const [dashboardMode, setDashboardMode] = useState<"student" | "instructor">("student");
   const [studentTab, setStudentTab] = useState<StudentTab>("courses");
   const [instructorTab, setInstructorTab] = useState<InstructorTab>("courses");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string>("");
+
+  // Sync active instructor tab from URL query params (e.g., /dashboard?tab=payouts)
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "payouts" || tabParam === "commission" || tabParam === "payout") {
+      setInstructorTab("payouts");
+    } else if (tabParam === "reports" || tabParam === "sales-report") {
+      setInstructorTab("reports");
+    } else if (tabParam === "courses") {
+      setInstructorTab("courses");
+    } else if (tabParam === "batches" || tabParam === "cohorts") {
+      setInstructorTab("batches");
+    } else if (tabParam === "sales") {
+      setInstructorTab("sales");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -91,7 +109,6 @@ export default function DashboardPage() {
           );
           if (hasRole) {
             setIsInstructorRole(true);
-            setDashboardMode("instructor"); // Default to Instructor Studio for instructors!
           }
           const isAdmin = roles.some((r: string) =>
             ["Administrator", "System Manager"].includes(r)
@@ -181,7 +198,6 @@ export default function DashboardPage() {
           if (iData && iData.is_instructor) {
             setInstructorData(iData);
             setIsInstructorRole(true);
-            setDashboardMode("instructor");
           }
         } catch (iErr: any) {
           if (handleAuthError(iErr)) return;
@@ -251,7 +267,7 @@ export default function DashboardPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
             <div>
               <div className="flex items-center gap-2 mb-1.5">
-                {isInstructorRole && dashboardMode === "instructor" ? (
+                {isInstructorRole ? (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                     <Briefcase className="w-3 h-3" />
                     Instructor Sales Studio
@@ -270,12 +286,12 @@ export default function DashboardPage() {
               </div>
 
               <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-                {isInstructorRole && dashboardMode === "instructor"
+                {isInstructorRole
                   ? "Instructor & Sales Dashboard"
                   : `Welcome back${userEmail ? `, ${userEmail.split("@")[0]}` : ""}!`}
               </h1>
               <p className="text-indigo-200/80 mt-1 text-xs sm:text-sm max-w-2xl font-light">
-                {isInstructorRole && dashboardMode === "instructor"
+                {isInstructorRole
                   ? "Manage your authored courses, track enrollment metrics, monitor sales revenue, and launch cohorts."
                   : "Track your enrolled courses, continue learning, and manage your certificates."}
               </p>
@@ -283,7 +299,7 @@ export default function DashboardPage() {
 
             {/* Top Action Buttons */}
             <div className="flex flex-wrap items-center gap-3">
-              {isInstructorRole && dashboardMode === "instructor" ? (
+              {isInstructorRole ? (
                 <>
                   <Link
                     href="/course/create"
@@ -320,38 +336,6 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
-
-          {/* ── Mode Toggle for Instructors (Instructor Studio vs Student View) ── */}
-          {isInstructorRole && (
-            <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-2 bg-slate-800/90 p-1 rounded-xl border border-slate-700/80 backdrop-blur-md">
-                <button
-                  onClick={() => setDashboardMode("instructor")}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${dashboardMode === "instructor"
-                      ? "bg-emerald-600 text-white shadow-sm"
-                      : "text-slate-300 hover:text-white"
-                    }`}
-                >
-                  <Briefcase className="w-3.5 h-3.5" />
-                  <span>Instructor Sales Studio</span>
-                </button>
-                <button
-                  onClick={() => setDashboardMode("student")}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${dashboardMode === "student"
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "text-slate-300 hover:text-white"
-                    }`}
-                >
-                  <GraduationCap className="w-3.5 h-3.5" />
-                  <span>Student View (My Learning)</span>
-                </button>
-              </div>
-
-              <div className="text-xs text-indigo-200/70 font-medium">
-                Viewing as: <span className="font-bold text-white">{dashboardMode === "instructor" ? "Course Instructor / Creator" : "Enrolled Learner"}</span>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -367,7 +351,7 @@ export default function DashboardPage() {
         {/* ══════════════════════════════════════════════════════
             VIEW A: INSTRUCTOR SALES & CREATOR STUDIO
         ══════════════════════════════════════════════════════ */}
-        {isInstructorRole && dashboardMode === "instructor" ? (
+        {isInstructorRole ? (
           <div>
             {/* 4 Instructor KPI Metrics Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-8">
@@ -468,51 +452,89 @@ export default function DashboardPage() {
             </div>
 
             {/* Instructor Tabs Navigation */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-1 mb-6 flex flex-wrap sm:flex-nowrap gap-1 max-w-3xl">
-              <button
-                onClick={() => setInstructorTab("courses")}
-                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${instructorTab === "courses"
-                    ? "bg-slate-900 text-white shadow-sm"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+            <div className="w-full bg-white rounded-2xl shadow-sm border border-slate-200/80 p-2 mb-8 overflow-x-auto scrollbar-none">
+              <div className="flex items-center gap-2 min-w-max md:min-w-0 md:w-full">
+                <button
+                  onClick={() => setInstructorTab("courses")}
+                  className={`py-3 px-4 sm:px-5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap shrink-0 md:flex-1 ${
+                    instructorTab === "courses"
+                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80"
                   }`}
-              >
-                <BookOpen className="w-4 h-4" />
-                <span>My Courses ({instructorCourses.length})</span>
-              </button>
+                >
+                  <BookOpen className="w-4 h-4 shrink-0" />
+                  <span>My Courses</span>
+                  <span
+                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold transition-colors ${
+                      instructorTab === "courses" ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {instructorCourses.length}
+                  </span>
+                </button>
 
-              <button
-                onClick={() => setInstructorTab("batches")}
-                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${instructorTab === "batches"
-                    ? "bg-slate-900 text-white shadow-sm"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                <button
+                  onClick={() => setInstructorTab("batches")}
+                  className={`py-3 px-4 sm:px-5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap shrink-0 md:flex-1 ${
+                    instructorTab === "batches"
+                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80"
                   }`}
-              >
-                <Users className="w-4 h-4" />
-                <span>Cohorts ({instructorBatches.length})</span>
-              </button>
+                >
+                  <Users className="w-4 h-4 shrink-0" />
+                  <span>Cohorts</span>
+                  <span
+                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold transition-colors ${
+                      instructorTab === "batches" ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {instructorBatches.length}
+                  </span>
+                </button>
 
-              <button
-                onClick={() => setInstructorTab("sales")}
-                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${instructorTab === "sales"
-                    ? "bg-slate-900 text-white shadow-sm"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                <button
+                  onClick={() => setInstructorTab("sales")}
+                  className={`py-3 px-4 sm:px-5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap shrink-0 md:flex-1 ${
+                    instructorTab === "sales"
+                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80"
                   }`}
-              >
-                <DollarSign className="w-4 h-4" />
-                <span>Recent Sales ({recentSales.length})</span>
-              </button>
+                >
+                  <DollarSign className="w-4 h-4 shrink-0" />
+                  <span>Recent Sales</span>
+                  <span
+                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold transition-colors ${
+                      instructorTab === "sales" ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {recentSales.length}
+                  </span>
+                </button>
 
-              <button
-                onClick={() => setInstructorTab("payouts")}
-                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                  instructorTab === "payouts"
-                    ? "bg-slate-900 text-white shadow-sm"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-                }`}
-              >
-                <Wallet className="w-4 h-4 text-emerald-400" />
-                <span>Payouts & Commission</span>
-              </button>
+                <button
+                  onClick={() => setInstructorTab("payouts")}
+                  className={`py-3 px-4 sm:px-5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap shrink-0 md:flex-1 ${
+                    instructorTab === "payouts"
+                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80"
+                  }`}
+                >
+                  <Wallet className={`w-4 h-4 shrink-0 ${instructorTab === "payouts" ? "text-emerald-400" : "text-emerald-600"}`} />
+                  <span>Payouts & Commission</span>
+                </button>
+
+                <button
+                  onClick={() => setInstructorTab("reports")}
+                  className={`py-3 px-4 sm:px-5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap shrink-0 md:flex-1 ${
+                    instructorTab === "reports"
+                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80"
+                  }`}
+                >
+                  <BarChart3 className={`w-4 h-4 shrink-0 ${instructorTab === "reports" ? "text-indigo-400" : "text-indigo-600"}`} />
+                  <span>Sales Report</span>
+                </button>
+              </div>
             </div>
 
             {/* ── SUBTAB 1: INSTRUCTOR COURSES & SALES PERFORMANCE ── */}
@@ -793,6 +815,11 @@ export default function DashboardPage() {
             {/* ── SUBTAB 4: INSTRUCTOR PAYOUTS & COMMISSIONS ── */}
             {instructorTab === "payouts" && (
               <InstructorPayoutsTab isAdmin={isAdminRole} instructorEmail={userEmail} />
+            )}
+
+            {/* ── SUBTAB 5: INSTRUCTOR SALES & ANALYTICS REPORT ── */}
+            {instructorTab === "reports" && (
+              <InstructorSalesReportTab isAdmin={isAdminRole} instructorEmail={userEmail} />
             )}
           </div>
         ) : (
@@ -1157,5 +1184,28 @@ export default function DashboardPage() {
         )}
       </main>
     </div>
+  );
+}
+
+function DashboardLoading() {
+  return (
+    <div className="min-h-screen flex flex-col bg-slate-50 font-sans">
+      <Navbar />
+      <div className="flex-grow flex flex-col justify-center items-center py-24">
+        <div className="relative">
+          <div className="w-14 h-14 border-4 border-indigo-200 border-dashed rounded-full animate-spin"></div>
+          <div className="w-14 h-14 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin absolute inset-0"></div>
+        </div>
+        <p className="mt-4 text-sm font-medium text-slate-500">Loading your dashboard...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardLoading />}>
+      <DashboardContent />
+    </Suspense>
   );
 }
