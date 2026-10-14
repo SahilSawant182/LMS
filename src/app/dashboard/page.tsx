@@ -292,7 +292,7 @@ export function DashboardContent() {
               </h1>
               <p className="text-indigo-200/80 mt-1 text-xs sm:text-sm max-w-2xl font-light">
                 {isInstructorRole
-                  ? "Manage your authored courses, track enrollment metrics, monitor sales revenue, and launch cohorts."
+                  ? "Manage your authored courses, track enrollment metrics, monitor sales revenue, and launch batches."
                   : "Track your enrolled courses, continue learning, and manage your certificates."}
               </p>
             </div>
@@ -313,7 +313,7 @@ export function DashboardContent() {
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-semibold backdrop-blur-sm border border-white/15 transition-all shadow-sm"
                   >
                     <Users className="w-4 h-4 text-emerald-300" />
-                    <span>Create Cohort</span>
+                    <span>Create Batch</span>
                   </Link>
                 </>
               ) : (
@@ -403,17 +403,17 @@ export function DashboardContent() {
                 </div>
               </div>
 
-              {/* Cohorts / Batches */}
+              {/* Batches */}
               <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col justify-between hover:border-sky-200 transition-all">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Live Cohorts</span>
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Live Batches</span>
                   <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-600">
                     <Video className="w-5 h-5" />
                   </div>
                 </div>
                 <div>
                   <p className="text-2xl sm:text-3xl font-extrabold text-slate-900">{iStats.total_batches}</p>
-                  <p className="text-[11px] font-semibold text-sky-600 mt-1">Cohort batches instructed</p>
+                  <p className="text-[11px] font-semibold text-sky-600 mt-1">Batches instructed</p>
                 </div>
               </div>
             </div>
@@ -432,7 +432,7 @@ export function DashboardContent() {
                   href="/batch/create"
                   className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center gap-1.5"
                 >
-                  <Plus className="w-3.5 h-3.5" /> New Cohort
+                  <Plus className="w-3.5 h-3.5" /> New Batch
                 </Link>
                 <Link
                   href="/coupons/create"
@@ -482,7 +482,7 @@ export function DashboardContent() {
                   }`}
                 >
                   <Users className="w-4 h-4 shrink-0" />
-                  <span>Cohorts</span>
+                  <span>Batches</span>
                   <span
                     className={`text-xs px-2.5 py-0.5 rounded-full font-bold transition-colors ${
                       instructorTab === "batches" ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-600"
@@ -659,7 +659,7 @@ export function DashboardContent() {
               </div>
             )}
 
-            {/* ── SUBTAB 2: INSTRUCTOR COHORTS / BATCHES ── */}
+            {/* ── SUBTAB 2: INSTRUCTOR BATCHES ── */}
             {instructorTab === "batches" && (
               <div>
                 {instructorBatches.length > 0 ? (
@@ -673,7 +673,7 @@ export function DashboardContent() {
                           <div className="flex items-center justify-between gap-3 mb-3">
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200">
                               <Video className="w-3.5 h-3.5 text-sky-600" />
-                              {b.medium || "Live Cohort"}
+                              {b.medium || "Live Batch"}
                             </span>
                             <span className="font-bold text-emerald-700 text-sm">
                               {b.paid_batch ? `₹ ${b.amount.toLocaleString("en-IN")}` : "Free"}
@@ -688,7 +688,7 @@ export function DashboardContent() {
                             </p>
                           )}
 
-                          {/* Cohort Details Box */}
+                          {/* Batch Details Box */}
                           <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-2 mb-4 text-xs text-slate-700">
                             {b.start_date && (
                               <div className="flex items-center gap-2">
@@ -724,7 +724,7 @@ export function DashboardContent() {
                             className="flex-1 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
-                            <span>Edit Cohort</span>
+                            <span>Edit Batch</span>
                           </Link>
                           <Link
                             href={`/batch/${encodeURIComponent(b.name)}`}
@@ -739,15 +739,15 @@ export function DashboardContent() {
                 ) : (
                   <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
                     <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                    <h3 className="text-base font-bold text-slate-900 mb-1">No Active Cohort Batches</h3>
+                    <h3 className="text-base font-bold text-slate-900 mb-1">No Active Batches</h3>
                     <p className="text-xs text-slate-500 max-w-sm mx-auto mb-5">
-                      Launch a live cohort batch to teach students with live classes and scheduled curriculum.
+                      Launch a live batch to teach students with live classes and scheduled curriculum.
                     </p>
                     <Link
                       href="/batch/create"
                       className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors"
                     >
-                      <Plus className="w-3.5 h-3.5" /> Create Cohort Batch
+                      <Plus className="w-3.5 h-3.5" /> Create Batch
                     </Link>
                   </div>
                 )}
@@ -844,7 +844,7 @@ export function DashboardContent() {
                   <Users className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cohort Batches</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Live Batches</p>
                   <p className="text-2xl font-extrabold text-slate-900 mt-0.5">{sStats.enrolled_batches}</p>
                 </div>
               </div>
@@ -894,7 +894,7 @@ export function DashboardContent() {
                   }`}
               >
                 <Users className="w-4 h-4" />
-                <span>My Cohorts</span>
+                <span>My Batches</span>
                 <span className={`text-xs px-2 py-0.5 rounded-full ${studentTab === "batches" ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-600"}`}>
                   {studentBatches.length}
                 </span>
@@ -944,7 +944,7 @@ export function DashboardContent() {
                             </span>
                             {course.enrollment_from_batch && (
                               <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                                Cohort Course
+                                Batch Course
                               </span>
                             )}
                           </div>
@@ -1034,7 +1034,7 @@ export function DashboardContent() {
                         <div>
                           <div className="flex items-center justify-between gap-3 mb-3">
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Active Cohort
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Active Batch
                             </span>
                             {batch.medium && (
                               <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg">
@@ -1075,7 +1075,7 @@ export function DashboardContent() {
                             <div className="flex items-center gap-2">
                               <BookOpen className="w-4 h-4 text-emerald-500 shrink-0" />
                               <span>
-                                <strong>Curriculum:</strong> {batch.courses_count || batch.courses?.length || 0} Courses included in cohort
+                                <strong>Curriculum:</strong> {batch.courses_count || batch.courses?.length || 0} Courses included in batch
                               </span>
                             </div>
                           </div>
@@ -1086,7 +1086,7 @@ export function DashboardContent() {
                             href={`/batch/${encodeURIComponent(batch.batch)}`}
                             className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm"
                           >
-                            <span>Open Cohort & View Classes</span>
+                            <span>Open Batch & View Classes</span>
                             <ArrowRight className="w-3.5 h-3.5" />
                           </Link>
                         </div>
@@ -1096,16 +1096,16 @@ export function DashboardContent() {
                 ) : (
                   <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
                     <Users className="w-12 h-12 text-emerald-600 mx-auto mb-3" />
-                    <h3 className="text-lg font-bold text-slate-900 mb-1">No Active Cohorts</h3>
+                    <h3 className="text-lg font-bold text-slate-900 mb-1">No Active Batches</h3>
                     <p className="text-sm text-slate-500 max-w-md mx-auto mb-6">
-                      Join mentor-led cohort batches with interactive live classes, scheduled assignments, and peer learning.
+                      Join mentor-led live batches with interactive live classes, scheduled assignments, and peer learning.
                     </p>
                     <Link
                       href="/batches"
                       className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-all shadow-sm"
                     >
                       <Users className="w-4 h-4" />
-                      <span>Explore Cohort Batches</span>
+                      <span>Explore Batches</span>
                     </Link>
                   </div>
                 )}

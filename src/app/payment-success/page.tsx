@@ -53,7 +53,7 @@ function PaymentSuccessContent() {
   }, [paymentName]);
 
   const targetLink = itemType === "batch" ? `/batch/${itemId}` : `/course/${itemId}`;
-  const targetLabel = itemType === "batch" ? "Go to Batch Cohort" : "Start Learning Now";
+  const targetLabel = itemType === "batch" ? "Go to Batch" : "Start Learning Now";
 
   const handleCopyTransaction = () => {
     const idToCopy = status?.payment_id || status?.order_id || paymentName;

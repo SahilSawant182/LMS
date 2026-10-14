@@ -885,7 +885,7 @@ export default function InstructorPayoutsTab({
             <Wallet className="w-10 h-10 text-slate-300 mx-auto mb-2" />
             <h4 className="text-sm font-bold text-slate-800 mb-1">No Settlement Statements Found</h4>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              Statements are compiled automatically at the end of each billing cycle once your course and cohort sales reach the minimum payout threshold.
+              Statements are compiled automatically at the end of each billing cycle once your course and batch sales reach the minimum payout threshold.
             </p>
           </div>
         )}
@@ -897,7 +897,7 @@ export default function InstructorPayoutsTab({
           <div>
             <h3 className="text-base font-bold text-slate-900">Recent Student Course Transactions</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Live ledger of incoming payments received for your published courses and live cohorts.
+              Live ledger of incoming payments received for your published courses and live batches.
             </p>
           </div>
           <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
@@ -1359,7 +1359,7 @@ export default function InstructorPayoutsTab({
               </div>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-slate-500 text-[11px]">
-                This will calculate all gross course/cohort sales, apply progressive commission tiers, deduct 18% GST and Sec 194J TDS, and generate official billing records for disbursal.
+                This will calculate all gross course/batch sales, apply progressive commission tiers, deduct 18% GST and Sec 194J TDS, and generate official billing records for disbursal.
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
