@@ -1,7 +1,9 @@
 export interface CommissionTier {
-  threshold: number;
-  rate: number;
   label?: string;
+  gross_threshold?: number;
+  commission_rate?: number;
+  threshold?: number;
+  rate?: number;
 }
 
 export interface BillingSettings {
@@ -15,7 +17,7 @@ export interface BillingSettings {
   platform_name?: string;
 }
 
-export interface BillingLifetimeStats {
+export interface InstructorLifetimeStats {
   lifetime_gross_sales: number;
   lifetime_net_earnings: number;
   lifetime_tds_deducted: number;
@@ -25,12 +27,14 @@ export interface BillingLifetimeStats {
   billing_records_count: number;
 }
 
+export type BillingLifetimeStats = InstructorLifetimeStats;
+
 export interface InstructorBillingRecord {
   name: string;
-  payout_sheet: string;
-  billing_cycle: string;
-  start_date: string;
-  end_date: string;
+  payout_sheet?: string | null;
+  billing_cycle?: string;
+  start_date?: string | null;
+  end_date?: string | null;
   gross_sales: number;
   platform_commission_rate: number;
   platform_commission: number;
@@ -40,16 +44,16 @@ export interface InstructorBillingRecord {
   tds_rate: number;
   tds_amount: number;
   net_payout: number;
-  status: "Draft" | "Approved" | "Paid" | "Cancelled";
-  paid_on?: string;
-  payment_reference?: string;
-  payment_mode?: string;
-  created_at: string;
+  status: "Draft" | "Approved" | "Paid" | "Hold" | "Cancelled" | string;
+  paid_on?: string | null;
+  payment_reference?: string | null;
+  payment_mode?: string | null;
+  created_at?: string;
   instructor?: string;
   instructor_name?: string;
 }
 
-export interface RecentTransaction {
+export interface RecentInstructorSale {
   payment_name: string;
   payment_id: string;
   student_name: string;
@@ -61,16 +65,18 @@ export interface RecentTransaction {
   created_at: string;
 }
 
+export type RecentTransaction = RecentInstructorSale;
+
 export interface InstructorBillingDashboardData {
   instructor: string;
   instructor_name: string;
-  lifetime_stats: BillingLifetimeStats;
+  lifetime_stats: InstructorLifetimeStats;
   billing_history: InstructorBillingRecord[];
-  recent_transactions: RecentTransaction[];
+  recent_transactions: RecentInstructorSale[];
   settings: BillingSettings;
 }
 
-export interface PayoutPreviewData {
+export interface BillingPreviewData {
   instructor: string;
   instructor_name: string;
   period: { start_date: string; end_date: string };
@@ -95,6 +101,8 @@ export interface PayoutPreviewData {
     apply_gst_on_commission: boolean;
   };
 }
+
+export type PayoutPreviewData = BillingPreviewData;
 
 export interface PayoutSheetRow {
   name?: string;
@@ -130,4 +138,68 @@ export interface PayoutSheetData {
     transaction_count: number;
   };
   instructor_rows: PayoutSheetRow[];
+}
+
+export interface PaymentSlipDetails {
+  name: string;
+  student_name?: string;
+  student_email?: string;
+  payment_id?: string;
+  order_id?: string;
+  item_type?: string;
+  item_id?: string;
+  item_title?: string;
+  amount: number;
+  original_amount?: number;
+  discount_amount?: number;
+  coupon_code?: string | null;
+  currency?: string;
+  payment_received?: boolean;
+  date?: string;
+  time?: string;
+  [key: string]: any;
+}
+
+export interface PaymentSlipResponse {
+  payment_name: string;
+  filename: string;
+  pdf_base64: string;
+  pdf_data_url: string;
+  view_url: string;
+  download_url: string;
+  details: PaymentSlipDetails;
+}
+
+export interface PayoutSlipDetails {
+  name: string;
+  instructor?: string;
+  instructor_name?: string;
+  payout_sheet?: string | null;
+  billing_cycle?: string;
+  start_date?: string;
+  end_date?: string;
+  status?: string;
+  gross_sales?: number;
+  platform_commission_rate?: number;
+  platform_commission?: number;
+  gst_on_commission?: number;
+  refunds?: number;
+  net_earnings?: number;
+  tds_rate?: number;
+  tds_amount?: number;
+  net_payout?: number;
+  paid_on?: string;
+  payment_mode?: string;
+  payment_reference?: string;
+  [key: string]: any;
+}
+
+export interface PayoutSlipResponse {
+  billing_name: string;
+  filename: string;
+  pdf_base64: string;
+  pdf_data_url: string;
+  view_url: string;
+  download_url: string;
+  details: PayoutSlipDetails;
 }
