@@ -116,11 +116,16 @@ export default function PaymentSlipModal({
       } catch (err: any) {
         if (isMounted) {
           console.error("Failed to load PDF slip:", err);
-          setError(
-            err?.response?.data?.message ||
-              err?.message ||
-              "Could not generate or load the PDF slip."
-          );
+          let errMsg = "Could not generate or load the PDF slip.";
+          const rawMsg = err?.response?.data?.message;
+          if (typeof rawMsg === "string") {
+            errMsg = rawMsg;
+          } else if (rawMsg && typeof rawMsg === "object") {
+            errMsg = rawMsg.message || rawMsg.error || JSON.stringify(rawMsg);
+          } else if (typeof err?.message === "string") {
+            errMsg = err.message;
+          }
+          setError(errMsg);
         }
       } finally {
         if (isMounted) setLoading(false);

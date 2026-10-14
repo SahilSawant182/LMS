@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck } from 'lucide-react';
+import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/services/auth.services';
@@ -46,8 +46,22 @@ export default function Navbar() {
         setUserName(fullName || userEmail?.split("@")[0] || "Learner");
         setUserEmail(userEmail || "");
         setIsAuthenticated(true);
-        const roles = localStorage.getItem("roles");
-        setIsInstructor(roles?.includes("Instructor") || false);
+        let hasInstructorRole = false;
+        try {
+          const rolesStr = localStorage.getItem("roles");
+          if (rolesStr) {
+            const parsedRoles = JSON.parse(rolesStr);
+            if (Array.isArray(parsedRoles)) {
+              hasInstructorRole = parsedRoles.some((r: string) =>
+                ["Instructor", "Course Creator", "Moderator", "Administrator", "System Manager"].includes(r)
+              );
+            }
+          }
+        } catch (e) {
+          const roles = localStorage.getItem("roles");
+          hasInstructorRole = roles?.includes("Instructor") || false;
+        }
+        setIsInstructor(hasInstructorRole);
       } else {
         setIsAuthenticated(false);
         setIsInstructor(false);
@@ -273,14 +287,25 @@ export default function Navbar() {
                             <CreditCard className="w-4 h-4 mr-2 text-gray-400" />
                             Plans
                           </Link>
-                          <Link
-                            href="/my-payments"
-                            onClick={() => setIsDropdownOpen(false)}
-                            className="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
-                          >
-                            <Receipt className="w-4 h-4 mr-2 text-gray-400" />
-                            My Payments
-                          </Link>
+                          {isInstructor ? (
+                            <Link
+                              href="/dashboard?tab=payouts"
+                              onClick={() => setIsDropdownOpen(false)}
+                              className="flex items-center px-4 py-2 text-xs text-emerald-700 hover:bg-emerald-50 transition-colors font-medium"
+                            >
+                              <Wallet className="w-4 h-4 mr-2 text-emerald-600" />
+                              Payout Dashboard
+                            </Link>
+                          ) : (
+                            <Link
+                              href="/my-payments"
+                              onClick={() => setIsDropdownOpen(false)}
+                              className="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                              <Receipt className="w-4 h-4 mr-2 text-gray-400" />
+                              My Payments
+                            </Link>
+                          )}
                           <Link
                             href="/profile"
                             onClick={() => setIsDropdownOpen(false)}

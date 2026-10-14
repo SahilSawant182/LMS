@@ -203,3 +203,91 @@ export interface PayoutSlipResponse {
   download_url: string;
   details: PayoutSlipDetails;
 }
+
+export interface SalesReportFilter {
+  period?: "all" | "this_month" | "last_month" | "last_30_days" | "last_90_days" | "this_year" | "custom";
+  start_date?: string;
+  end_date?: string;
+  course?: string;
+  item_type?: "all" | "course" | "batch";
+  search?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export interface SalesReportSummary {
+  total_orders: number;
+  total_gross_sales: number;
+  total_discount_given: number;
+  total_courses_sold: number;
+  total_batches_sold: number;
+  unique_students: number;
+  average_order_value: number;
+  top_performing_course: string;
+}
+
+export interface MonthlyBreakdownItem {
+  month_key: string;
+  month_label: string;
+  sales_count: number;
+  gross_revenue: number;
+  courses_sold: number;
+  batches_sold: number;
+  unique_students: number;
+}
+
+export interface CourseWiseBreakdownItem {
+  item_id: string;
+  item_title: string;
+  item_type: "course" | "batch";
+  item_image: string | null;
+  sales_count: number;
+  gross_revenue: number;
+  unique_students: number;
+  percentage_of_total: number;
+  average_price: number;
+}
+
+export interface ReportTransactionItem {
+  name: string;
+  payment_id: string;
+  order_id: string;
+  student_name: string;
+  student_email: string;
+  item_type: "course" | "batch";
+  item_id: string;
+  item_title: string;
+  amount: number;
+  original_amount: number;
+  discount_amount: number;
+  coupon_code: string | null;
+  currency: string;
+  date: string;
+  time: string;
+  created_at: string;
+}
+
+export interface SalesReportResponse {
+  instructor: string;
+  instructor_name: string;
+  filter_applied: {
+    period?: string;
+    start_date?: string | null;
+    end_date?: string | null;
+    course?: string | null;
+    item_type?: string | null;
+    search?: string | null;
+  };
+  available_items: Array<{ id: string; title: string; type: string }>;
+  summary: SalesReportSummary;
+  monthly_breakdown: MonthlyBreakdownItem[];
+  course_wise_breakdown: CourseWiseBreakdownItem[];
+  transactions: ReportTransactionItem[];
+  pagination: {
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+  };
+}
+

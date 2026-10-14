@@ -7,6 +7,8 @@ import {
   InstructorBillingRecord,
   PaymentSlipResponse,
   PayoutSlipResponse,
+  SalesReportFilter,
+  SalesReportResponse,
 } from "@/types/billing.types";
 
 const METHOD_PREFIX = "method/lms.lms.stride_lms";
@@ -213,3 +215,42 @@ export const getPayoutSlipDownloadUrl = (
     billingName
   )}${att}`;
 };
+
+export const getInstructorSalesReport = async (
+  filters: SalesReportFilter = {},
+  instructor?: string
+): Promise<SalesReportResponse> => {
+  const params: Record<string, any> = {};
+  if (instructor) params.instructor = instructor;
+  if (filters.period) params.period = filters.period;
+  if (filters.start_date) params.start_date = filters.start_date;
+  if (filters.end_date) params.end_date = filters.end_date;
+  if (filters.course) params.course = filters.course;
+  if (filters.item_type && filters.item_type !== "all") params.item_type = filters.item_type;
+  if (filters.search) params.search = filters.search;
+  if (filters.page) params.page = String(filters.page);
+  if (filters.page_size !== undefined) params.page_size = String(filters.page_size);
+
+  const res = await apiService.get(`${METHOD_PREFIX}.get_instructor_sales_report`, {
+    params,
+    headers: authHeaders(),
+  });
+  return extractData<SalesReportResponse>(res);
+};
+
+export const getInstructorSalesReportCsvUrl = (
+  filters: SalesReportFilter = {},
+  instructor?: string
+): string => {
+  const params = new URLSearchParams();
+  if (instructor) params.append("instructor", instructor);
+  if (filters.period) params.append("period", filters.period);
+  if (filters.start_date) params.append("start_date", filters.start_date);
+  if (filters.end_date) params.append("end_date", filters.end_date);
+  if (filters.course) params.append("course", filters.course);
+  if (filters.item_type && filters.item_type !== "all") params.append("item_type", filters.item_type);
+  if (filters.search) params.append("search", filters.search);
+
+  return `/api/method/lms.lms.stride_lms.export_instructor_sales_report_csv?${params.toString()}`;
+};
+
