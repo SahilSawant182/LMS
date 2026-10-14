@@ -26,7 +26,8 @@ import {
   CreditCard,
   Layers,
   ArrowUpRight,
-  Award
+  Award,
+  Receipt
 } from "lucide-react";
 import {
   InstructorBillingDashboardData,
@@ -703,18 +704,18 @@ export default function InstructorPayoutsTab({
 
         {filteredBillingHistory.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse text-xs min-w-[1080px]">
               <thead>
-                <tr className="bg-slate-50/75 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
-                  <th className="py-3 px-4">Statement ID</th>
-                  <th className="py-3 px-4">Period</th>
-                  <th className="py-3 px-4 text-right">Gross Sales</th>
-                  <th className="py-3 px-4 text-right">Fee + GST</th>
-                  <th className="py-3 px-4 text-right">TDS (194J)</th>
-                  <th className="py-3 px-4 text-right">Net Payout</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Payment Ref / UTR</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                  <th className="py-3.5 px-4 text-left whitespace-nowrap">Statement ID</th>
+                  <th className="py-3.5 px-4 text-left whitespace-nowrap">Billing Period</th>
+                  <th className="py-3.5 px-4 text-right whitespace-nowrap">Gross Sales</th>
+                  <th className="py-3.5 px-4 text-right whitespace-nowrap">Platform Fee & GST</th>
+                  <th className="py-3.5 px-4 text-right whitespace-nowrap">TDS (194J)</th>
+                  <th className="py-3.5 px-4 text-right whitespace-nowrap">Net Payout</th>
+                  <th className="py-3.5 px-4 text-center whitespace-nowrap">Status</th>
+                  <th className="py-3.5 px-4 text-left whitespace-nowrap">Payment Ref / UTR</th>
+                  <th className="py-3.5 px-4 text-right whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -722,40 +723,81 @@ export default function InstructorPayoutsTab({
                   const feePlusGst = (rec.platform_commission || 0) + (rec.gst_on_commission || 0);
 
                   return (
-                    <tr key={rec.name} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-medium text-slate-900">
-                        <div className="font-bold">{rec.name}</div>
-                        {rec.payout_sheet && (
-                          <div className="text-[10px] text-slate-400">{rec.payout_sheet}</div>
+                    <tr key={rec.name} className="hover:bg-slate-50/80 transition-colors">
+                      {/* 1. Statement ID */}
+                      <td className="py-3.5 px-4 align-middle whitespace-nowrap">
+                        <div className="font-mono font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                          <Receipt className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                          <span>{rec.name}</span>
+                        </div>
+                        {rec.payout_sheet ? (
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">{rec.payout_sheet}</div>
+                        ) : (
+                          <div className="text-[10px] text-slate-400 mt-0.5">Automated Settlement</div>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-600 whitespace-nowrap">
-                        <div>{formatDate(rec.start_date)} → {formatDate(rec.end_date)}</div>
-                        <span className="text-[10px] text-slate-400 capitalize">{rec.billing_cycle || "Monthly"}</span>
+
+                      {/* 2. Billing Period */}
+                      <td className="py-3.5 px-4 align-middle whitespace-nowrap text-slate-600">
+                        <div className="font-semibold text-slate-800 text-xs">
+                          {formatDate(rec.start_date)} → {formatDate(rec.end_date)}
+                        </div>
+                        <span className="inline-block text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded capitalize mt-0.5">
+                          {rec.billing_cycle || "Monthly"}
+                        </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right font-bold text-slate-800">
-                        ₹ {formatINR(rec.gross_sales)}
+
+                      {/* 3. Gross Sales */}
+                      <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
+                        <div className="font-bold text-slate-900 text-xs">
+                          ₹ {formatINR(rec.gross_sales)}
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-normal">Gross Sales</span>
                       </td>
-                      <td className="py-3.5 px-4 text-right text-purple-700 font-medium">
-                        <div>- ₹ {formatINR(feePlusGst)}</div>
-                        <span className="text-[10px] text-slate-400">({rec.platform_commission_rate}%)</span>
+
+                      {/* 4. Platform Fee & GST */}
+                      <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
+                        <div className="font-semibold text-purple-700 text-xs">
+                          - ₹ {formatINR(feePlusGst)}
+                        </div>
+                        <span className="text-[10px] text-purple-600/70">
+                          ({rec.platform_commission_rate}% fee + GST)
+                        </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right text-blue-700 font-medium">
+
+                      {/* 5. TDS (194J) */}
+                      <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
                         {(rec.tds_amount || 0) > 0 ? (
                           <>
-                            <div>- ₹ {formatINR(rec.tds_amount)}</div>
-                            <span className="text-[10px] text-slate-400">({rec.tds_rate}%)</span>
+                            <div className="font-semibold text-blue-700 text-xs">
+                              - ₹ {formatINR(rec.tds_amount)}
+                            </div>
+                            <span className="text-[10px] text-blue-600/70">
+                              ({rec.tds_rate}% IT Act)
+                            </span>
                           </>
                         ) : (
-                          <span className="text-slate-400">₹ 0.00</span>
+                          <>
+                            <div className="font-semibold text-slate-400 text-xs">₹ 0.00</div>
+                            <span className="text-[10px] text-slate-400">Exempt</span>
+                          </>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-right font-extrabold text-emerald-700 text-sm">
-                        ₹ {formatINR(rec.net_payout)}
+
+                      {/* 6. Net Payout */}
+                      <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
+                        <div className="font-extrabold text-emerald-700 text-sm">
+                          ₹ {formatINR(rec.net_payout)}
+                        </div>
+                        <span className="text-[10px] font-semibold text-emerald-600/80">
+                          Disbursable
+                        </span>
                       </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
+
+                      {/* 7. Status */}
+                      <td className="py-3.5 px-4 align-middle text-center whitespace-nowrap">
                         <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
                             rec.status === "Paid"
                               ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                               : rec.status === "Approved"
@@ -765,21 +807,23 @@ export default function InstructorPayoutsTab({
                               : "bg-slate-50 text-slate-600 border-slate-200"
                           }`}
                         >
-                          {rec.status === "Paid" && <CheckCircle2 className="w-3 h-3" />}
-                          {rec.status === "Approved" && <ShieldCheck className="w-3 h-3" />}
-                          {rec.status === "Draft" && <Clock className="w-3 h-3" />}
+                          {rec.status === "Paid" && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
+                          {rec.status === "Approved" && <ShieldCheck className="w-3 h-3 text-blue-600" />}
+                          {rec.status === "Draft" && <Clock className="w-3 h-3 text-amber-600" />}
                           {rec.status}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-[11px] text-slate-600">
+
+                      {/* 8. Payment Ref / UTR */}
+                      <td className="py-3.5 px-4 align-middle whitespace-nowrap">
                         {rec.payment_reference ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                          <div className="inline-flex items-center gap-1.5 bg-slate-100/80 border border-slate-200 px-2 py-1 rounded-lg">
+                            <span className="font-mono text-[11px] font-bold text-slate-700">
                               {rec.payment_reference}
                             </span>
                             <button
                               onClick={() => handleCopy(rec.payment_reference!, `utr-${rec.name}`)}
-                              className="text-slate-400 hover:text-slate-700 p-1 rounded cursor-pointer"
+                              className="text-slate-400 hover:text-slate-700 p-0.5 rounded transition-colors cursor-pointer"
                               title="Copy UTR Reference"
                             >
                               {copiedKey === `utr-${rec.name}` ? (
@@ -790,15 +834,20 @@ export default function InstructorPayoutsTab({
                             </button>
                           </div>
                         ) : (
-                          <span className="text-slate-400 italic">Pending Bank Transfer</span>
+                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 italic font-medium">
+                            <Clock className="w-3 h-3 text-slate-300" />
+                            Pending Disbursal
+                          </span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2">
+
+                      {/* 9. Actions */}
+                      <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
                             onClick={() => setSelectedSlipBilling(rec.name)}
-                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 border border-indigo-100 cursor-pointer shadow-xs"
+                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 border border-indigo-100 cursor-pointer shadow-2xs"
                             title="View / Download Official PDF Voucher"
                           >
                             <FileText className="w-3.5 h-3.5 text-indigo-600" />
@@ -816,7 +865,7 @@ export default function InstructorPayoutsTab({
                           {isAdmin && rec.status !== "Paid" && (
                             <button
                               onClick={() => openMarkPaidForRecord(rec)}
-                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1 cursor-pointer"
+                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs"
                               title="Mark as Paid"
                             >
                               <CreditCard className="w-3.5 h-3.5" />
