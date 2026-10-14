@@ -44,6 +44,7 @@ import {
   markPayoutPaid
 } from "@/services/billing.services";
 import { formatDate } from "@/utils/formatters";
+import PaymentSlipModal from "@/components/modals/PaymentSlipModal";
 
 interface InstructorPayoutsTabProps {
   isAdmin?: boolean;
@@ -66,6 +67,13 @@ export default function InstructorPayoutsTab({
   const [statusFilter, setStatusFilter] = useState<"All" | "Paid" | "Approved" | "Draft">("All");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [selectedVoucher, setSelectedVoucher] = useState<InstructorBillingRecord | null>(null);
+  const [selectedSlipBilling, setSelectedSlipBilling] = useState<string | null>(null);
+
+  // Custom Date Estimator States
+  const [calcStart, setCalcStart] = useState("");
+  const [calcEnd, setCalcEnd] = useState("");
+  const [calcLoading, setCalcLoading] = useState(false);
+  const [calcResult, setCalcResult] = useState<PayoutPreviewData | null>(null);
 
   // Admin Modal States
   const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -194,9 +202,15 @@ export default function InstructorPayoutsTab({
   }, [dashboardData?.billing_history, statusFilter]);
 
   // Commission Tiers with Active Tier Detection
-  const tiers: CommissionTier[] = useMemo(() => {
+  const tiers = useMemo(() => {
     if (dashboardData?.settings?.commission_tiers && dashboardData.settings.commission_tiers.length > 0) {
-      return [...dashboardData.settings.commission_tiers].sort((a, b) => a.threshold - b.threshold);
+      return [...dashboardData.settings.commission_tiers]
+        .map((t) => ({
+          ...t,
+          threshold: t.threshold ?? t.gross_threshold ?? 0,
+          rate: t.rate ?? t.commission_rate ?? 0,
+        }))
+        .sort((a, b) => a.threshold - b.threshold);
     }
     return [
       { threshold: 50000, rate: 20, label: "Starter Tier" },
@@ -209,12 +223,34 @@ export default function InstructorPayoutsTab({
 
   const currentTier = useMemo(() => {
     for (let i = 0; i < tiers.length; i++) {
-      if (lifetimeGross < tiers[i].threshold) {
-        return { index: i, tier: tiers[i] };
+      const tierItem = tiers[i];
+      if (tierItem && lifetimeGross < tierItem.threshold) {
+        return { index: i, tier: tierItem };
       }
     }
-    return { index: tiers.length - 1, tier: tiers[tiers.length - 1] };
+    const fallbackIdx = Math.max(0, tiers.length - 1);
+    const fallbackTier = tiers[fallbackIdx] || { threshold: 999999999, rate: 10, label: "Elite Tier" };
+    return { index: fallbackIdx, tier: fallbackTier };
   }, [tiers, lifetimeGross]);
+
+  // Custom Date-Range Earnings Estimator Handler
+  const handleCalculateEstimate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!calcStart || !calcEnd) return;
+    setCalcLoading(true);
+    try {
+      const res = await previewInstructorBilling({
+        instructor: instructorEmail || dashboardData?.instructor,
+        start_date: calcStart,
+        end_date: calcEnd
+      });
+      setCalcResult(res);
+    } catch (err: any) {
+      console.error("Failed to estimate earnings:", err);
+    } finally {
+      setCalcLoading(false);
+    }
+  };
 
   // Admin Handler: Generate Payout Sheet
   const handleGenerateSheet = async (e: React.FormEvent) => {
@@ -760,11 +796,21 @@ export default function InstructorPayoutsTab({
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">
                           <button
+                            type="button"
+                            onClick={() => setSelectedSlipBilling(rec.name)}
+                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 border border-indigo-100 cursor-pointer shadow-xs"
+                            title="View / Download Official PDF Voucher"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Slip PDF</span>
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() => setSelectedVoucher(rec)}
                             className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1 cursor-pointer"
                           >
-                            <FileText className="w-3.5 h-3.5 text-slate-600" />
-                            <span>View Voucher</span>
+                            <span>Summary</span>
                           </button>
 
                           {isAdmin && rec.status !== "Paid" && (
@@ -879,6 +925,88 @@ export default function InstructorPayoutsTab({
         )}
       </div>
 
+      {/* ── 6. LIVE REVENUE & COMMISSION CALCULATOR ── */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-1">
+          <Calendar className="w-5 h-5 text-indigo-600" />
+          <h3 className="font-bold text-slate-900 text-base">Live Revenue & Commission Calculator</h3>
+        </div>
+        <p className="text-xs text-slate-500 mb-5">
+          Estimate earnings for any custom date range without waiting for settlement cycle finalization.
+        </p>
+
+        <form onSubmit={handleCalculateEstimate} className="flex flex-wrap items-end gap-3 mb-6">
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">From Date</label>
+            <input
+              type="date"
+              value={calcStart}
+              onChange={(e) => setCalcStart(e.target.value)}
+              className="px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">To Date</label>
+            <input
+              type="date"
+              value={calcEnd}
+              onChange={(e) => setCalcEnd(e.target.value)}
+              className="px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={calcLoading || !calcStart || !calcEnd}
+            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md hover:shadow-indigo-200 disabled:opacity-50 cursor-pointer"
+          >
+            {calcLoading ? "Calculating..." : "Estimate Earnings"}
+          </button>
+        </form>
+
+        {calcResult && calcResult.breakdown && (
+          <div className="p-5 bg-indigo-50/60 border border-indigo-100 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+            <div>
+              <span className="text-slate-500 font-semibold block text-[11px]">Gross Revenue</span>
+              <strong className="text-slate-900 text-sm font-black">
+                ₹ {formatINR(calcResult.breakdown.gross_sales)}
+              </strong>
+              <span className="text-[10px] text-slate-400 block mt-0.5">
+                {calcResult.breakdown.total_transactions} orders
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 font-semibold block text-[11px]">
+                Commission ({calcResult.breakdown.platform_commission_rate}%)
+              </span>
+              <strong className="text-rose-600 text-sm font-black">
+                - ₹ {formatINR(calcResult.breakdown.platform_commission)}
+              </strong>
+              <span className="text-[10px] text-slate-400 block mt-0.5">
+                + GST ₹ {formatINR(calcResult.breakdown.gst_on_commission)}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 font-semibold block text-[11px]">
+                TDS ({calcResult.breakdown.tds_rate}%)
+              </span>
+              <strong className="text-purple-600 text-sm font-black">
+                {calcResult.breakdown.tds_amount > 0 ? `- ₹ ${formatINR(calcResult.breakdown.tds_amount)}` : "NIL (Exempt)"}
+              </strong>
+              <span className="text-[10px] text-slate-400 block mt-0.5">Sec 194J</span>
+            </div>
+            <div>
+              <span className="text-slate-500 font-semibold block text-[11px]">Estimated Net Payout</span>
+              <strong className="text-emerald-600 text-base font-black">
+                ₹ {formatINR(calcResult.breakdown.net_payout)}
+              </strong>
+              <span className="text-[10px] text-emerald-700 block mt-0.5">Creditable to bank</span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* ═════════════════════════════════════════════════════════
           MODAL 1: SETTLEMENT VOUCHER / DIGITAL PAYSLIP
       ═════════════════════════════════════════════════════════ */}
@@ -894,6 +1022,16 @@ export default function InstructorPayoutsTab({
                 </span>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSlipBilling(selectedVoucher.name);
+                  }}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Official PDF Slip</span>
+                </button>
                 <button
                   onClick={() => window.print()}
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
@@ -1314,6 +1452,14 @@ export default function InstructorPayoutsTab({
           </div>
         </div>
       )}
+
+      {/* Official PDF Slip Modal */}
+      <PaymentSlipModal
+        isOpen={!!selectedSlipBilling}
+        onClose={() => setSelectedSlipBilling(null)}
+        billingName={selectedSlipBilling}
+        title="Instructor Settlement Advice & Payout Slip"
+      />
     </div>
   );
 }

@@ -5,6 +5,8 @@ import {
   PayoutSheetData,
   BillingSettings,
   InstructorBillingRecord,
+  PaymentSlipResponse,
+  PayoutSlipResponse,
 } from "@/types/billing.types";
 
 const METHOD_PREFIX = "method/lms.lms.stride_lms";
@@ -57,17 +59,38 @@ export const getInstructorBillingDashboard = async (
   return extractData<InstructorBillingDashboardData>(res);
 };
 
-export const previewInstructorBilling = async (params: {
+export function previewInstructorBilling(params: {
   instructor?: string;
   start_date: string;
   end_date: string;
-}): Promise<PayoutPreviewData> => {
+}): Promise<PayoutPreviewData>;
+export function previewInstructorBilling(
+  startDate?: string,
+  endDate?: string,
+  instructor?: string
+): Promise<PayoutPreviewData>;
+export async function previewInstructorBilling(
+  arg1?: string | { instructor?: string; start_date?: string; end_date?: string },
+  arg2?: string,
+  arg3?: string
+): Promise<PayoutPreviewData> {
+  const params: Record<string, any> = {};
+  if (typeof arg1 === "object" && arg1 !== null) {
+    if (arg1.instructor) params.instructor = arg1.instructor;
+    if (arg1.start_date) params.start_date = arg1.start_date;
+    if (arg1.end_date) params.end_date = arg1.end_date;
+  } else {
+    if (arg1) params.start_date = arg1;
+    if (arg2) params.end_date = arg2;
+    if (arg3) params.instructor = arg3;
+  }
+
   const res = await apiService.get(`${METHOD_PREFIX}.preview_instructor_billing`, {
     params,
     headers: authHeaders(),
   });
   return extractData<PayoutPreviewData>(res);
-};
+}
 
 export const generateInstructorPayoutSheet = async (payload: {
   start_date: string;
@@ -141,4 +164,52 @@ export const updateInstructorBillingSettings = async (
     { headers: authHeaders() }
   );
   return extractData<BillingSettings>(res);
+};
+
+export const getPaymentSlipData = async (
+  paymentName: string
+): Promise<PaymentSlipResponse> => {
+  const res = await apiService.get(`${METHOD_PREFIX}.get_payment_slip_data`, {
+    params: { payment_name: paymentName },
+    headers: authHeaders(),
+  });
+  const data = extractData<PaymentSlipResponse>(res);
+  if (data && !data.pdf_data_url && data.pdf_base64) {
+    data.pdf_data_url = `data:application/pdf;base64,${data.pdf_base64}`;
+  }
+  return data;
+};
+
+export const getInstructorPayoutSlipData = async (
+  billingName: string
+): Promise<PayoutSlipResponse> => {
+  const res = await apiService.get(`${METHOD_PREFIX}.get_instructor_payout_slip_data`, {
+    params: { billing_name: billingName },
+    headers: authHeaders(),
+  });
+  const data = extractData<PayoutSlipResponse>(res);
+  if (data && !data.pdf_data_url && data.pdf_base64) {
+    data.pdf_data_url = `data:application/pdf;base64,${data.pdf_base64}`;
+  }
+  return data;
+};
+
+export const getPaymentSlipDownloadUrl = (
+  paymentName: string,
+  asAttachment = true
+): string => {
+  const att = asAttachment ? "&as_attachment=1" : "";
+  return `/api/method/lms.lms.stride_lms.download_payment_slip?payment_name=${encodeURIComponent(
+    paymentName
+  )}${att}`;
+};
+
+export const getPayoutSlipDownloadUrl = (
+  billingName: string,
+  asAttachment = true
+): string => {
+  const att = asAttachment ? "&as_attachment=1" : "";
+  return `/api/method/lms.lms.stride_lms.download_instructor_payout_slip?billing_name=${encodeURIComponent(
+    billingName
+  )}${att}`;
 };
