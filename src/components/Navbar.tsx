@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet, TrendingUp } from 'lucide-react';
+import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet, TrendingUp, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/services/auth.services';
@@ -268,6 +268,14 @@ export default function Navbar() {
                               >
                                 <UserCheck className="w-4 h-4 text-violet-600" />
                                 Course Evaluators
+                              </Link>
+                              <Link
+                                href="/settings"
+                                onClick={() => setIsDropdownOpen(false)}
+                                className="flex items-center gap-2 px-4 py-2 text-xs text-indigo-700 hover:bg-indigo-50 transition-colors font-semibold"
+                              >
+                                <Settings className="w-4 h-4 text-indigo-600" />
+                                LMS Settings
                               </Link>
                             </>
                           )}

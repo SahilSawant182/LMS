@@ -1731,6 +1731,14 @@ export const deleteProgrammingExerciseSubmission = async (
   }
 };
 
+export const getLmsSettings = async (): Promise<any> => {
+  return apiService.get("method/lms.lms.doctype.lms_settings.lms_settings.get_lms_settings");
+};
+
+export const updateLmsSettings = async (payload: Record<string, any>): Promise<any> => {
+  return apiService.post("method/lms.lms.doctype.lms_settings.lms_settings.update_lms_settings", payload);
+};
+
 export * from './payment.services';
 
 

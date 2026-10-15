@@ -25,6 +25,7 @@ import {
   ChevronRight,
   X,
   Sparkles,
+  Settings,
 } from 'lucide-react';
 import CreateChapterModal from '@/components/admin/CreateChapterModal';
 
@@ -373,6 +374,15 @@ export default function Sidebar({
               instructorOnly: true,
             },
           ],
+        },
+        {
+          type: 'link',
+          name: 'LMS Settings',
+          href: '/settings',
+          icon: Settings,
+          badge: 'Admin',
+          badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
+          instructorOnly: true,
         },
       ],
     },
