@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import { redirect } from "next/navigation";
 
-export default function CoursesPage() {
-  redirect('/dashboard?tab=courses');
+export default function CourseIndexPage() {
+  redirect("/courses");
 }

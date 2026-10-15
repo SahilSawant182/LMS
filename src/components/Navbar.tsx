@@ -115,19 +115,25 @@ export default function Navbar() {
   };
 
   const handleLogout = async () => {
-    if (window.confirm("Are you sure you want to log out?")) {
-      try {
-        await logout();
-      } catch (err) {
-        console.error("Logout API failed:", err);
-      }
-      localStorage.clear();
-      document.body.classList.remove("has-sidebar");
-      document.documentElement.style.removeProperty("--sidebar-width");
-      setIsAuthenticated(false);
-      window.dispatchEvent(new Event("auth-changed"));
-      router.push("/login");
-    }
+    try {
+      logout().catch((err) => console.warn("Logout API warning:", err));
+    } catch (e) {}
+
+    // Immediately clear all credentials and storage
+    localStorage.removeItem("apiKey");
+    localStorage.removeItem("apiSecret");
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("fullName");
+    localStorage.removeItem("roles");
+    localStorage.removeItem("isInstructor");
+    localStorage.clear();
+    sessionStorage.clear();
+
+    document.body.classList.remove("has-sidebar");
+    document.documentElement.style.removeProperty("--sidebar-width");
+    setIsAuthenticated(false);
+    window.dispatchEvent(new Event("auth-changed"));
+    window.location.href = "/login";
   };
 
   return (

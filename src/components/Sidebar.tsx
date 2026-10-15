@@ -26,8 +26,10 @@ import {
   X,
   Sparkles,
   Settings,
+  LogOut,
 } from 'lucide-react';
 import CreateChapterModal from '@/components/admin/CreateChapterModal';
+import { logout } from '@/services/auth.services';
 
 interface SidebarProps {
   isOpenMobile?: boolean;
@@ -156,6 +158,26 @@ export default function Sidebar({
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      logout().catch((err) => console.warn("Logout API warning:", err));
+    } catch (e) {}
+
+    localStorage.removeItem("apiKey");
+    localStorage.removeItem("apiSecret");
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("fullName");
+    localStorage.removeItem("roles");
+    localStorage.removeItem("isInstructor");
+    localStorage.clear();
+    sessionStorage.clear();
+
+    document.body.classList.remove("has-sidebar");
+    document.documentElement.style.removeProperty("--sidebar-width");
+    window.dispatchEvent(new Event("auth-changed"));
+    window.location.href = "/login";
+  };
+
   const toggleAccordion = (id: string) => {
     setOpenAccordions((prev) => ({
       ...prev,
@@ -177,7 +199,7 @@ export default function Sidebar({
   useEffect(() => {
     if (!pathname) return;
 
-    if (pathname.startsWith('/course') || pathname === '/progress') {
+    if (pathname.startsWith('/course') || pathname.startsWith('/courses') || pathname === '/progress') {
       setOpenAccordions((prev) => ({ ...prev, courses: true }));
     } else if (pathname.startsWith('/programming-exercises')) {
       setOpenAccordions((prev) => ({ ...prev, exercises: true }));
@@ -213,7 +235,7 @@ export default function Sidebar({
           children: [
             {
               name: 'All Courses',
-              href: '/dashboard?tab=courses',
+              href: '/courses',
               icon: BookOpen,
             },
             {
@@ -841,22 +863,38 @@ export default function Sidebar({
         {/* Sidebar Footer / Collapse Toggle */}
         <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
           {isExpanded ? (
-            <div className="flex items-center gap-2.5 truncate flex-1 px-1">
+            <div className="flex items-center gap-2 truncate flex-1 px-1">
               <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0">
                 {isInstructor ? 'INS' : 'LRN'}
               </div>
-              <div className="truncate">
+              <div className="truncate flex-1">
                 <p className="text-xs font-semibold text-slate-800 leading-none truncate">
                   {isInstructor ? 'Instructor Portal' : 'Student Portal'}
                 </p>
                 <p className="text-[10px] text-slate-400 mt-0.5">StrideNex LMS</p>
               </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                title="Sign out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
           ) : (
-            <div className="w-full flex justify-center">
+            <div className="w-full flex flex-col items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center">
                 {isInstructor ? 'INS' : 'LRN'}
               </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                title="Sign out"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
 
