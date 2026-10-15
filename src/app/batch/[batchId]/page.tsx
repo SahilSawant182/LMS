@@ -329,7 +329,7 @@ export default function BatchDetailsPage() {
                     }}
                     className="px-8 py-3.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95 text-sm"
                   >
-                    <CheckCircle2 className="w-5 h-5" /> Enrolled • View Cohort Courses
+                    <CheckCircle2 className="w-5 h-5" /> Enrolled • View Batch Courses
                   </button>
                 ) : isPaid ? (
                   <button

@@ -481,7 +481,7 @@ function CheckoutContent() {
                 href={itemLink}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3 rounded-xl shadow-md transition-all text-sm"
               >
-                Go to {itemTypeParam === "batch" ? "Batch Cohort" : "Course Material"}
+                Go to {itemTypeParam === "batch" ? "Batch" : "Course Material"}
               </Link>
               <Link
                 href="/my-payments"

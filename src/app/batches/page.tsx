@@ -93,7 +93,7 @@ export default function BatchesPage() {
             Explore Learning <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-sky-400">Batches</span>
           </h1>
           <p className="text-indigo-100 max-w-2xl mx-auto text-xs md:text-sm mb-2">
-            Join curated cohorts of learners, follow structured timelines, and achieve your goals together with expert instructors.
+            Join structured live batches, follow guided timelines, and achieve your goals together with expert instructors.
           </p>
         </div>
       </div>

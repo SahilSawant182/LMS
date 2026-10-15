@@ -482,7 +482,7 @@ export default function BadgesPage() {
                 </span>
               </h1>
               <p className="text-slate-300 max-w-2xl text-xs md:text-sm mt-1.5">
-                Recognizing student dedication, milestone mastery, and active cohort engagement across the platform.
+                Recognizing student dedication, milestone mastery, and active batch engagement across the platform.
               </p>
             </div>
 

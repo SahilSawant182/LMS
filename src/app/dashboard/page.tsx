@@ -28,9 +28,7 @@ import {
   Eye,
   ShieldCheck,
   Briefcase,
-  AlertCircle,
-  Wallet,
-  BarChart3
+  AlertCircle
 } from "lucide-react";
 import {
   getStudentDashboard,
@@ -42,11 +40,9 @@ import {
 } from "@/services/payment.services";
 import { getImageUrl } from "@/services/api.services";
 import { formatDate } from "@/utils/formatters";
-import InstructorPayoutsTab from "@/components/instructor/InstructorPayoutsTab";
-import InstructorSalesReportTab from "@/components/instructor/InstructorSalesReportTab";
 
 type StudentTab = "courses" | "batches" | "programs";
-type InstructorTab = "courses" | "batches" | "sales" | "payouts" | "reports";
+type InstructorTab = "courses" | "batches";
 
 export function DashboardContent() {
   const router = useRouter();
@@ -61,21 +57,21 @@ export function DashboardContent() {
   const [error, setError] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string>("");
 
-  // Sync active instructor tab from URL query params (e.g., /dashboard?tab=payouts)
+  // Sync active instructor tab from URL query params (e.g., /dashboard?tab=batches)
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     if (tabParam === "payouts" || tabParam === "commission" || tabParam === "payout") {
-      setInstructorTab("payouts");
-    } else if (tabParam === "reports" || tabParam === "sales-report") {
-      setInstructorTab("reports");
+      router.replace("/sales-earnings?tab=payouts");
+    } else if (tabParam === "reports" || tabParam === "sales-report" || tabParam === "analytics") {
+      router.replace("/sales-earnings?tab=reports");
+    } else if (tabParam === "sales" || tabParam === "transactions") {
+      router.replace("/sales-earnings?tab=sales");
     } else if (tabParam === "courses") {
       setInstructorTab("courses");
     } else if (tabParam === "batches" || tabParam === "cohorts") {
       setInstructorTab("batches");
-    } else if (tabParam === "sales") {
-      setInstructorTab("sales");
     }
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -251,7 +247,6 @@ export function DashboardContent() {
   };
   const instructorCourses = instructorData?.courses || [];
   const instructorBatches = instructorData?.batches || [];
-  const recentSales = instructorData?.recent_sales || [];
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
@@ -292,7 +287,7 @@ export function DashboardContent() {
               </h1>
               <p className="text-indigo-200/80 mt-1 text-xs sm:text-sm max-w-2xl font-light">
                 {isInstructorRole
-                  ? "Manage your authored courses, track enrollment metrics, monitor sales revenue, and launch cohorts."
+                  ? "Manage your authored courses, track enrollment metrics, monitor sales revenue, and launch batches."
                   : "Track your enrolled courses, continue learning, and manage your certificates."}
               </p>
             </div>
@@ -313,7 +308,14 @@ export function DashboardContent() {
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-semibold backdrop-blur-sm border border-white/15 transition-all shadow-sm"
                   >
                     <Users className="w-4 h-4 text-emerald-300" />
-                    <span>Create Cohort</span>
+                    <span>Create Batch</span>
+                  </Link>
+                  <Link
+                    href="/sales-earnings"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs sm:text-sm font-semibold backdrop-blur-sm border border-emerald-500/30 transition-all shadow-sm"
+                  >
+                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                    <span>Sales & Earnings</span>
                   </Link>
                 </>
               ) : (
@@ -353,25 +355,8 @@ export function DashboardContent() {
         ══════════════════════════════════════════════════════ */}
         {isInstructorRole ? (
           <div>
-            {/* 4 Instructor KPI Metrics Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-8">
-              {/* Total Revenue */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col justify-between hover:border-emerald-200 transition-all">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Gross Sales Revenue</span>
-                  <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
-                    <DollarSign className="w-5 h-5" />
-                  </div>
-                </div>
-                <div>
-                  <p className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                    ₹ {Number(iStats.total_revenue || 0).toLocaleString("en-IN")}
-                  </p>
-                  <p className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1">
-                    <TrendingUp className="w-3 h-3" /> From Course & Batch sales
-                  </p>
-                </div>
-              </div>
+            {/* 3 Instructor KPI Metrics Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-8">
 
               {/* Total Enrolled Students */}
               <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col justify-between hover:border-indigo-200 transition-all">
@@ -403,17 +388,17 @@ export function DashboardContent() {
                 </div>
               </div>
 
-              {/* Cohorts / Batches */}
+              {/* Batches */}
               <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col justify-between hover:border-sky-200 transition-all">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Live Cohorts</span>
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Live Batches</span>
                   <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-600">
                     <Video className="w-5 h-5" />
                   </div>
                 </div>
                 <div>
                   <p className="text-2xl sm:text-3xl font-extrabold text-slate-900">{iStats.total_batches}</p>
-                  <p className="text-[11px] font-semibold text-sky-600 mt-1">Cohort batches instructed</p>
+                  <p className="text-[11px] font-semibold text-sky-600 mt-1">Batches instructed</p>
                 </div>
               </div>
             </div>
@@ -432,13 +417,19 @@ export function DashboardContent() {
                   href="/batch/create"
                   className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center gap-1.5"
                 >
-                  <Plus className="w-3.5 h-3.5" /> New Cohort
+                  <Plus className="w-3.5 h-3.5" /> New Batch
                 </Link>
                 <Link
                   href="/coupons/create"
                   className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors flex items-center gap-1.5"
                 >
                   <Tag className="w-3.5 h-3.5" /> Promo Coupon
+                </Link>
+                <Link
+                  href="/sales-earnings"
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center gap-1.5"
+                >
+                  <TrendingUp className="w-3.5 h-3.5" /> Sales & Earnings
                 </Link>
               </div>
 
@@ -452,11 +443,11 @@ export function DashboardContent() {
             </div>
 
             {/* Instructor Tabs Navigation */}
-            <div className="w-full bg-white rounded-2xl shadow-sm border border-slate-200/80 p-2 mb-8 overflow-x-auto scrollbar-none">
-              <div className="flex items-center gap-2 min-w-max md:min-w-0 md:w-full">
+            <div className="w-full bg-white rounded-2xl shadow-sm border border-slate-200/80 p-2 mb-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
                   onClick={() => setInstructorTab("courses")}
-                  className={`py-3 px-4 sm:px-5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap shrink-0 md:flex-1 ${
+                  className={`py-3 px-5 sm:px-6 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap ${
                     instructorTab === "courses"
                       ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
                       : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80"
@@ -475,14 +466,14 @@ export function DashboardContent() {
 
                 <button
                   onClick={() => setInstructorTab("batches")}
-                  className={`py-3 px-4 sm:px-5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap shrink-0 md:flex-1 ${
+                  className={`py-3 px-5 sm:px-6 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap ${
                     instructorTab === "batches"
                       ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
                       : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80"
                   }`}
                 >
                   <Users className="w-4 h-4 shrink-0" />
-                  <span>Cohorts</span>
+                  <span>Batches</span>
                   <span
                     className={`text-xs px-2.5 py-0.5 rounded-full font-bold transition-colors ${
                       instructorTab === "batches" ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-600"
@@ -491,50 +482,16 @@ export function DashboardContent() {
                     {instructorBatches.length}
                   </span>
                 </button>
-
-                <button
-                  onClick={() => setInstructorTab("sales")}
-                  className={`py-3 px-4 sm:px-5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap shrink-0 md:flex-1 ${
-                    instructorTab === "sales"
-                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80"
-                  }`}
-                >
-                  <DollarSign className="w-4 h-4 shrink-0" />
-                  <span>Recent Sales</span>
-                  <span
-                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold transition-colors ${
-                      instructorTab === "sales" ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-600"
-                    }`}
-                  >
-                    {recentSales.length}
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setInstructorTab("payouts")}
-                  className={`py-3 px-4 sm:px-5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap shrink-0 md:flex-1 ${
-                    instructorTab === "payouts"
-                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80"
-                  }`}
-                >
-                  <Wallet className={`w-4 h-4 shrink-0 ${instructorTab === "payouts" ? "text-emerald-400" : "text-emerald-600"}`} />
-                  <span>Payouts & Commission</span>
-                </button>
-
-                <button
-                  onClick={() => setInstructorTab("reports")}
-                  className={`py-3 px-4 sm:px-5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap shrink-0 md:flex-1 ${
-                    instructorTab === "reports"
-                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80"
-                  }`}
-                >
-                  <BarChart3 className={`w-4 h-4 shrink-0 ${instructorTab === "reports" ? "text-indigo-400" : "text-indigo-600"}`} />
-                  <span>Sales Report</span>
-                </button>
               </div>
+
+              <Link
+                href="/sales-earnings"
+                className="w-full sm:w-auto py-2.5 px-4 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 transition-all flex items-center justify-center gap-2 shadow-xs group"
+              >
+                <TrendingUp className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
+                <span>Sales & Earnings Dashboard</span>
+                <ChevronRight className="w-3.5 h-3.5 text-emerald-500 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
             </div>
 
             {/* ── SUBTAB 1: INSTRUCTOR COURSES & SALES PERFORMANCE ── */}
@@ -659,7 +616,7 @@ export function DashboardContent() {
               </div>
             )}
 
-            {/* ── SUBTAB 2: INSTRUCTOR COHORTS / BATCHES ── */}
+            {/* ── SUBTAB 2: INSTRUCTOR BATCHES ── */}
             {instructorTab === "batches" && (
               <div>
                 {instructorBatches.length > 0 ? (
@@ -673,7 +630,7 @@ export function DashboardContent() {
                           <div className="flex items-center justify-between gap-3 mb-3">
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200">
                               <Video className="w-3.5 h-3.5 text-sky-600" />
-                              {b.medium || "Live Cohort"}
+                              {b.medium || "Live Batch"}
                             </span>
                             <span className="font-bold text-emerald-700 text-sm">
                               {b.paid_batch ? `₹ ${b.amount.toLocaleString("en-IN")}` : "Free"}
@@ -688,7 +645,7 @@ export function DashboardContent() {
                             </p>
                           )}
 
-                          {/* Cohort Details Box */}
+                          {/* Batch Details Box */}
                           <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-2 mb-4 text-xs text-slate-700">
                             {b.start_date && (
                               <div className="flex items-center gap-2">
@@ -724,7 +681,7 @@ export function DashboardContent() {
                             className="flex-1 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
-                            <span>Edit Cohort</span>
+                            <span>Edit Batch</span>
                           </Link>
                           <Link
                             href={`/batch/${encodeURIComponent(b.name)}`}
@@ -739,87 +696,19 @@ export function DashboardContent() {
                 ) : (
                   <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
                     <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                    <h3 className="text-base font-bold text-slate-900 mb-1">No Active Cohort Batches</h3>
+                    <h3 className="text-base font-bold text-slate-900 mb-1">No Active Batches</h3>
                     <p className="text-xs text-slate-500 max-w-sm mx-auto mb-5">
-                      Launch a live cohort batch to teach students with live classes and scheduled curriculum.
+                      Launch a live batch to teach students with live classes and scheduled curriculum.
                     </p>
                     <Link
                       href="/batch/create"
                       className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors"
                     >
-                      <Plus className="w-3.5 h-3.5" /> Create Cohort Batch
+                      <Plus className="w-3.5 h-3.5" /> Create Batch
                     </Link>
                   </div>
                 )}
               </div>
-            )}
-
-            {/* ── SUBTAB 3: RECENT STUDENT SALES & ACTIVITY FEED ── */}
-            {instructorTab === "sales" && (
-              <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm">
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-900">Recent Student Purchases & Enrollments</h3>
-                  <span className="text-xs font-medium text-slate-500">{recentSales.length} Transactions</span>
-                </div>
-
-                {recentSales.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-100">
-                        <tr>
-                          <th className="py-3 px-5">Student</th>
-                          <th className="py-3 px-5">Item Purchased</th>
-                          <th className="py-3 px-5">Amount Paid</th>
-                          <th className="py-3 px-5">Date</th>
-                          <th className="py-3 px-5">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-slate-700">
-                        {recentSales.map((sale, idx) => (
-                          <tr key={sale.payment_name || idx} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="py-3.5 px-5">
-                              <p className="font-bold text-slate-900">{sale.student_name}</p>
-                              <p className="text-[11px] text-slate-400">{sale.member}</p>
-                            </td>
-                            <td className="py-3.5 px-5">
-                              <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 mr-1.5">
-                                {sale.item_type}
-                              </span>
-                              <span className="font-medium text-slate-800">{sale.item_name}</span>
-                            </td>
-                            <td className="py-3.5 px-5 font-bold text-emerald-700">
-                              ₹ {sale.amount.toLocaleString("en-IN")}
-                            </td>
-                            <td className="py-3.5 px-5 text-slate-500">
-                              {formatDate(sale.created_at)}
-                            </td>
-                            <td className="py-3.5 px-5">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <CheckCircle2 className="w-3 h-3" /> Paid & Active
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="p-12 text-center text-slate-500">
-                    <DollarSign className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                    <p className="text-xs font-semibold">No transactions recorded yet.</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── SUBTAB 4: INSTRUCTOR PAYOUTS & COMMISSIONS ── */}
-            {instructorTab === "payouts" && (
-              <InstructorPayoutsTab isAdmin={isAdminRole} instructorEmail={userEmail} />
-            )}
-
-            {/* ── SUBTAB 5: INSTRUCTOR SALES & ANALYTICS REPORT ── */}
-            {instructorTab === "reports" && (
-              <InstructorSalesReportTab isAdmin={isAdminRole} instructorEmail={userEmail} />
             )}
           </div>
         ) : (
@@ -844,7 +733,7 @@ export function DashboardContent() {
                   <Users className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cohort Batches</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Live Batches</p>
                   <p className="text-2xl font-extrabold text-slate-900 mt-0.5">{sStats.enrolled_batches}</p>
                 </div>
               </div>
@@ -894,7 +783,7 @@ export function DashboardContent() {
                   }`}
               >
                 <Users className="w-4 h-4" />
-                <span>My Cohorts</span>
+                <span>My Batches</span>
                 <span className={`text-xs px-2 py-0.5 rounded-full ${studentTab === "batches" ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-600"}`}>
                   {studentBatches.length}
                 </span>
@@ -944,7 +833,7 @@ export function DashboardContent() {
                             </span>
                             {course.enrollment_from_batch && (
                               <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                                Cohort Course
+                                Batch Course
                               </span>
                             )}
                           </div>
@@ -1034,7 +923,7 @@ export function DashboardContent() {
                         <div>
                           <div className="flex items-center justify-between gap-3 mb-3">
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Active Cohort
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Active Batch
                             </span>
                             {batch.medium && (
                               <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg">
@@ -1075,7 +964,7 @@ export function DashboardContent() {
                             <div className="flex items-center gap-2">
                               <BookOpen className="w-4 h-4 text-emerald-500 shrink-0" />
                               <span>
-                                <strong>Curriculum:</strong> {batch.courses_count || batch.courses?.length || 0} Courses included in cohort
+                                <strong>Curriculum:</strong> {batch.courses_count || batch.courses?.length || 0} Courses included in batch
                               </span>
                             </div>
                           </div>
@@ -1086,7 +975,7 @@ export function DashboardContent() {
                             href={`/batch/${encodeURIComponent(batch.batch)}`}
                             className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm"
                           >
-                            <span>Open Cohort & View Classes</span>
+                            <span>Open Batch & View Classes</span>
                             <ArrowRight className="w-3.5 h-3.5" />
                           </Link>
                         </div>
@@ -1096,16 +985,16 @@ export function DashboardContent() {
                 ) : (
                   <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
                     <Users className="w-12 h-12 text-emerald-600 mx-auto mb-3" />
-                    <h3 className="text-lg font-bold text-slate-900 mb-1">No Active Cohorts</h3>
+                    <h3 className="text-lg font-bold text-slate-900 mb-1">No Active Batches</h3>
                     <p className="text-sm text-slate-500 max-w-md mx-auto mb-6">
-                      Join mentor-led cohort batches with interactive live classes, scheduled assignments, and peer learning.
+                      Join mentor-led live batches with interactive live classes, scheduled assignments, and peer learning.
                     </p>
                     <Link
                       href="/batches"
                       className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-all shadow-sm"
                     >
                       <Users className="w-4 h-4" />
-                      <span>Explore Cohort Batches</span>
+                      <span>Explore Batches</span>
                     </Link>
                   </div>
                 )}
