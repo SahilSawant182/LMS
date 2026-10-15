@@ -19,7 +19,9 @@ import {
   ArrowRight, 
   Play, 
   Loader2,
-  PanelLeft
+  PanelLeft,
+  HelpCircle,
+  Plus
 } from 'lucide-react';
 
 export default function LessonPage() {
@@ -619,6 +621,52 @@ export default function LessonPage() {
                     <p class="text-slate-500">This lesson does not contain any readable material.</p>
                   </div>
                 ` }} />
+              </div>
+
+              {/* Lesson Quiz & Knowledge Check */}
+              <div className="mt-8 p-6 bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/40 rounded-2xl border border-indigo-100/90 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-indigo-500/20">
+                    <HelpCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-slate-900">Lesson Quiz & Knowledge Check</h3>
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                        Lesson Test
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Reinforce your understanding of the topics taught in this lesson.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                  {isInstructor ? (
+                    <>
+                      <Link
+                        href={`/quizzes/create-question?course=${encodeURIComponent(courseId)}&chapter=${encodeURIComponent(chapterId)}&lesson=${encodeURIComponent(lessonId)}`}
+                        className="flex-1 md:flex-initial px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Create Lesson Quiz
+                      </Link>
+                      <Link
+                        href="/quizzes"
+                        className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center"
+                      >
+                        Manage Quizzes
+                      </Link>
+                    </>
+                  ) : (
+                    <Link
+                      href="/quizzes"
+                      className="flex-1 md:flex-initial px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2"
+                    >
+                      <Award className="w-3.5 h-3.5" /> Take Lesson Quiz
+                    </Link>
+                  )}
+                </div>
               </div>
 
               {/* Bottom Action: Mark as Complete */}
