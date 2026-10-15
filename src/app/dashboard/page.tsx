@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, Suspense } from "react";
+import React, { useEffect, useState, useMemo, Suspense } from "react";
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -19,6 +19,8 @@ import {
   Video,
   Layers,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   DollarSign,
   TrendingUp,
   Plus,
@@ -28,7 +30,12 @@ import {
   Eye,
   ShieldCheck,
   Briefcase,
-  AlertCircle
+  AlertCircle,
+  BarChart3,
+  ArrowUpRight,
+  Activity,
+  Flame,
+  Info
 } from "lucide-react";
 import {
   getStudentDashboard,
@@ -38,11 +45,12 @@ import {
   StudentDashboardData,
   InstructorDashboardData
 } from "@/services/payment.services";
+import { getInstructorSalesReport } from "@/services/billing.services";
+import { MonthlyBreakdownItem } from "@/types/billing.types";
 import { getImageUrl } from "@/services/api.services";
 import { formatDate } from "@/utils/formatters";
 
 type StudentTab = "courses" | "batches" | "programs";
-type InstructorTab = "courses" | "batches";
 
 export function DashboardContent() {
   const router = useRouter();
@@ -52,12 +60,22 @@ export function DashboardContent() {
   const [isInstructorRole, setIsInstructorRole] = useState(false);
   const [isAdminRole, setIsAdminRole] = useState(false);
   const [studentTab, setStudentTab] = useState<StudentTab>("courses");
-  const [instructorTab, setInstructorTab] = useState<InstructorTab>("courses");
+  const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyBreakdownItem[]>([]);
+  const [hoveredMonth, setHoveredMonth] = useState<MonthlyBreakdownItem | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<MonthlyBreakdownItem | null>(null);
+  const [showTableBreakdown, setShowTableBreakdown] = useState(false);
+  const [leaderboardMetric, setLeaderboardMetric] = useState<"revenue" | "enrollments">("revenue");
+  const [hoveredVelocityPoint, setHoveredVelocityPoint] = useState<{
+    month: string;
+    value: number;
+    x: number;
+    y: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string>("");
 
-  // Sync active instructor tab from URL query params (e.g., /dashboard?tab=batches)
+  // Sync active tab redirects from URL query params (e.g., /dashboard?tab=payouts)
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     if (tabParam === "payouts" || tabParam === "commission" || tabParam === "payout") {
@@ -66,10 +84,6 @@ export function DashboardContent() {
       router.replace("/sales-earnings?tab=reports");
     } else if (tabParam === "sales" || tabParam === "transactions") {
       router.replace("/sales-earnings?tab=sales");
-    } else if (tabParam === "courses") {
-      setInstructorTab("courses");
-    } else if (tabParam === "batches" || tabParam === "cohorts") {
-      setInstructorTab("batches");
     }
   }, [searchParams, router]);
 
@@ -200,6 +214,16 @@ export function DashboardContent() {
           console.warn("Instructor dashboard fetch error:", iErr);
         }
 
+        // Fetch monthly sales report for revenue breakdown
+        try {
+          const reportRes = await getInstructorSalesReport({ period: "this_year" });
+          if (reportRes && Array.isArray(reportRes.monthly_breakdown) && reportRes.monthly_breakdown.length > 0) {
+            setMonthlyRevenue(reportRes.monthly_breakdown);
+          }
+        } catch (rErr: any) {
+          console.warn("Instructor sales report fetch error:", rErr);
+        }
+
       } catch (err: any) {
         if (handleAuthError(err)) return;
         setError(err.message || "Failed to load dashboard data");
@@ -210,21 +234,6 @@ export function DashboardContent() {
 
     fetchAllDashboardData();
   }, [router]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col bg-slate-50 font-sans">
-        <Navbar />
-        <div className="flex-grow flex flex-col justify-center items-center py-24">
-          <div className="relative">
-            <div className="w-14 h-14 border-4 border-indigo-200 border-dashed rounded-full animate-spin"></div>
-            <div className="w-14 h-14 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin absolute inset-0"></div>
-          </div>
-          <p className="mt-4 text-sm font-medium text-slate-500">Loading your dashboard...</p>
-        </div>
-      </div>
-    );
-  }
 
   const studentCourses = studentData?.courses || [];
   const studentBatches = studentData?.batches || [];
@@ -247,6 +256,243 @@ export function DashboardContent() {
   };
   const instructorCourses = instructorData?.courses || [];
   const instructorBatches = instructorData?.batches || [];
+
+  // Course status counts: active, inactive, and published
+  const publishedCoursesCount =
+    iStats.published_courses || instructorCourses.filter((c) => Boolean(c.published)).length;
+
+  // Active courses: courses that are published and actively active
+  const activeCoursesCount = instructorCourses.filter((c: any) => {
+    if (c.is_active !== undefined) return Boolean(c.is_active);
+    if (c.status) return c.status.toLowerCase() === "active";
+    return Boolean(c.published) && (c.enrollments_count > 0 || c.published);
+  }).length;
+
+  // Inactive courses: draft or unpublished courses
+  const inactiveCoursesCount = instructorCourses.filter((c: any) => {
+    if (c.is_active === false) return true;
+    if (c.status) return c.status.toLowerCase() === "inactive" || c.status.toLowerCase() === "draft";
+    return !c.published;
+  }).length || iStats.draft_courses || 0;
+
+  // Generate 12-month series for current year
+  const monthlyData = useMemo<MonthlyBreakdownItem[]>(() => {
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const now = new Date();
+    const currentYear = now.getFullYear();
+
+    const revMap: Record<string, MonthlyBreakdownItem> = {};
+    if (monthlyRevenue && monthlyRevenue.length > 0) {
+      for (const item of monthlyRevenue) {
+        revMap[item.month_key] = item;
+      }
+    }
+
+    // Fallback: populate from recent_sales if monthlyRevenue API was empty
+    if (Object.keys(revMap).length === 0 && instructorData?.recent_sales?.length) {
+      for (const sale of instructorData.recent_sales) {
+        if (!sale.created_at) continue;
+        const d = new Date(sale.created_at);
+        if (isNaN(d.getTime())) continue;
+        const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        if (!revMap[mKey]) {
+          revMap[mKey] = {
+            month_key: mKey,
+            month_label: `${monthNames[d.getMonth()]} ${d.getFullYear()}`,
+            sales_count: 0,
+            gross_revenue: 0,
+            courses_sold: 0,
+            batches_sold: 0,
+            unique_students: 0,
+          };
+        }
+        revMap[mKey].gross_revenue += Number(sale.amount || 0);
+        revMap[mKey].sales_count += 1;
+        if (sale.item_type === "Course") revMap[mKey].courses_sold += 1;
+        if (sale.item_type === "Batch") revMap[mKey].batches_sold += 1;
+      }
+    }
+
+    // Build complete 12 months for current year
+    const result: MonthlyBreakdownItem[] = [];
+    for (let monthIdx = 0; monthIdx < 12; monthIdx++) {
+      const mKey = `${currentYear}-${String(monthIdx + 1).padStart(2, "0")}`;
+      if (revMap[mKey]) {
+        result.push(revMap[mKey]);
+      } else {
+        result.push({
+          month_key: mKey,
+          month_label: `${monthNames[monthIdx]} ${currentYear}`,
+          sales_count: 0,
+          gross_revenue: 0,
+          courses_sold: 0,
+          batches_sold: 0,
+          unique_students: 0,
+        });
+      }
+    }
+    return result;
+  }, [monthlyRevenue, instructorData]);
+
+  const currentMonthIdx = new Date().getMonth();
+
+  const totalYearRevenue = useMemo(() => {
+    return monthlyData.reduce((acc, m) => acc + Number(m.gross_revenue || 0), 0);
+  }, [monthlyData]);
+
+  const totalYearSalesCount = useMemo(() => {
+    return monthlyData.reduce((acc, m) => acc + Number(m.sales_count || 0), 0);
+  }, [monthlyData]);
+
+  const totalCoursesSold = useMemo(() => {
+    return monthlyData.reduce((acc, m) => acc + Number(m.courses_sold || 0), 0);
+  }, [monthlyData]);
+
+  const totalBatchesSold = useMemo(() => {
+    return monthlyData.reduce((acc, m) => acc + Number(m.batches_sold || 0), 0);
+  }, [monthlyData]);
+
+  const maxMonthlyRevenue = useMemo(() => {
+    const maxVal = Math.max(...monthlyData.map((m) => Number(m.gross_revenue || 0)), 0);
+    if (maxVal === 0) return 50000;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(maxVal)));
+    return Math.ceil(maxVal / magnitude) * magnitude;
+  }, [monthlyData]);
+
+  const peakMonth = useMemo(() => {
+    let peak = monthlyData[0];
+    for (const m of monthlyData) {
+      if (Number(m.gross_revenue || 0) > Number(peak?.gross_revenue || 0)) {
+        peak = m;
+      }
+    }
+    return peak && Number(peak.gross_revenue || 0) > 0 ? peak : null;
+  }, [monthlyData]);
+
+  const avgMonthlyRevenue = useMemo(() => {
+    const passedMonths = Math.max(currentMonthIdx + 1, 1);
+    return Math.round(totalYearRevenue / passedMonths);
+  }, [totalYearRevenue, currentMonthIdx]);
+
+  const formatTick = (val: number) => {
+    if (val >= 100000) return `₹${(val / 100000).toFixed(val % 100000 === 0 ? 0 : 1)}L`;
+    if (val >= 1000) return `₹${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
+    return `₹${val}`;
+  };
+
+  // Top 5 Performing Courses Leaderboard
+  const topCourses = useMemo(() => {
+    const list = [...instructorCourses];
+    list.sort((a, b) => {
+      if (leaderboardMetric === "revenue") {
+        return Number(b.revenue || 0) - Number(a.revenue || 0);
+      }
+      return Number(b.enrollments_count || 0) - Number(a.enrollments_count || 0);
+    });
+    return list.slice(0, 5);
+  }, [instructorCourses, leaderboardMetric]);
+
+  const maxLeaderboardVal = useMemo(() => {
+    if (topCourses.length === 0) return 1;
+    const top = topCourses[0];
+    const val =
+      leaderboardMetric === "revenue"
+        ? Number(top.revenue || 0)
+        : Number(top.enrollments_count || 0);
+    return Math.max(val, 1);
+  }, [topCourses, leaderboardMetric]);
+
+  // Student Enrollment Velocity
+  const velocityData = useMemo(() => {
+    return monthlyData.map((m) => {
+      const count = Number(m.unique_students || m.sales_count || 0);
+      return {
+        month_key: m.month_key,
+        month_label: m.month_label,
+        count: count,
+      };
+    });
+  }, [monthlyData]);
+
+  const totalNewStudentsYear = useMemo(() => {
+    const sum = velocityData.reduce((acc, m) => acc + m.count, 0);
+    return sum > 0 ? sum : Number(iStats.total_students || 0);
+  }, [velocityData, iStats.total_students]);
+
+  const currentMonthAdditions = useMemo(() => {
+    return velocityData[currentMonthIdx]?.count || 0;
+  }, [velocityData, currentMonthIdx]);
+
+  const lastMonthAdditions = useMemo(() => {
+    return currentMonthIdx > 0 ? (velocityData[currentMonthIdx - 1]?.count || 0) : 0;
+  }, [velocityData, currentMonthIdx]);
+
+  const velocityMoMChange = useMemo(() => {
+    if (lastMonthAdditions === 0) {
+      return currentMonthAdditions > 0 ? 100 : 0;
+    }
+    return Math.round(((currentMonthAdditions - lastMonthAdditions) / lastMonthAdditions) * 100);
+  }, [currentMonthAdditions, lastMonthAdditions]);
+
+  const maxVelocityVal = useMemo(() => {
+    const maxVal = Math.max(...velocityData.map((d) => d.count), 0);
+    if (maxVal === 0) return 10;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(maxVal)));
+    return Math.ceil(maxVal / magnitude) * magnitude;
+  }, [velocityData]);
+
+  const velocitySvgPoints = useMemo(() => {
+    const width = 500;
+    const height = 180;
+    const pLeft = 25;
+    const pRight = 25;
+    const pTop = 20;
+    const pBottom = 25;
+    const usableWidth = width - pLeft - pRight;
+    const usableHeight = height - pTop - pBottom;
+
+    const points = velocityData.map((d, i) => {
+      const x = pLeft + (i / Math.max(velocityData.length - 1, 1)) * usableWidth;
+      const ratio = maxVelocityVal > 0 ? d.count / maxVelocityVal : 0;
+      const y = height - pBottom - ratio * usableHeight;
+      return { x, y, month: d.month_label.split(" ")[0], count: d.count, fullMonth: d.month_label };
+    });
+
+    if (points.length === 0) return { linePath: "", areaPath: "", points: [] };
+
+    let line = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i === 0 ? i : i - 1];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[i + 2] || p2;
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      line += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    }
+
+    const baselineY = height - pBottom;
+    const area = `${line} L ${points[points.length - 1].x} ${baselineY} L ${points[0].x} ${baselineY} Z`;
+
+    return { linePath: line, areaPath: area, points };
+  }, [velocityData, maxVelocityVal]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-slate-50 font-sans">
+        <Navbar />
+        <div className="flex-grow flex flex-col justify-center items-center py-24">
+          <div className="relative">
+            <div className="w-14 h-14 border-4 border-indigo-200 border-dashed rounded-full animate-spin"></div>
+            <div className="w-14 h-14 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin absolute inset-0"></div>
+          </div>
+          <p className="mt-4 text-sm font-medium text-slate-500">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
@@ -355,55 +601,94 @@ export function DashboardContent() {
         ══════════════════════════════════════════════════════ */}
         {isInstructorRole ? (
           <div>
-            {/* 3 Instructor KPI Metrics Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-8">
-
-              {/* Total Enrolled Students */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col justify-between hover:border-indigo-200 transition-all">
+            {/* ── COURSE STATUS BREAKDOWN METRICS: ACTIVE, INACTIVE, AND PUBLISHED ── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+              {/* Active Courses */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col justify-between hover:border-emerald-300 hover:shadow-md transition-all group">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Students</span>
-                  <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
-                    <Users className="w-5 h-5" />
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Courses</span>
+                  <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                    <Sparkles className="w-5 h-5" />
                   </div>
                 </div>
                 <div>
-                  <p className="text-2xl sm:text-3xl font-extrabold text-slate-900">{iStats.total_students}</p>
-                  <p className="text-[11px] font-semibold text-slate-500 mt-1">Unique enrolled learners</p>
-                </div>
-              </div>
-
-              {/* Authored Courses */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col justify-between hover:border-purple-200 transition-all">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">My Courses</span>
-                  <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600">
-                    <BookOpen className="w-5 h-5" />
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl sm:text-4xl font-extrabold text-slate-900">{activeCoursesCount}</p>
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full">
+                      Live & Active
+                    </span>
                   </div>
-                </div>
-                <div>
-                  <p className="text-2xl sm:text-3xl font-extrabold text-slate-900">{iStats.total_courses}</p>
-                  <p className="text-[11px] font-semibold text-purple-600 mt-1">
-                    {iStats.published_courses} Published • {iStats.draft_courses} Drafts
+                  <p className="text-[11px] font-medium text-slate-500 mt-1.5">
+                    Live courses actively enrolled and open to learners
                   </p>
                 </div>
               </div>
 
-              {/* Batches */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col justify-between hover:border-sky-200 transition-all">
+              {/* Inactive / Draft Courses */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col justify-between hover:border-amber-300 hover:shadow-md transition-all group">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Live Batches</span>
-                  <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-600">
-                    <Video className="w-5 h-5" />
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Inactive Courses</span>
+                  <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
+                    <Clock className="w-5 h-5" />
                   </div>
                 </div>
                 <div>
-                  <p className="text-2xl sm:text-3xl font-extrabold text-slate-900">{iStats.total_batches}</p>
-                  <p className="text-[11px] font-semibold text-sky-600 mt-1">Batches instructed</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl sm:text-4xl font-extrabold text-slate-900">{inactiveCoursesCount}</p>
+                    <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-full">
+                      Draft / Inactive
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-medium text-slate-500 mt-1.5">
+                    Unpublished drafts or hidden from student catalog
+                  </p>
+                </div>
+              </div>
+
+              {/* Published Courses */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col justify-between hover:border-indigo-300 hover:shadow-md transition-all group">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Published Courses</span>
+                  <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl sm:text-4xl font-extrabold text-slate-900">{publishedCoursesCount}</p>
+                    <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded-full">
+                      Catalog Ready
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-medium text-slate-500 mt-1.5">
+                    Published and discoverable on platform catalog
+                  </p>
+                </div>
+              </div>
+
+              {/* Total Learners & Offerings */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col justify-between hover:border-purple-300 hover:shadow-md transition-all group">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Learners & Batches</span>
+                  <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform">
+                    <Users className="w-5 h-5" />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl sm:text-4xl font-extrabold text-slate-900">{iStats.total_students}</p>
+                    <span className="text-[11px] font-bold text-purple-700 bg-purple-50 border border-purple-200/60 px-2 py-0.5 rounded-full">
+                      {iStats.total_batches} Batches
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-medium text-slate-500 mt-1.5">
+                    Unique learners enrolled across courses and live batches
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Quick Actions Row */}
+            {/* Quick Actions / Creator Shortcuts Row */}
             <div className="bg-white rounded-2xl border border-slate-200/80 p-4 mb-8 flex flex-wrap items-center justify-between gap-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Creator Shortcuts:</span>
@@ -442,274 +727,716 @@ export function DashboardContent() {
               </Link>
             </div>
 
-            {/* Instructor Tabs Navigation */}
-            <div className="w-full bg-white rounded-2xl shadow-sm border border-slate-200/80 p-2 mb-8 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button
-                  onClick={() => setInstructorTab("courses")}
-                  className={`py-3 px-5 sm:px-6 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap ${
-                    instructorTab === "courses"
-                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80"
-                  }`}
-                >
-                  <BookOpen className="w-4 h-4 shrink-0" />
-                  <span>My Courses</span>
-                  <span
-                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold transition-colors ${
-                      instructorTab === "courses" ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-600"
-                    }`}
-                  >
-                    {instructorCourses.length}
-                  </span>
-                </button>
+            {/* ── SECTION 2: MONTHLY REVENUE BREAKDOWN GRAPH ── */}
+            <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden mb-8">
+              {/* Graph Card Header */}
+              <div className="p-6 sm:p-8 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950 text-white">
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />
+                      Sales Analytics
+                    </span>
+                    <span className="text-[11px] font-medium text-slate-400">
+                      Year {new Date().getFullYear()} Overview
+                    </span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+                    Monthly Revenue Breakdown
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-300 font-light mt-0.5">
+                    Gross sales revenue, unit volume, and earnings performance by month.
+                  </p>
+                </div>
 
-                <button
-                  onClick={() => setInstructorTab("batches")}
-                  className={`py-3 px-5 sm:px-6 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap ${
-                    instructorTab === "batches"
-                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80"
-                  }`}
-                >
-                  <Users className="w-4 h-4 shrink-0" />
-                  <span>Batches</span>
-                  <span
-                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold transition-colors ${
-                      instructorTab === "batches" ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-600"
-                    }`}
+                <div className="flex items-center gap-3">
+                  <Link
+                    href="/sales-earnings?tab=reports"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-bold backdrop-blur-sm border border-white/15 transition-all shadow-sm"
                   >
-                    {instructorBatches.length}
-                  </span>
-                </button>
+                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                    <span>Detailed Sales Hub</span>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
+                  </Link>
+                </div>
               </div>
 
-              <Link
-                href="/sales-earnings"
-                className="w-full sm:w-auto py-2.5 px-4 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 transition-all flex items-center justify-center gap-2 shadow-xs group"
-              >
-                <TrendingUp className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
-                <span>Sales & Earnings Dashboard</span>
-                <ChevronRight className="w-3.5 h-3.5 text-emerald-500 group-hover:translate-x-0.5 transition-transform" />
-              </Link>
-            </div>
+              {/* Top KPI Metrics Strip inside Graph Card */}
+              <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-slate-100 bg-slate-50/70 border-b border-slate-100">
+                <div className="p-4 sm:p-5">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Total Period Revenue</span>
+                  <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
+                    ₹ {totalYearRevenue.toLocaleString("en-IN")}
+                  </p>
+                  <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1 mt-0.5">
+                    <DollarSign className="w-3 h-3" /> Annual gross earnings
+                  </span>
+                </div>
 
-            {/* ── SUBTAB 1: INSTRUCTOR COURSES & SALES PERFORMANCE ── */}
-            {instructorTab === "courses" && (
-              <div>
-                {instructorCourses.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {instructorCourses.map((c) => (
-                      <div
-                        key={c.name}
-                        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
-                      >
-                        <div>
-                          {/* Image & Status header */}
-                          <div className="h-40 bg-slate-100 relative overflow-hidden">
-                            {c.image ? (
-                              <img
-                                src={getImageUrl(c.image)}
-                                alt={c.title}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-gradient-to-br from-indigo-500/20 via-purple-500/20 to-teal-500/20 flex items-center justify-center">
-                                <BookOpen className="w-10 h-10 text-indigo-400" />
-                              </div>
-                            )}
+                <div className="p-4 sm:p-5">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Average / Month</span>
+                  <p className="text-xl sm:text-2xl font-black text-indigo-600 mt-1">
+                    ₹ {avgMonthlyRevenue.toLocaleString("en-IN")}
+                  </p>
+                  <span className="text-[11px] text-slate-500 font-medium block mt-0.5">
+                    Monthly run rate
+                  </span>
+                </div>
 
-                            <div className="absolute top-3 left-3 flex gap-1.5">
-                              {c.published ? (
-                                <span className="bg-emerald-600 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 backdrop-blur-sm">
-                                  ● Live
-                                </span>
-                              ) : (
-                                <span className="bg-amber-600 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-sm">
-                                  Draft
-                                </span>
-                              )}
-                              {c.paid_course ? (
-                                <span className="bg-slate-900/90 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                                  ₹ {c.price.toLocaleString("en-IN")}
-                                </span>
-                              ) : (
-                                <span className="bg-indigo-900/90 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                                  Free
-                                </span>
-                              )}
-                            </div>
+                <div className="p-4 sm:p-5">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Peak Month</span>
+                  <p className="text-xl sm:text-2xl font-black text-emerald-600 mt-1">
+                    {peakMonth ? peakMonth.month_label.split(" ")[0] : "—"}
+                  </p>
+                  <span className="text-[11px] text-slate-500 font-medium block mt-0.5">
+                    {peakMonth ? `₹ ${Number(peakMonth.gross_revenue).toLocaleString("en-IN")}` : "No sales recorded yet"}
+                  </span>
+                </div>
 
-                            {c.category && (
-                              <span className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm text-indigo-700 text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-sm">
-                                {c.category}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="p-5">
-                            <h3 className="font-extrabold text-slate-900 text-base leading-snug line-clamp-2 mb-2 group-hover:text-indigo-600 transition-colors">
-                              {c.title}
-                            </h3>
-
-                            {c.short_introduction && (
-                              <p className="text-xs text-slate-500 line-clamp-2 mb-4 leading-relaxed">
-                                {c.short_introduction.replace(/<[^>]*>?/gm, "")}
-                              </p>
-                            )}
-
-                            {/* Sales & Enrollment Stats Box */}
-                            <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs mb-4">
-                              <div>
-                                <span className="text-slate-500 block text-[11px]">Enrolled Students</span>
-                                <span className="font-bold text-slate-900 text-sm flex items-center gap-1 mt-0.5">
-                                  <Users className="w-3.5 h-3.5 text-indigo-500" />
-                                  {c.enrollments_count}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-slate-500 block text-[11px]">Revenue Earned</span>
-                                <span className="font-bold text-emerald-700 text-sm flex items-center gap-1 mt-0.5">
-                                  <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                                  ₹ {c.revenue.toLocaleString("en-IN")}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Action buttons */}
-                        <div className="px-5 pb-5 pt-0 flex gap-2">
-                          <Link
-                            href={`/course/${encodeURIComponent(c.name)}/edit`}
-                            className="flex-1 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                            <span>Edit Course</span>
-                          </Link>
-                          <Link
-                            href={`/course/${encodeURIComponent(c.name)}`}
-                            className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
-                            title="View Course Page"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </Link>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
-                    <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                    <h3 className="text-base font-bold text-slate-900 mb-1">No Courses Created Yet</h3>
-                    <p className="text-xs text-slate-500 max-w-sm mx-auto mb-5">
-                      Create your first curriculum, set pricing, upload lessons, and start selling.
-                    </p>
-                    <Link
-                      href="/course/create"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Create Course
-                    </Link>
-                  </div>
-                )}
+                <div className="p-4 sm:p-5">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Total Units Sold</span>
+                  <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
+                    {totalYearSalesCount}
+                  </p>
+                  <span className="text-[11px] text-slate-500 font-medium block mt-0.5">
+                    {totalCoursesSold} courses • {totalBatchesSold} batches
+                  </span>
+                </div>
               </div>
-            )}
 
-            {/* ── SUBTAB 2: INSTRUCTOR BATCHES ── */}
-            {instructorTab === "batches" && (
-              <div>
-                {instructorBatches.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {instructorBatches.map((b) => (
-                      <div
-                        key={b.name}
-                        className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-                      >
-                        <div>
-                          <div className="flex items-center justify-between gap-3 mb-3">
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200">
-                              <Video className="w-3.5 h-3.5 text-sky-600" />
-                              {b.medium || "Live Batch"}
-                            </span>
-                            <span className="font-bold text-emerald-700 text-sm">
-                              {b.paid_batch ? `₹ ${b.amount.toLocaleString("en-IN")}` : "Free"}
-                            </span>
-                          </div>
+              {/* Interactive Chart Body */}
+              <div className="p-6 sm:p-8">
+                <div className="relative">
+                  {/* Y-Axis Gridlines & Reference Labels */}
+                  <div className="h-64 sm:h-72 w-full relative flex flex-col justify-between pointer-events-none pb-8 pr-2">
+                    {[1, 0.75, 0.5, 0.25, 0].map((ratio) => {
+                      const val = Math.round(maxMonthlyRevenue * ratio);
+                      return (
+                        <div key={ratio} className="w-full flex items-center gap-3">
+                          <span className="text-[11px] font-bold text-slate-400 w-12 text-right shrink-0">
+                            {formatTick(val)}
+                          </span>
+                          <div className="w-full border-b border-slate-100"></div>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                          <h3 className="text-lg font-bold text-slate-900 mb-2">{b.title}</h3>
+                  {/* Bar Columns Container (Absolute over gridlines) */}
+                  <div className="absolute inset-0 pl-16 pb-8 flex items-end justify-between gap-1 sm:gap-2">
+                    {monthlyData.map((m, idx) => {
+                      const isCurrent = idx === currentMonthIdx;
+                      const rev = Number(m.gross_revenue || 0);
+                      const heightPercent = maxMonthlyRevenue > 0 ? (rev / maxMonthlyRevenue) * 100 : 0;
+                      const isHovered = hoveredMonth?.month_key === m.month_key;
+                      const isSelected = selectedMonth?.month_key === m.month_key;
 
-                          {b.description && (
-                            <p className="text-xs text-slate-500 line-clamp-2 mb-4 leading-relaxed">
-                              {b.description.replace(/<[^>]*>?/gm, "")}
-                            </p>
+                      return (
+                        <div
+                          key={m.month_key}
+                          onMouseEnter={() => setHoveredMonth(m)}
+                          onMouseLeave={() => setHoveredMonth(null)}
+                          onClick={() => setSelectedMonth(isSelected ? null : m)}
+                          className="relative flex-1 h-full flex flex-col items-center justify-end group cursor-pointer"
+                        >
+                          {/* Floating Tooltip */}
+                          {isHovered && (
+                            <div className="absolute bottom-full mb-3 z-30 pointer-events-none animate-in fade-in duration-200">
+                              <div className="bg-slate-900 text-white rounded-xl shadow-xl px-3 py-2 text-xs w-44 border border-slate-700">
+                                <p className="font-bold text-slate-200 border-b border-slate-800 pb-1 mb-1.5 flex items-center justify-between">
+                                  <span>{m.month_label}</span>
+                                  {isCurrent && (
+                                    <span className="text-[9px] bg-indigo-500/30 text-indigo-300 px-1.5 py-0.5 rounded font-semibold">
+                                      Current
+                                    </span>
+                                  )}
+                                </p>
+                                <p className="text-emerald-400 font-extrabold text-sm mb-1">
+                                  ₹ {rev.toLocaleString("en-IN")}
+                                </p>
+                                <div className="text-[10px] text-slate-400 space-y-0.5">
+                                  <div className="flex justify-between">
+                                    <span>Total Orders:</span>
+                                    <span className="font-semibold text-slate-200">{m.sales_count}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Courses:</span>
+                                    <span className="font-semibold text-slate-200">{m.courses_sold}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Batches:</span>
+                                    <span className="font-semibold text-slate-200">{m.batches_sold}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              {/* Tooltip Arrow */}
+                              <div className="w-2.5 h-2.5 bg-slate-900 rotate-45 mx-auto -mt-1 border-r border-b border-slate-700"></div>
+                            </div>
                           )}
 
-                          {/* Batch Details Box */}
-                          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-2 mb-4 text-xs text-slate-700">
-                            {b.start_date && (
-                              <div className="flex items-center gap-2">
-                                <Calendar className="w-4 h-4 text-indigo-500 shrink-0" />
-                                <span>
-                                  <strong>Schedule:</strong> {formatDate(b.start_date)}{" "}
-                                  {b.end_date ? `to ${formatDate(b.end_date)}` : ""}
-                                </span>
-                              </div>
-                            )}
-                            {b.start_time && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 text-sky-500 shrink-0" />
-                                <span>
-                                  <strong>Timings:</strong> {b.start_time} - {b.end_time || ""}
-                                </span>
-                              </div>
-                            )}
-                            <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
-                              <span>
-                                <strong>Seats Filled:</strong> {b.enrolled_count} / {b.seat_count || "Unlimited"}
-                              </span>
-                              <span className="font-bold text-emerald-700">
-                                Total Revenue: ₹ {b.revenue.toLocaleString("en-IN")}
-                              </span>
+                          {/* Bar Column Track */}
+                          <div className="w-full max-w-[42px] h-full flex items-end justify-center rounded-xl transition-all">
+                            {/* The Filled Bar */}
+                            <div
+                              style={{
+                                height: rev > 0 ? `${Math.max(heightPercent, 6)}%` : "4px",
+                              }}
+                              className={`w-full max-w-[36px] rounded-t-lg transition-all duration-300 relative ${
+                                rev > 0
+                                  ? isHovered || isSelected
+                                    ? "bg-gradient-to-t from-indigo-700 via-indigo-600 to-emerald-400 shadow-lg shadow-indigo-500/30 ring-2 ring-indigo-400 scale-[1.03]"
+                                    : "bg-gradient-to-t from-indigo-600 to-emerald-500 opacity-90 group-hover:opacity-100"
+                                  : isHovered || isSelected
+                                  ? "bg-slate-300"
+                                  : "bg-slate-200/80"
+                              }`}
+                            >
+                              {/* Top value indicator on hover */}
+                              {rev > 0 && (
+                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-black text-slate-700 whitespace-nowrap pointer-events-none">
+                                  {formatTick(rev)}
+                                </div>
+                              )}
                             </div>
                           </div>
-                        </div>
 
-                        <div className="flex gap-2 pt-2">
-                          <Link
-                            href={`/batch/${encodeURIComponent(b.name)}/edit`}
-                            className="flex-1 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                            <span>Edit Batch</span>
-                          </Link>
-                          <Link
-                            href={`/batch/${encodeURIComponent(b.name)}`}
-                            className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </Link>
+                          {/* Month Label */}
+                          <div className="absolute -bottom-7 flex flex-col items-center">
+                            <span
+                              className={`text-[11px] sm:text-xs font-semibold tracking-tight transition-colors ${
+                                isSelected
+                                  ? "text-indigo-600 font-extrabold"
+                                  : isCurrent
+                                  ? "text-slate-900 font-bold"
+                                  : "text-slate-500 group-hover:text-slate-900"
+                              }`}
+                            >
+                              {m.month_label.split(" ")[0]}
+                            </span>
+                            {isCurrent && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-0.5"></span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
-                ) : (
-                  <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
-                    <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                    <h3 className="text-base font-bold text-slate-900 mb-1">No Active Batches</h3>
-                    <p className="text-xs text-slate-500 max-w-sm mx-auto mb-5">
-                      Launch a live batch to teach students with live classes and scheduled curriculum.
-                    </p>
-                    <Link
-                      href="/batch/create"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Create Batch
-                    </Link>
+                </div>
+
+                {/* Chart Footer / Legend & Selected Details */}
+                <div className="mt-12 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  {/* Legend */}
+                  <div className="flex flex-wrap items-center gap-5 text-xs text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-md bg-gradient-to-t from-indigo-600 to-emerald-500"></div>
+                      <span className="font-semibold">Gross Revenue (INR)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
+                      <span className="text-[11px] text-slate-500">Current Month</span>
+                    </div>
+                    <div className="hidden sm:flex items-center gap-1 text-[11px] text-slate-400">
+                      <Info className="w-3.5 h-3.5" />
+                      <span>Hover or click any bar to inspect month details</span>
+                    </div>
+                  </div>
+
+                  {/* Toggle raw tabular breakdown */}
+                  <button
+                    type="button"
+                    onClick={() => setShowTableBreakdown(!showTableBreakdown)}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <span>{showTableBreakdown ? "Hide Monthly Table" : "View Monthly Breakdown Table"}</span>
+                    {showTableBreakdown ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+
+                {/* Selected Month Inspector Card */}
+                {selectedMonth && (
+                  <div className="mt-4 p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm">
+                        {selectedMonth.month_label.split(" ")[0]}
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-slate-900 text-sm">
+                          {selectedMonth.month_label} Performance
+                        </h4>
+                        <p className="text-xs text-indigo-700 font-medium">
+                          Gross Revenue: <strong>₹ {Number(selectedMonth.gross_revenue).toLocaleString("en-IN")}</strong>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-6 text-xs text-slate-700">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Units Sold</span>
+                        <span className="font-bold text-slate-900">{selectedMonth.sales_count} orders</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Courses</span>
+                        <span className="font-bold text-slate-900">{selectedMonth.courses_sold} sold</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Batches</span>
+                        <span className="font-bold text-slate-900">{selectedMonth.batches_sold} sold</span>
+                      </div>
+                      <button
+                        onClick={() => setSelectedMonth(null)}
+                        className="text-xs font-semibold text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Expandable Tabular Breakdown */}
+                {showTableBreakdown && (
+                  <div className="mt-5 border border-slate-200 rounded-2xl overflow-hidden animate-in fade-in duration-200">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-extrabold border-b border-slate-200">
+                          <tr>
+                            <th className="py-3 px-4">Month</th>
+                            <th className="py-3 px-4">Gross Revenue</th>
+                            <th className="py-3 px-4">Total Orders</th>
+                            <th className="py-3 px-4">Courses Sold</th>
+                            <th className="py-3 px-4">Batches Sold</th>
+                            <th className="py-3 px-4 text-right">Share of Annual Sales</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {monthlyData.map((m) => {
+                            const rev = Number(m.gross_revenue || 0);
+                            const share = totalYearRevenue > 0 ? ((rev / totalYearRevenue) * 100).toFixed(1) : "0.0";
+                            return (
+                              <tr key={m.month_key} className="hover:bg-slate-50/70 transition-colors">
+                                <td className="py-3 px-4 font-bold text-slate-900 flex items-center gap-2">
+                                  <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                                  {m.month_label}
+                                </td>
+                                <td className="py-3 px-4 font-extrabold text-slate-900">
+                                  ₹ {rev.toLocaleString("en-IN")}
+                                </td>
+                                <td className="py-3 px-4 font-semibold text-slate-700">
+                                  {m.sales_count}
+                                </td>
+                                <td className="py-3 px-4 text-slate-600">
+                                  {m.courses_sold}
+                                </td>
+                                <td className="py-3 px-4 text-slate-600">
+                                  {m.batches_sold}
+                                </td>
+                                <td className="py-3 px-4 text-right font-bold text-slate-700">
+                                  {share}%
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>
-            )}
+            </div>
+
+            {/* ── SECTION 3: 60/40 SPLIT — TOP 5 LEADERBOARD (60%) + ENROLLMENT VELOCITY (40%) ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mb-8">
+              {/* ── LEFT (60% / col-span-7): TOP 5 PERFORMING COURSES LEADERBOARD ── */}
+              <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 sm:p-7 flex flex-col justify-between">
+                <div>
+                  {/* Leaderboard Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-100">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-700 border border-amber-500/25">
+                          <Trophy className="w-3.5 h-3.5 text-amber-600" />
+                          Course Performance
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                        Top 5 Performing Courses
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Ranked by gross sales revenue or student enrollment volume.
+                      </p>
+                    </div>
+
+                    {/* Metric Switcher Toggle */}
+                    <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 self-start sm:self-auto border border-slate-200/70">
+                      <button
+                        type="button"
+                        onClick={() => setLeaderboardMetric("revenue")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          leaderboardMetric === "revenue"
+                            ? "bg-white text-slate-900 shadow-xs"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        By Revenue
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLeaderboardMetric("enrollments")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          leaderboardMetric === "enrollments"
+                            ? "bg-white text-slate-900 shadow-xs"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        By Learners
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Top 5 Course Rows */}
+                  {topCourses.length > 0 ? (
+                    <div className="divide-y divide-slate-100 mt-2">
+                      {topCourses.map((c, idx) => {
+                        const rank = idx + 1;
+                        const isFirst = rank === 1;
+                        const primaryVal =
+                          leaderboardMetric === "revenue" ? Number(c.revenue || 0) : Number(c.enrollments_count || 0);
+                        const progressWidth =
+                          maxLeaderboardVal > 0 ? (primaryVal / maxLeaderboardVal) * 100 : 0;
+
+                        return (
+                          <div
+                            key={c.name}
+                            className="py-3.5 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group hover:bg-slate-50/50 rounded-2xl px-2 transition-colors"
+                          >
+                            <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                              {/* Rank Badge */}
+                              <div
+                                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-black text-xs ${
+                                  isFirst
+                                    ? "bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-sm shadow-amber-500/25 ring-2 ring-amber-200"
+                                    : rank === 2
+                                    ? "bg-slate-200 text-slate-800 font-extrabold"
+                                    : rank === 3
+                                    ? "bg-amber-100 text-amber-900 font-extrabold"
+                                    : "bg-slate-100 text-slate-600 font-bold"
+                                }`}
+                              >
+                                {isFirst ? <Trophy className="w-4 h-4" /> : `#${rank}`}
+                              </div>
+
+                              {/* Thumbnail */}
+                              <div className="w-11 h-11 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200/80 relative">
+                                {c.image ? (
+                                  <img
+                                    src={getImageUrl(c.image)}
+                                    alt={c.title}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-indigo-50">
+                                    <BookOpen className="w-5 h-5 text-indigo-400" />
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Title & Horizontal Fill Bar */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Link
+                                    href={`/course/${encodeURIComponent(c.name)}`}
+                                    className="font-extrabold text-sm text-slate-900 hover:text-indigo-600 transition-colors truncate block"
+                                    title={c.title}
+                                  >
+                                    {c.title}
+                                  </Link>
+                                  {c.category && (
+                                    <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 shrink-0">
+                                      {c.category}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Proportional Fill Bar */}
+                                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mt-1.5">
+                                  <div
+                                    style={{ width: `${Math.max(progressWidth, 5)}%` }}
+                                    className={`h-full rounded-full transition-all duration-500 ${
+                                      isFirst
+                                        ? "bg-gradient-to-r from-amber-500 via-amber-400 to-indigo-500"
+                                        : "bg-gradient-to-r from-indigo-600 to-sky-400"
+                                    }`}
+                                  ></div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Value & Actions */}
+                            <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pl-11 sm:pl-0">
+                              <div className="text-left sm:text-right">
+                                {leaderboardMetric === "revenue" ? (
+                                  <>
+                                    <p className="font-black text-sm text-slate-900">
+                                      ₹ {Number(c.revenue || 0).toLocaleString("en-IN")}
+                                    </p>
+                                    <p className="text-[11px] font-medium text-slate-500">
+                                      {c.enrollments_count} enrolled
+                                    </p>
+                                  </>
+                                ) : (
+                                  <>
+                                    <p className="font-black text-sm text-slate-900">
+                                      {c.enrollments_count} <span className="text-xs font-semibold text-slate-500">learners</span>
+                                    </p>
+                                    <p className="text-[11px] font-medium text-emerald-600">
+                                      ₹ {Number(c.revenue || 0).toLocaleString("en-IN")}
+                                    </p>
+                                  </>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                                <Link
+                                  href={`/course/${encodeURIComponent(c.name)}/edit`}
+                                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors"
+                                  title="Edit Course"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </Link>
+                                <Link
+                                  href={`/course/${encodeURIComponent(c.name)}`}
+                                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors"
+                                  title="View Course Page"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </Link>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-12 text-center text-slate-400 text-sm">
+                      <BookOpen className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                      <p>No courses created yet.</p>
+                      <Link
+                        href="/course/create"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 mt-2"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Create your first course
+                      </Link>
+                    </div>
+                  )}
+                </div>
+
+                {/* Card Footer */}
+                <div className="pt-4 mt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                  <span>
+                    Showing top {topCourses.length} of {instructorCourses.length} authored courses
+                  </span>
+                  <Link
+                    href="/sales-earnings?tab=reports"
+                    className="font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1"
+                  >
+                    <span>Full Analytics</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
+
+              {/* ── RIGHT (40% / col-span-5): STUDENT ENROLLMENT VELOCITY (AREA TREND) ── */}
+              <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 sm:p-7 flex flex-col justify-between">
+                <div>
+                  {/* Velocity Header */}
+                  <div className="flex items-center justify-between pb-5 border-b border-slate-100">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-500/15 text-sky-700 border border-sky-500/25">
+                          <Flame className="w-3.5 h-3.5 text-sky-600" />
+                          Adoption Trend
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                        Enrollment Velocity
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        New student additions month-over-month.
+                      </p>
+                    </div>
+
+                    {/* MoM Badge */}
+                    <div className="text-right">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                          velocityMoMChange >= 0
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : "bg-rose-50 text-rose-700 border border-rose-200"
+                        }`}
+                      >
+                        <TrendingUp className="w-3 h-3" />
+                        {velocityMoMChange >= 0 ? `+${velocityMoMChange}%` : `${velocityMoMChange}%`}
+                      </span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">vs last month</span>
+                    </div>
+                  </div>
+
+                  {/* Summary Metric Strip */}
+                  <div className="grid grid-cols-3 gap-2 py-4 my-2 bg-slate-50/70 rounded-2xl border border-slate-100 px-3 text-center">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        New This Year
+                      </span>
+                      <p className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
+                        {totalNewStudentsYear}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        This Month
+                      </span>
+                      <p className="text-base sm:text-lg font-black text-indigo-600 mt-0.5">
+                        +{currentMonthAdditions}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Monthly Avg
+                      </span>
+                      <p className="text-base sm:text-lg font-black text-sky-600 mt-0.5">
+                        ~{Math.round(totalNewStudentsYear / Math.max(currentMonthIdx + 1, 1))}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* SVG Area Line Trend Chart */}
+                  <div className="relative mt-4 pt-4">
+                    {/* Floating Hover Tooltip */}
+                    {hoveredVelocityPoint && (
+                      <div
+                        style={{
+                          left: `${(hoveredVelocityPoint.x / 500) * 100}%`,
+                          top: "-15px",
+                        }}
+                        className="absolute -translate-x-1/2 -translate-y-full z-20 pointer-events-none transition-all duration-150"
+                      >
+                        <div className="bg-slate-900 text-white rounded-xl shadow-xl px-2.5 py-1 text-[11px] whitespace-nowrap border border-slate-700 text-center">
+                          <p className="font-bold text-indigo-300">{hoveredVelocityPoint.month}</p>
+                          <p className="font-extrabold text-white text-xs">
+                            +{hoveredVelocityPoint.value} learners
+                          </p>
+                        </div>
+                        <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mt-1 border-r border-b border-slate-700"></div>
+                      </div>
+                    )}
+
+                    <div className="h-44 sm:h-48 w-full relative">
+                      <svg
+                        viewBox="0 0 500 180"
+                        preserveAspectRatio="none"
+                        className="w-full h-full overflow-visible"
+                      >
+                        <defs>
+                          <linearGradient id="velocityAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.4" />
+                            <stop offset="60%" stopColor="#06b6d4" stopOpacity="0.15" />
+                            <stop offset="100%" stopColor="#ffffff" stopOpacity="0.0" />
+                          </linearGradient>
+                          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#4f46e5" floodOpacity="0.3" />
+                          </filter>
+                        </defs>
+
+                        {/* Subtle Horizontal Reference Gridlines */}
+                        <line x1="25" y1="20" x2="475" y2="20" stroke="#f1f5f9" strokeWidth="1" strokeDasharray="3 3" />
+                        <line x1="25" y1="87" x2="475" y2="87" stroke="#f1f5f9" strokeWidth="1" strokeDasharray="3 3" />
+                        <line x1="25" y1="155" x2="475" y2="155" stroke="#e2e8f0" strokeWidth="1.5" />
+
+                        {/* Area Path */}
+                        {velocitySvgPoints.areaPath && (
+                          <path
+                            d={velocitySvgPoints.areaPath}
+                            fill="url(#velocityAreaGradient)"
+                            className="transition-all duration-500"
+                          />
+                        )}
+
+                        {/* Line Path */}
+                        {velocitySvgPoints.linePath && (
+                          <path
+                            d={velocitySvgPoints.linePath}
+                            fill="none"
+                            stroke="#4f46e5"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            filter="url(#glow)"
+                            className="transition-all duration-500"
+                          />
+                        )}
+
+                        {/* Interactive Data Point Circles */}
+                        {velocitySvgPoints.points.map((pt, i) => {
+                          const isHovered = hoveredVelocityPoint?.month === pt.fullMonth;
+                          const isCurrent = i === currentMonthIdx;
+
+                          return (
+                            <g key={i}>
+                              <circle
+                                cx={pt.x}
+                                cy={pt.y}
+                                r={isHovered ? 6 : isCurrent ? 5 : 3.5}
+                                fill={isHovered ? "#4f46e5" : isCurrent ? "#06b6d4" : "#ffffff"}
+                                stroke="#4f46e5"
+                                strokeWidth={isHovered ? 2.5 : 2}
+                                className="transition-all duration-150 cursor-pointer"
+                                onMouseEnter={() =>
+                                  setHoveredVelocityPoint({
+                                    month: pt.fullMonth,
+                                    value: pt.count,
+                                    x: pt.x,
+                                    y: pt.y,
+                                  })
+                                }
+                                onMouseLeave={() => setHoveredVelocityPoint(null)}
+                              />
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    </div>
+
+                    {/* X-Axis Month Labels */}
+                    <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-semibold text-slate-400 mt-2 px-1">
+                      {monthlyData.map((m, i) => (
+                        <span
+                          key={m.month_key}
+                          className={`${
+                            i === currentMonthIdx ? "text-indigo-600 font-extrabold" : "text-slate-400"
+                          }`}
+                        >
+                          {m.month_label.split(" ")[0]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card Footer */}
+                <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                  <span className="flex items-center gap-1.5 text-[11px]">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    Steady subscriber acquisition
+                  </span>
+                  <Link
+                    href="/enrollments"
+                    className="font-bold text-sky-600 hover:text-sky-800 transition-colors flex items-center gap-1"
+                  >
+                    <span>Full Student Roster</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
           /* ══════════════════════════════════════════════════════
