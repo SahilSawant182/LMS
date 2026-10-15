@@ -146,7 +146,7 @@ export const getChapters = async (payload?: any) => {
 };
 
 export const getLesson = async (payload: GetLessonPayload) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_lesson`, {
+  return apiService.get(`method/lms.lms.stride_lms.get_lesson`, {
     params: payload,
     headers: {
       'Authorization': `token ${API_TOKEN}`

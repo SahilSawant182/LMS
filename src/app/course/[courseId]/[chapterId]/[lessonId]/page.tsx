@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getLesson, getChapters, getLessons, getCourseProgress, createCourseProgress, getCourse } from '@/services/lms.services';
 import { getCourseWithEnrollment } from '@/services/payment.services';
+import { getImageUrl } from '@/services/api.services';
 import { CourseWithEnrollment } from '@/types/payment.types';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
@@ -21,8 +22,519 @@ import {
   Loader2,
   PanelLeft,
   HelpCircle,
-  Plus
+  Plus,
+  Video,
+  Code,
+  Copy,
+  Check,
+  FileText,
+  Download
 } from 'lucide-react';
+
+interface EditorBlock {
+  id?: string;
+  type: string;
+  data: any;
+}
+
+function extractLessonData(val: any): any {
+  if (!val) return null;
+  // If val.data contains the lesson fields
+  if (val.data && typeof val.data === 'object' && (val.data.name || val.data.content !== undefined || val.data.title)) {
+    return val.data;
+  }
+  // If val.message.data contains the lesson fields
+  if (val.message?.data && typeof val.message.data === 'object' && (val.message.data.name || val.message.data.content !== undefined || val.message.data.title)) {
+    return val.message.data;
+  }
+  // If val.message is the lesson object
+  if (val.message && typeof val.message === 'object' && (val.message.name || val.message.content !== undefined || val.message.title)) {
+    return val.message;
+  }
+  // If val is the lesson object directly
+  return val;
+}
+
+function parseBlocks(rawContent: any): EditorBlock[] {
+  if (!rawContent) return [];
+
+  let parsed = rawContent;
+  if (typeof rawContent === 'string') {
+    const trimmed = rawContent.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch (e) {
+        return [{ id: 'fallback-text', type: 'markdown', data: { text: rawContent } }];
+      }
+    } else {
+      return [{ id: 'fallback-html', type: 'raw', data: { html: rawContent } }];
+    }
+  }
+
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+
+  if (parsed && Array.isArray(parsed.blocks)) {
+    return parsed.blocks;
+  }
+
+  return [];
+}
+
+function formatSimpleMarkdown(text: string): string {
+  if (!text) return '';
+  if (!/<[a-z][\s\S]*>/i.test(text)) {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 rounded bg-slate-100 text-indigo-600 font-mono text-xs">$1</code>')
+      .replace(/\n/g, '<br />');
+  }
+  return text;
+}
+
+function CodeBlock({ code, language }: { code: string; language?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <div className="my-6 rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 shadow-xl group">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-800/90 border-b border-slate-700/60 text-xs text-slate-300">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+          </div>
+          <span className="font-mono uppercase font-semibold tracking-wider text-[11px] text-slate-400 pl-1">
+            {language || 'code'}
+          </span>
+        </div>
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-700/60 hover:bg-slate-700 text-slate-200 hover:text-white transition-all text-xs font-medium cursor-pointer"
+        >
+          {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+          <span>{copied ? 'Copied!' : 'Copy'}</span>
+        </button>
+      </div>
+      <div className="p-4 md:p-5 overflow-x-auto text-sm font-mono leading-relaxed text-slate-100">
+        <pre><code>{code}</code></pre>
+      </div>
+    </div>
+  );
+}
+
+function ListBlock({ data }: { data: any }) {
+  const isOrdered = data?.style === 'ordered';
+  const rawItems = Array.isArray(data?.items) ? data.items : [];
+  
+  if (rawItems.length === 0) return null;
+
+  const renderItemContent = (item: any): string => {
+    if (typeof item === 'string') return item;
+    if (item && typeof item === 'object') {
+      return item.content || item.text || '';
+    }
+    return String(item || '');
+  };
+
+  const Tag = isOrdered ? 'ol' : 'ul';
+  const listClass = isOrdered 
+    ? 'list-decimal pl-6 space-y-2 text-slate-700 my-4 text-base' 
+    : 'list-disc pl-6 space-y-2 text-slate-700 my-4 text-base marker:text-indigo-500';
+
+  return (
+    <Tag className={listClass}>
+      {rawItems.map((item: any, idx: number) => {
+        const itemHtml = renderItemContent(item);
+        const subItems = item && typeof item === 'object' && Array.isArray(item.items) ? item.items : [];
+        return (
+          <li key={idx}>
+            <span dangerouslySetInnerHTML={{ __html: itemHtml }} />
+            {subItems.length > 0 && (
+              <ListBlock data={{ style: data?.style, items: subItems }} />
+            )}
+          </li>
+        );
+      })}
+    </Tag>
+  );
+}
+
+function TableBlock({ data }: { data: any }) {
+  const content = Array.isArray(data?.content) ? data.content : [];
+  if (content.length === 0) return null;
+
+  const withHeadings = Boolean(data?.withHeadings);
+  const headRow = withHeadings ? content[0] : null;
+  const bodyRows = withHeadings ? content.slice(1) : content;
+
+  return (
+    <div className="my-6 overflow-x-auto rounded-2xl border border-slate-200 shadow-xs bg-white">
+      <table className="w-full text-sm text-left border-collapse">
+        {headRow && Array.isArray(headRow) && (
+          <thead>
+            <tr className="bg-slate-100/90 border-b border-slate-200">
+              {headRow.map((cell: any, idx: number) => (
+                <th
+                  key={idx}
+                  className="px-4 py-3 font-semibold text-slate-800 border-r last:border-r-0 border-slate-200"
+                  dangerouslySetInnerHTML={{ __html: typeof cell === 'string' ? cell : JSON.stringify(cell) }}
+                />
+              ))}
+            </tr>
+          </thead>
+        )}
+        <tbody>
+          {bodyRows.map((row: any, rIdx: number) => (
+            <tr key={rIdx} className="border-b last:border-b-0 border-slate-100 hover:bg-slate-50/60 transition-colors">
+              {Array.isArray(row) ? (
+                row.map((cell: any, cIdx: number) => (
+                  <td
+                    key={cIdx}
+                    className="px-4 py-3 text-slate-700 border-r last:border-r-0 border-slate-100"
+                    dangerouslySetInnerHTML={{ __html: typeof cell === 'string' ? cell : JSON.stringify(cell) }}
+                  />
+                ))
+              ) : (
+                <td className="px-4 py-3 text-slate-700">{JSON.stringify(row)}</td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function EditorBlockRenderer({ block, isInstructor }: { block: EditorBlock; isInstructor: boolean }) {
+  if (!block || !block.type) return null;
+
+  switch (block.type) {
+    case 'header': {
+      const level = block.data?.level || 2;
+      const text = block.data?.text || '';
+      if (level === 1) {
+        return <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mt-8 mb-4" dangerouslySetInnerHTML={{ __html: text }} />;
+      }
+      if (level === 2) {
+        return <h2 className="text-2xl font-bold text-slate-900 tracking-tight mt-6 mb-3" dangerouslySetInnerHTML={{ __html: text }} />;
+      }
+      if (level === 3) {
+        return <h3 className="text-xl font-bold text-slate-800 tracking-tight mt-5 mb-2.5" dangerouslySetInnerHTML={{ __html: text }} />;
+      }
+      return <h4 className="text-lg font-semibold text-slate-800 tracking-tight mt-4 mb-2" dangerouslySetInnerHTML={{ __html: text }} />;
+    }
+
+    case 'paragraph': {
+      const text = block.data?.text || '';
+      return <p className="text-slate-700 leading-relaxed text-base my-3.5" dangerouslySetInnerHTML={{ __html: text }} />;
+    }
+
+    case 'markdown': {
+      const text = block.data?.text || '';
+      return (
+        <div 
+          className="text-slate-700 leading-relaxed text-base my-3.5"
+          dangerouslySetInnerHTML={{ __html: formatSimpleMarkdown(text) }} 
+        />
+      );
+    }
+
+    case 'list': {
+      return <ListBlock data={block.data} />;
+    }
+
+    case 'upload': {
+      const fileUrl = block.data?.file_url || block.data?.url || '';
+      const fileType = block.data?.file_type || '';
+      if (!fileUrl) return null;
+      const fullUrl = getImageUrl(fileUrl) || fileUrl;
+
+      const isVideo = Boolean(
+        fileType?.toUpperCase() === 'MP4' ||
+        fileType?.toUpperCase() === 'WEBM' ||
+        fileType?.toUpperCase() === 'VIDEO' ||
+        fileUrl.match(/\.(mp4|webm|ogg|mov|mkv)$/i)
+      );
+      const isImage = Boolean(
+        fileType?.toUpperCase() === 'IMAGE' ||
+        fileType?.toUpperCase() === 'PNG' ||
+        fileType?.toUpperCase() === 'JPG' ||
+        fileType?.toUpperCase() === 'JPEG' ||
+        fileUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i)
+      );
+      const isAudio = Boolean(
+        fileType?.toUpperCase() === 'AUDIO' ||
+        fileType?.toUpperCase() === 'MP3' ||
+        fileUrl.match(/\.(mp3|wav|ogg|aac|m4a)$/i)
+      );
+
+      if (isVideo) {
+        return (
+          <div className="my-6 rounded-2xl overflow-hidden bg-black shadow-xl ring-1 ring-slate-900/10">
+            <div className="relative aspect-video w-full bg-black flex items-center justify-center">
+              <video
+                controls
+                playsInline
+                className="w-full h-full object-contain max-h-[600px]"
+                src={fullUrl}
+              >
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          </div>
+        );
+      }
+
+      if (isImage) {
+        return (
+          <div className="my-6 text-center">
+            <img
+              src={fullUrl}
+              alt={block.data?.caption || 'Uploaded file'}
+              className="mx-auto rounded-2xl shadow-md border border-slate-200/80 max-h-[560px] object-contain"
+            />
+            {block.data?.caption && (
+              <p className="mt-2 text-xs text-slate-500 italic text-center" dangerouslySetInnerHTML={{ __html: block.data.caption }} />
+            )}
+          </div>
+        );
+      }
+
+      if (isAudio) {
+        return (
+          <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+            <audio controls className="w-full" src={fullUrl}>
+              Your browser does not support audio playback.
+            </audio>
+          </div>
+        );
+      }
+
+      return (
+        <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900 truncate">
+                {fileUrl.split('/').pop() || 'Lesson Resource'}
+              </p>
+              <p className="text-xs text-slate-500 uppercase font-mono">{fileType || 'File'}</p>
+            </div>
+          </div>
+          <a
+            href={fullUrl}
+            download
+            target="_blank"
+            rel="noreferrer"
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors"
+          >
+            <Download className="w-4 h-4" /> Download
+          </a>
+        </div>
+      );
+    }
+
+    case 'table': {
+      return <TableBlock data={block.data} />;
+    }
+
+    case 'quiz': {
+      const quizId = block.data?.quiz || block.data?.id || '';
+      if (!quizId) return null;
+      return (
+        <div className="my-6 p-5 md:p-6 bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/40 rounded-2xl border border-indigo-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-600/20">
+              <HelpCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                  Lesson Quiz
+                </span>
+                <h4 className="text-base font-bold text-slate-900">
+                  {quizId}
+                </h4>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Reinforce your understanding with interactive quiz questions.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/quizzes?quiz=${encodeURIComponent(quizId)}`}
+            className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-1.5 shrink-0"
+          >
+            <Award className="w-4 h-4" />
+            {isInstructor ? "Manage Quiz" : "Start Quiz"}
+          </Link>
+        </div>
+      );
+    }
+
+    case 'assignment': {
+      const assignmentId = block.data?.assignment || block.data?.id || '';
+      if (!assignmentId) return null;
+      return (
+        <div className="my-6 p-5 md:p-6 bg-gradient-to-br from-violet-50/70 via-white to-indigo-50/40 rounded-2xl border border-violet-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-violet-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-violet-600/20">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
+                  Assignment
+                </span>
+                <h4 className="text-base font-bold text-slate-900">
+                  {assignmentId}
+                </h4>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Complete and submit your coursework assignment for this lesson.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/assignments?id=${encodeURIComponent(assignmentId)}`}
+            className="w-full sm:w-auto px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-violet-600/20 flex items-center justify-center gap-1.5 shrink-0"
+          >
+            <FileText className="w-4 h-4" />
+            {isInstructor ? "View Submissions" : "Open Assignment"}
+          </Link>
+        </div>
+      );
+    }
+
+    case 'program': {
+      const exerciseId = block.data?.exercise || block.data?.id || '';
+      if (!exerciseId) return null;
+      return (
+        <div className="my-6 p-5 md:p-6 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/40 rounded-2xl border border-emerald-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-600/20">
+              <Code className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                  Coding Exercise
+                </span>
+                <h4 className="text-base font-bold text-slate-900">
+                  {exerciseId}
+                </h4>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Hands-on programming exercise with live test cases.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/programming-exercises?exercise=${encodeURIComponent(exerciseId)}`}
+            className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 shrink-0"
+          >
+            <Code className="w-4 h-4" />
+            Launch Exercise
+          </Link>
+        </div>
+      );
+    }
+
+    case 'codeBox':
+    case 'code': {
+      const code = block.data?.code || '';
+      const language = block.data?.language || block.data?.format || 'code';
+      return <CodeBlock code={code} language={language} />;
+    }
+
+    case 'image': {
+      const url = block.data?.file?.url || block.data?.url || '';
+      if (!url) return null;
+      const fullUrl = getImageUrl(url) || url;
+      return (
+        <div className="my-6 text-center">
+          <img
+            src={fullUrl}
+            alt={block.data?.caption || 'Lesson image'}
+            className="mx-auto rounded-2xl shadow-md border border-slate-200/80 max-h-[560px] object-contain"
+          />
+          {block.data?.caption && (
+            <p className="mt-2 text-xs text-slate-500 italic text-center" dangerouslySetInnerHTML={{ __html: block.data.caption }} />
+          )}
+        </div>
+      );
+    }
+
+    case 'quote': {
+      const text = block.data?.text || '';
+      const caption = block.data?.caption || '';
+      return (
+        <blockquote className="my-6 pl-5 border-l-4 border-indigo-500 italic text-slate-700 bg-slate-50/50 py-3 pr-4 rounded-r-xl">
+          <div dangerouslySetInnerHTML={{ __html: text }} />
+          {caption && <footer className="mt-2 text-xs text-slate-500 font-medium not-italic">— {caption}</footer>}
+        </blockquote>
+      );
+    }
+
+    case 'delimiter': {
+      return (
+        <div className="my-8 flex items-center justify-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+        </div>
+      );
+    }
+
+    case 'embed': {
+      const embedUrl = block.data?.embed || block.data?.source || '';
+      if (!embedUrl) return null;
+      return (
+        <div className="my-6 rounded-2xl overflow-hidden bg-black shadow-xl ring-1 ring-slate-900/10">
+          <div className="aspect-video w-full">
+            <iframe
+              src={embedUrl}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="w-full h-full"
+            />
+          </div>
+          {block.data?.caption && (
+            <div className="p-3 bg-slate-900 text-slate-400 text-xs text-center">
+              {block.data.caption}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    case 'raw': {
+      const html = block.data?.html || '';
+      return <div className="my-4" dangerouslySetInnerHTML={{ __html: html }} />;
+    }
+
+    default: {
+      if (block.data?.text) {
+        return <p className="text-slate-700 leading-relaxed text-base my-3" dangerouslySetInnerHTML={{ __html: block.data.text }} />;
+      }
+      return null;
+    }
+  }
+}
 
 export default function LessonPage() {
   const params = useParams();
@@ -146,7 +658,7 @@ export default function LessonPage() {
           }
         } else {
           const val = lessonRes.value;
-          const raw = val?.data || val?.message || val;
+          const raw = extractLessonData(val);
           if (
             val?.status === 403 || 
             raw?.status === 403 || 
@@ -160,7 +672,7 @@ export default function LessonPage() {
           }
         }
 
-        // CRITICAL REQUIREMENT: For instructor, lessons CANNOT be locked. Lessons can be locked ONLY for student!
+        // For instructor, lessons CANNOT be locked. Lessons can be locked ONLY for student!
         if (instructorUser) {
           paywalled = false;
           setIsPaywallLocked(false);
@@ -237,7 +749,6 @@ export default function LessonPage() {
             ...c,
             lessons: chLessons.map((l: any) => {
               const fromEnroll = enrollLessonsMap.get(l.name);
-              // For instructor, lessons CANNOT be locked. Lessons can be locked ONLY for student!
               const isLessonLocked = instructorUser
                 ? false
                 : (fromEnroll?.is_locked !== undefined 
@@ -280,7 +791,6 @@ export default function LessonPage() {
         status: "Complete"
       });
       setIsCompletedLocally(true);
-      // refresh progress to sync sidebar
       const progressRes = await getCourseProgress(courseId);
       if (progressRes?.message || progressRes?.data || progressRes) {
         setProgress(progressRes);
@@ -291,6 +801,10 @@ export default function LessonPage() {
       setUpdatingProgress(false);
     }
   };
+
+  // Parse blocks from lessonData.content and lessonData.instructor_content
+  const contentBlocks = useMemo(() => parseBlocks(lessonData?.content), [lessonData?.content]);
+  const instructorBlocks = useMemo(() => parseBlocks(lessonData?.instructor_content), [lessonData?.instructor_content]);
 
   if (loading) {
     return (
@@ -518,36 +1032,9 @@ export default function LessonPage() {
                   <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight mb-3">
                     This lesson is part of a paid course
                   </h2>
-
-                  {/* Subtitle */}
-                  <p className="text-slate-600 text-base md:text-lg max-w-lg mx-auto leading-relaxed mb-8">
-                    Purchase this course to unlock all lessons, downloadable resources, and get certified.
+                  <p className="text-slate-600 text-sm md:text-base max-w-lg mx-auto mb-8 leading-relaxed">
+                    {paywallMessage}
                   </p>
-
-                  {/* Feature Highlights Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8 text-left max-w-xl mx-auto">
-                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-2.5">
-                      <BookOpen className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-xs font-bold text-slate-800">Complete Curriculum</p>
-                        <p className="text-[11px] text-slate-500">Access all chapters & video lessons</p>
-                      </div>
-                    </div>
-                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-2.5">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-xs font-bold text-slate-800">Hands-on Exercises</p>
-                        <p className="text-[11px] text-slate-500">Quizzes, code & assignments</p>
-                      </div>
-                    </div>
-                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-2.5">
-                      <Award className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-xs font-bold text-slate-800">Certificate</p>
-                        <p className="text-[11px] text-slate-500">Official course completion credential</p>
-                      </div>
-                    </div>
-                  </div>
 
                   {/* Action Buttons */}
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -587,40 +1074,98 @@ export default function LessonPage() {
             </div>
           ) : (
             <div className="max-w-7xl mx-auto p-4 md:p-8 w-full flex-grow flex flex-col">
-              {lessonData?.description && (
-                <div className="mb-8 p-6 bg-indigo-50 border border-indigo-100 rounded-xl">
-                  <p className="text-lg text-indigo-900 font-medium leading-relaxed">
-                    {lessonData.description}
-                  </p>
-                </div>
-              )}
+              {/* Main Content Card rendered from Editor.js blocks in `content` */}
+              <div className="bg-white p-6 md:p-12 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200/60 flex-grow relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500"></div>
 
-              {/* Video Player Box */}
-              {lessonData?.video_url && (
-                <div className="relative rounded-xl overflow-hidden bg-black shadow-xl mb-10 ring-1 ring-slate-900/10">
-                  <div className="aspect-w-16 aspect-h-9">
-                    <iframe 
-                      src={lessonData.video_url} 
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                      allowFullScreen
-                      className="w-full h-[400px] md:h-[600px]"
-                    ></iframe>
+                {/* Lesson Header Title */}
+                <div className="mb-8 pb-6 border-b border-slate-100">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100/80">
+                      Lesson {lessonData?.idx !== undefined ? `#${Number(lessonData.idx) + 1}` : ''}
+                    </span>
+                    {lessonData?.chapter && (
+                      <span className="text-xs text-slate-400 font-medium">
+                        {lessonData.chapter}
+                      </span>
+                    )}
                   </div>
+                  <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+                    {lessonDisplayTitle}
+                  </h1>
                 </div>
-              )}
 
-              {/* Lesson Body HTML */}
-              <div className="bg-white p-8 md:p-14 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200/60 flex-grow relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 opacity-20"></div>
-                <div className="prose prose-indigo max-w-none text-slate-600 marker:text-indigo-500 prose-headings:font-bold prose-headings:text-slate-800 prose-p:leading-relaxed prose-a:text-indigo-600 hover:prose-a:text-indigo-700 prose-pre:bg-slate-900 prose-pre:shadow-lg prose-pre:rounded-xl" dangerouslySetInnerHTML={{ __html: lessonData?.body || lessonData?.content || `
-                  <div class="text-center py-16">
-                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
-                      <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                {/* Rendered content blocks */}
+                {contentBlocks.length > 0 ? (
+                  <div className="space-y-4">
+                    {contentBlocks.map((block: EditorBlock, idx: number) => (
+                      <EditorBlockRenderer 
+                        key={block.id || `blk-${idx}`} 
+                        block={block} 
+                        isInstructor={isInstructor} 
+                      />
+                    ))}
+                  </div>
+                ) : lessonData?.body ? (
+                  <div 
+                    className="prose prose-indigo max-w-none text-slate-700 leading-relaxed" 
+                    dangerouslySetInnerHTML={{ __html: lessonData.body }} 
+                  />
+                ) : (
+                  <div className="text-center py-16">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
+                      <BookOpen className="w-8 h-8 text-slate-400" />
                     </div>
-                    <h3 class="text-lg font-bold text-slate-900 mb-2">No Text Content Available</h3>
-                    <p class="text-slate-500">This lesson does not contain any readable material.</p>
+                    <h3 className="text-lg font-bold text-slate-900 mb-2">No Content Available</h3>
+                    <p className="text-slate-500 text-sm">This lesson does not contain any readable material.</p>
                   </div>
-                ` }} />
+                )}
+
+                {/* Instructor Exclusive Section */}
+                {isInstructor && (instructorBlocks.length > 0 || (lessonData?.instructor_notes && typeof lessonData.instructor_notes === 'string' && lessonData.instructor_notes.trim())) && (
+                  <div className="mt-12 pt-8 border-t-2 border-dashed border-amber-200">
+                    <div className="p-6 md:p-8 bg-amber-50/50 border border-amber-200/80 rounded-2xl shadow-xs">
+                      <div className="flex items-center justify-between gap-3 mb-6 pb-4 border-b border-amber-200/60 flex-wrap">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                            <ShieldCheck className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm md:text-base font-bold text-amber-950">
+                              Instructor Teaching Notes & Materials
+                            </h3>
+                            <p className="text-xs text-amber-700">
+                              Visible only to instructors and course administrators
+                            </p>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-200/80 text-amber-900 border border-amber-300">
+                          Instructor Only
+                        </span>
+                      </div>
+
+                      {/* Instructor Blocks */}
+                      {instructorBlocks.length > 0 && (
+                        <div className="space-y-4">
+                          {instructorBlocks.map((block: EditorBlock, idx: number) => (
+                            <EditorBlockRenderer 
+                              key={block.id || `inst-${idx}`} 
+                              block={block} 
+                              isInstructor={true} 
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Instructor Text Notes */}
+                      {lessonData?.instructor_notes && typeof lessonData.instructor_notes === 'string' && lessonData.instructor_notes.trim() !== '' && (
+                        <div className="mt-4 p-4 bg-white/90 rounded-xl border border-amber-200 text-sm text-amber-950 whitespace-pre-wrap leading-relaxed">
+                          {lessonData.instructor_notes}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Lesson Quiz & Knowledge Check */}
