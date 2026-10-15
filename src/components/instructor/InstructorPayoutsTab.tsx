@@ -20,6 +20,10 @@ import {
   FileText,
   AlertCircle,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  LayoutGrid,
+  List,
   ExternalLink,
   Plus,
   Send,
@@ -66,6 +70,8 @@ export default function InstructorPayoutsTab({
 
   // Table Filters & Interaction States
   const [statusFilter, setStatusFilter] = useState<"All" | "Paid" | "Approved" | "Draft">("All");
+  const [statementViewMode, setStatementViewMode] = useState<"table" | "cards">("table");
+  const [expandedStatementId, setExpandedStatementId] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [selectedVoucher, setSelectedVoucher] = useState<InstructorBillingRecord | null>(null);
   const [selectedSlipBilling, setSelectedSlipBilling] = useState<string | null>(null);
@@ -362,7 +368,7 @@ export default function InstructorPayoutsTab({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pt-2">
       {/* ── HEADER & ADMIN CONTROLS ── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
         <div>
@@ -676,157 +682,465 @@ export default function InstructorPayoutsTab({
 
       {/* ── 4. MONTHLY SETTLEMENT STATEMENTS TABLE (`billing_history`) ── */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        {/* Header with Title, Status Filter, and View Mode Switcher */}
+        <div className="p-5 border-b border-slate-200 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
-            <h3 className="text-base font-bold text-slate-900">Monthly Settlement Statements</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-bold text-slate-900">Monthly Settlement Statements</h3>
+              <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                {filteredBillingHistory.length} {filteredBillingHistory.length === 1 ? "statement" : "statements"}
+              </span>
+            </div>
             <p className="text-xs text-slate-500 mt-0.5">
               Verified tax-compliant monthly accounts ready for download and reconciliation.
             </p>
           </div>
 
-          {/* Filters */}
-          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
-            {(["All", "Paid", "Approved", "Draft"] as const).map((filter) => (
+          <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-between lg:justify-end">
+            {/* Status Filters */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              {(["All", "Paid", "Approved", "Draft"] as const).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setStatusFilter(filter)}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    statusFilter === filter
+                      ? "bg-white text-slate-900 shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+
+            {/* View Mode Switcher (Table vs Cards) */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/60">
               <button
-                key={filter}
-                onClick={() => setStatusFilter(filter)}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  statusFilter === filter
+                onClick={() => setStatementViewMode("table")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  statementViewMode === "table"
                     ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
+                    : "text-slate-500 hover:text-slate-800"
                 }`}
+                title="Table View"
               >
-                {filter}
+                <List className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Table</span>
               </button>
-            ))}
+              <button
+                onClick={() => setStatementViewMode("cards")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  statementViewMode === "cards"
+                    ? "bg-white text-slate-900 shadow-xs"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+                title="Cards View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Cards</span>
+              </button>
+            </div>
           </div>
         </div>
 
         {filteredBillingHistory.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs min-w-[1080px]">
-              <thead>
-                <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-                  <th className="py-3.5 px-4 text-left whitespace-nowrap">Statement ID</th>
-                  <th className="py-3.5 px-4 text-left whitespace-nowrap">Billing Period</th>
-                  <th className="py-3.5 px-4 text-right whitespace-nowrap">Gross Sales</th>
-                  <th className="py-3.5 px-4 text-right whitespace-nowrap">Platform Fee & GST</th>
-                  <th className="py-3.5 px-4 text-right whitespace-nowrap">TDS (194J)</th>
-                  <th className="py-3.5 px-4 text-right whitespace-nowrap">Net Payout</th>
-                  <th className="py-3.5 px-4 text-center whitespace-nowrap">Status</th>
-                  <th className="py-3.5 px-4 text-left whitespace-nowrap">Payment Ref / UTR</th>
-                  <th className="py-3.5 px-4 text-right whitespace-nowrap">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredBillingHistory.map((rec) => {
-                  const feePlusGst = (rec.platform_commission || 0) + (rec.gst_on_commission || 0);
+          statementViewMode === "table" ? (
+            /* ── A. STREAMLINED ZERO-SCROLL TABLE VIEW ── */
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                    <th className="py-3 px-4 text-left">Statement & Period</th>
+                    <th className="py-3 px-4 text-right">Gross Sales</th>
+                    <th className="py-3 px-4 text-right">Deductions (Fee + Tax)</th>
+                    <th className="py-3 px-4 text-right">Net Payout</th>
+                    <th className="py-3 px-4 text-center">Status & Reference</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredBillingHistory.map((rec) => {
+                    const feePlusGst = (rec.platform_commission || 0) + (rec.gst_on_commission || 0);
+                    const totalDeductions = feePlusGst + (rec.tds_amount || 0);
+                    const isExpanded = expandedStatementId === rec.name;
 
-                  return (
-                    <tr key={rec.name} className="hover:bg-slate-50/80 transition-colors">
-                      {/* 1. Statement ID */}
-                      <td className="py-3.5 px-4 align-middle whitespace-nowrap">
-                        <div className="font-mono font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                          <Receipt className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                          <span>{rec.name}</span>
-                        </div>
-                        {rec.payout_sheet ? (
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">{rec.payout_sheet}</div>
-                        ) : (
-                          <div className="text-[10px] text-slate-400 mt-0.5">Automated Settlement</div>
-                        )}
-                      </td>
-
-                      {/* 2. Billing Period */}
-                      <td className="py-3.5 px-4 align-middle whitespace-nowrap text-slate-600">
-                        <div className="font-semibold text-slate-800 text-xs">
-                          {formatDate(rec.start_date)} → {formatDate(rec.end_date)}
-                        </div>
-                        <span className="inline-block text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded capitalize mt-0.5">
-                          {rec.billing_cycle || "Monthly"}
-                        </span>
-                      </td>
-
-                      {/* 3. Gross Sales */}
-                      <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
-                        <div className="font-bold text-slate-900 text-xs">
-                          ₹ {formatINR(rec.gross_sales)}
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-normal">Gross Sales</span>
-                      </td>
-
-                      {/* 4. Platform Fee & GST */}
-                      <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
-                        <div className="font-semibold text-purple-700 text-xs">
-                          - ₹ {formatINR(feePlusGst)}
-                        </div>
-                        <span className="text-[10px] text-purple-600/70">
-                          ({rec.platform_commission_rate}% fee + GST)
-                        </span>
-                      </td>
-
-                      {/* 5. TDS (194J) */}
-                      <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
-                        {(rec.tds_amount || 0) > 0 ? (
-                          <>
-                            <div className="font-semibold text-blue-700 text-xs">
-                              - ₹ {formatINR(rec.tds_amount)}
-                            </div>
-                            <span className="text-[10px] text-blue-600/70">
-                              ({rec.tds_rate}% IT Act)
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <div className="font-semibold text-slate-400 text-xs">₹ 0.00</div>
-                            <span className="text-[10px] text-slate-400">Exempt</span>
-                          </>
-                        )}
-                      </td>
-
-                      {/* 6. Net Payout */}
-                      <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
-                        <div className="font-extrabold text-emerald-700 text-sm">
-                          ₹ {formatINR(rec.net_payout)}
-                        </div>
-                        <span className="text-[10px] font-semibold text-emerald-600/80">
-                          Disbursable
-                        </span>
-                      </td>
-
-                      {/* 7. Status */}
-                      <td className="py-3.5 px-4 align-middle text-center whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                            rec.status === "Paid"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : rec.status === "Approved"
-                              ? "bg-blue-50 text-blue-700 border-blue-200"
-                              : rec.status === "Draft"
-                              ? "bg-amber-50 text-amber-700 border-amber-200"
-                              : "bg-slate-50 text-slate-600 border-slate-200"
+                    return (
+                      <React.Fragment key={rec.name}>
+                        <tr
+                          onClick={() => setExpandedStatementId(isExpanded ? null : rec.name)}
+                          className={`hover:bg-slate-50/80 transition-colors cursor-pointer ${
+                            isExpanded ? "bg-indigo-50/40 border-l-4 border-l-indigo-600" : ""
                           }`}
                         >
-                          {rec.status === "Paid" && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
-                          {rec.status === "Approved" && <ShieldCheck className="w-3 h-3 text-blue-600" />}
-                          {rec.status === "Draft" && <Clock className="w-3 h-3 text-amber-600" />}
-                          {rec.status}
-                        </span>
-                      </td>
+                          {/* 1. Statement ID & Period */}
+                          <td className="py-3.5 px-4 align-middle">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                                <Receipt className="w-3.5 h-3.5 text-indigo-600" />
+                              </div>
+                              <div>
+                                <div className="font-mono font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                                  <span>{rec.name}</span>
+                                  <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded capitalize">
+                                    {rec.billing_cycle || "Monthly"}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                                  {formatDate(rec.start_date)} → {formatDate(rec.end_date)}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
 
-                      {/* 8. Payment Ref / UTR */}
-                      <td className="py-3.5 px-4 align-middle whitespace-nowrap">
+                          {/* 2. Gross Sales */}
+                          <td className="py-3.5 px-4 align-middle text-right">
+                            <div className="font-bold text-slate-900 text-xs">
+                              ₹ {formatINR(rec.gross_sales)}
+                            </div>
+                            <span className="text-[10px] text-slate-400">Total Sales</span>
+                          </td>
+
+                          {/* 3. Deductions (Fee + GST + TDS) */}
+                          <td className="py-3.5 px-4 align-middle text-right">
+                            <div className="font-semibold text-rose-600 text-xs">
+                              - ₹ {formatINR(totalDeductions)}
+                            </div>
+                            <span className="text-[10px] text-slate-400">
+                              {rec.platform_commission_rate}% fee + GST{rec.tds_amount ? " + TDS" : ""}
+                            </span>
+                          </td>
+
+                          {/* 4. Net Payout */}
+                          <td className="py-3.5 px-4 align-middle text-right">
+                            <div className="font-extrabold text-emerald-700 text-sm">
+                              ₹ {formatINR(rec.net_payout)}
+                            </div>
+                            <span className="text-[10px] font-semibold text-emerald-600/80">
+                              {rec.status === "Paid" ? "Disbursed" : "Disbursable"}
+                            </span>
+                          </td>
+
+                          {/* 5. Status & Reference / UTR */}
+                          <td className="py-3.5 px-4 align-middle text-center" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex flex-col items-center gap-1">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  rec.status === "Paid"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : rec.status === "Approved"
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : rec.status === "Draft"
+                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                    : "bg-slate-50 text-slate-600 border-slate-200"
+                                }`}
+                              >
+                                {rec.status === "Paid" && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
+                                {rec.status === "Approved" && <ShieldCheck className="w-3 h-3 text-blue-600" />}
+                                {rec.status === "Draft" && <Clock className="w-3 h-3 text-amber-600" />}
+                                {rec.status}
+                              </span>
+
+                              {rec.payment_reference ? (
+                                <div className="inline-flex items-center gap-1 bg-slate-100/90 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-slate-700">
+                                  <span>UTR: {rec.payment_reference}</span>
+                                  <button
+                                    onClick={() => handleCopy(rec.payment_reference!, `utr-${rec.name}`)}
+                                    className="text-slate-400 hover:text-slate-700 p-0.5 rounded transition-colors cursor-pointer"
+                                    title="Copy UTR Reference"
+                                  >
+                                    {copiedKey === `utr-${rec.name}` ? (
+                                      <Check className="w-3 h-3 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 italic">
+                                  Pending Disbursal
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* 6. Actions */}
+                          <td className="py-3.5 px-4 align-middle text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedSlipBilling(rec.name)}
+                                className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 border border-indigo-100 cursor-pointer shadow-2xs"
+                                title="View / Download Official PDF Voucher"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Slip PDF</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setSelectedVoucher(rec)}
+                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1 cursor-pointer"
+                                title="View Statement Audit Summary"
+                              >
+                                <span>Summary</span>
+                              </button>
+
+                              {isAdmin && rec.status !== "Paid" && (
+                                <button
+                                  onClick={() => openMarkPaidForRecord(rec)}
+                                  className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs"
+                                  title="Mark as Paid"
+                                >
+                                  <CreditCard className="w-3.5 h-3.5" />
+                                  <span>Disburse</span>
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => setExpandedStatementId(isExpanded ? null : rec.name)}
+                                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                                title={isExpanded ? "Collapse breakdown" : "Expand itemized breakdown"}
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp className="w-4 h-4 text-indigo-600" />
+                                ) : (
+                                  <ChevronDown className="w-4 h-4" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* ACCORDION ROW DRAWER */}
+                        {isExpanded && (
+                          <tr className="bg-slate-50/70 border-b border-slate-200">
+                            <td colSpan={6} className="p-4 sm:p-5">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {/* Panel 1: Itemized Fee & Tax Breakdown */}
+                                <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs space-y-2.5">
+                                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                      <Percent className="w-3.5 h-3.5 text-indigo-500" />
+                                      Fee & Tax Deductions
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-medium">Audited Math</span>
+                                  </div>
+
+                                  <div className="space-y-1.5 text-xs">
+                                    <div className="flex items-center justify-between text-slate-600">
+                                      <span>Gross Sales:</span>
+                                      <span className="font-semibold text-slate-900">₹ {formatINR(rec.gross_sales)}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-slate-600">
+                                      <span>Platform Fee ({rec.platform_commission_rate}%):</span>
+                                      <span className="font-semibold text-purple-700">- ₹ {formatINR(rec.platform_commission)}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-slate-600">
+                                      <span>GST on Fee (18%):</span>
+                                      <span className="font-semibold text-purple-700">- ₹ {formatINR(rec.gst_on_commission)}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-slate-600">
+                                      <span>TDS u/s 194J ({rec.tds_rate}%):</span>
+                                      <span className="font-semibold text-blue-700">
+                                        {(rec.tds_amount || 0) > 0 ? `- ₹ ${formatINR(rec.tds_amount)}` : "₹ 0.00 (Exempt)"}
+                                      </span>
+                                    </div>
+                                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between font-bold text-slate-900">
+                                      <span>Net Disbursable Payout:</span>
+                                      <span className="text-emerald-700 font-extrabold text-sm">₹ {formatINR(rec.net_payout)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Panel 2: Settlement Audit & Banking */}
+                                <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs space-y-2.5">
+                                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                      <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                                      Settlement & Banking
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-mono">{rec.name}</span>
+                                  </div>
+
+                                  <div className="space-y-1.5 text-xs">
+                                    <div className="flex items-center justify-between text-slate-600">
+                                      <span>Payout Sheet:</span>
+                                      <span className="font-mono font-medium text-slate-800 text-[11px]">
+                                        {rec.payout_sheet || "Automated Cycle"}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-slate-600">
+                                      <span>Payment Mode:</span>
+                                      <span className="font-medium text-slate-800">
+                                        {rec.payment_mode || "NEFT / Bank Transfer"}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-slate-600">
+                                      <span>Cycle Period:</span>
+                                      <span className="font-medium text-slate-800">
+                                        {formatDate(rec.start_date)} – {formatDate(rec.end_date)}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-slate-600">
+                                      <span>Bank Ref / UTR:</span>
+                                      {rec.payment_reference ? (
+                                        <span className="font-mono font-bold text-slate-900 text-[11px]">
+                                          {rec.payment_reference}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-400 italic text-[11px]">Pending bank clearance</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Panel 3: Quick Statement Actions */}
+                                <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+                                  <div>
+                                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2.5">
+                                      <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                                        Official Documentation
+                                      </span>
+                                      <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                        Tax Compliant
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 leading-relaxed">
+                                      Download the digitally stamped settlement voucher with TDS certificate annexure and GST breakdown.
+                                    </p>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 pt-3 mt-3 border-t border-slate-100">
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedSlipBilling(rec.name)}
+                                      className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                                    >
+                                      <FileText className="w-3.5 h-3.5" />
+                                      <span>Official PDF Slip</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedVoucher(rec)}
+                                      className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold transition-all inline-flex items-center justify-center gap-1 cursor-pointer"
+                                    >
+                                      <span>Full Audit</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            /* ── B. CARDS GRID VIEW ── */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4.5 p-5">
+              {filteredBillingHistory.map((rec) => {
+                const feePlusGst = (rec.platform_commission || 0) + (rec.gst_on_commission || 0);
+                const totalDeductions = feePlusGst + (rec.tds_amount || 0);
+
+                return (
+                  <div
+                    key={rec.name}
+                    className="bg-white rounded-xl border border-slate-200/90 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between overflow-hidden"
+                  >
+                    {/* Top Header */}
+                    <div className="p-4 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                          <Receipt className="w-4 h-4 text-indigo-600" />
+                        </div>
+                        <div>
+                          <div className="font-mono font-bold text-slate-900 text-xs">{rec.name}</div>
+                          <div className="text-[10px] text-slate-400 capitalize">{rec.billing_cycle || "Monthly"} Cycle</div>
+                        </div>
+                      </div>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                          rec.status === "Paid"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : rec.status === "Approved"
+                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                            : rec.status === "Draft"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : "bg-slate-50 text-slate-600 border-slate-200"
+                        }`}
+                      >
+                        {rec.status === "Paid" && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
+                        {rec.status === "Approved" && <ShieldCheck className="w-3 h-3 text-blue-600" />}
+                        {rec.status === "Draft" && <Clock className="w-3 h-3 text-amber-600" />}
+                        {rec.status}
+                      </span>
+                    </div>
+
+                    {/* Card Body */}
+                    <div className="p-4 space-y-3 flex-1">
+                      {/* Period */}
+                      <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>{formatDate(rec.start_date)} → {formatDate(rec.end_date)}</span>
+                      </div>
+
+                      {/* Hero Net Payout Box */}
+                      <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-emerald-800/80 tracking-wider block">
+                            Net Payout
+                          </span>
+                          <span className="text-lg font-extrabold text-emerald-700">
+                            ₹ {formatINR(rec.net_payout)}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[11px] text-slate-500 block">
+                            Gross: ₹ {formatINR(rec.gross_sales)}
+                          </span>
+                          <span className="text-[10px] font-semibold text-rose-600">
+                            Ded: - ₹ {formatINR(totalDeductions)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Breakdown Mini List */}
+                      <div className="space-y-1.5 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <div className="flex justify-between text-slate-600 text-[11px]">
+                          <span>Platform Fee ({rec.platform_commission_rate}%):</span>
+                          <span className="font-semibold text-slate-800">- ₹ {formatINR(rec.platform_commission)}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 text-[11px]">
+                          <span>GST on Fee (18%):</span>
+                          <span className="font-semibold text-slate-800">- ₹ {formatINR(rec.gst_on_commission)}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 text-[11px]">
+                          <span>TDS u/s 194J ({rec.tds_rate}%):</span>
+                          <span className="font-semibold text-slate-800">
+                            {(rec.tds_amount || 0) > 0 ? `- ₹ ${formatINR(rec.tds_amount)}` : "₹ 0.00 (Exempt)"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Payment Reference / UTR */}
+                      <div className="pt-1">
                         {rec.payment_reference ? (
-                          <div className="inline-flex items-center gap-1.5 bg-slate-100/80 border border-slate-200 px-2 py-1 rounded-lg">
+                          <div className="flex items-center justify-between bg-slate-100/90 border border-slate-200 px-2.5 py-1 rounded-lg text-xs">
                             <span className="font-mono text-[11px] font-bold text-slate-700">
-                              {rec.payment_reference}
+                              UTR: {rec.payment_reference}
                             </span>
                             <button
-                              onClick={() => handleCopy(rec.payment_reference!, `utr-${rec.name}`)}
-                              className="text-slate-400 hover:text-slate-700 p-0.5 rounded transition-colors cursor-pointer"
+                              onClick={() => handleCopy(rec.payment_reference!, `utr-card-${rec.name}`)}
+                              className="text-slate-400 hover:text-slate-700 p-0.5 rounded cursor-pointer"
                               title="Copy UTR Reference"
                             >
-                              {copiedKey === `utr-${rec.name}` ? (
+                              {copiedKey === `utr-card-${rec.name}` ? (
                                 <Check className="w-3.5 h-3.5 text-emerald-600" />
                               ) : (
                                 <Copy className="w-3.5 h-3.5" />
@@ -834,52 +1148,47 @@ export default function InstructorPayoutsTab({
                             </button>
                           </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 italic font-medium">
-                            <Clock className="w-3 h-3 text-slate-300" />
-                            Pending Disbursal
+                          <span className="text-[11px] text-slate-400 italic flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> Pending Disbursal
                           </span>
                         )}
-                      </td>
+                      </div>
+                    </div>
 
-                      {/* 9. Actions */}
-                      <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedSlipBilling(rec.name)}
-                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 border border-indigo-100 cursor-pointer shadow-2xs"
-                            title="View / Download Official PDF Voucher"
-                          >
-                            <FileText className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Slip PDF</span>
-                          </button>
+                    {/* Footer Actions */}
+                    <div className="p-3 bg-slate-50/70 border-t border-slate-100 flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSlipBilling(rec.name)}
+                        className="flex-1 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-all inline-flex items-center justify-center gap-1 border border-indigo-100 cursor-pointer shadow-2xs"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Slip PDF</span>
+                      </button>
 
-                          <button
-                            type="button"
-                            onClick={() => setSelectedVoucher(rec)}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1 cursor-pointer"
-                          >
-                            <span>Summary</span>
-                          </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVoucher(rec)}
+                        className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-800 rounded-lg text-xs font-semibold transition-all border border-slate-200 cursor-pointer"
+                      >
+                        <span>Summary</span>
+                      </button>
 
-                          {isAdmin && rec.status !== "Paid" && (
-                            <button
-                              onClick={() => openMarkPaidForRecord(rec)}
-                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs"
-                              title="Mark as Paid"
-                            >
-                              <CreditCard className="w-3.5 h-3.5" />
-                              <span>Disburse</span>
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      {isAdmin && rec.status !== "Paid" && (
+                        <button
+                          onClick={() => openMarkPaidForRecord(rec)}
+                          className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs"
+                        >
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>Disburse</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
         ) : (
           <div className="p-12 text-center text-slate-500">
             <Wallet className="w-10 h-10 text-slate-300 mx-auto mb-2" />
@@ -1060,193 +1369,292 @@ export default function InstructorPayoutsTab({
           MODAL 1: SETTLEMENT VOUCHER / DIGITAL PAYSLIP
       ═════════════════════════════════════════════════════════ */}
       {selectedVoucher && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden my-8">
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-start justify-center p-3 sm:p-5 md:p-6 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-2xl w-full mt-24 sm:mt-28 md:mt-32 mb-12 max-h-[calc(100vh-8.5rem)] sm:max-h-[calc(100vh-9.5rem)] flex flex-col border border-slate-200 shadow-2xl overflow-hidden shrink-0">
             {/* Modal Controls Top Bar */}
-            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-indigo-400" />
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                  Settlement Advice & Remittance Voucher
-                </span>
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0 gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0">
+                  <FileText className="w-4 h-4 text-indigo-400" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xs sm:text-sm font-bold text-white tracking-wide truncate">
+                    Settlement Advice & Remittance Voucher
+                  </h3>
+                  <span className="text-[10px] text-slate-400 block truncate font-medium">
+                    Audit & Itemized Remittance Record
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
                     setSelectedSlipBilling(selectedVoucher.name);
                   }}
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                  className="px-2.5 sm:px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                  title="View / Download Official PDF Voucher"
                 >
                   <FileText className="w-3.5 h-3.5" />
-                  <span>Official PDF Slip</span>
+                  <span className="hidden sm:inline">Official PDF Slip</span>
+                  <span className="sm:hidden">PDF</span>
                 </button>
                 <button
                   onClick={() => window.print()}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                  className="px-2.5 sm:px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold hidden sm:flex items-center gap-1.5 transition-all cursor-pointer border border-slate-700"
+                  title="Print Voucher"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Print Voucher</span>
+                  <span>Print</span>
                 </button>
                 <button
                   onClick={() => setSelectedVoucher(null)}
                   className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-all cursor-pointer"
+                  title="Close Voucher"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* Printable Voucher Document */}
-            <div className="p-6 sm:p-8 space-y-6 text-slate-800" id="settlement-voucher-printable">
+            {/* Printable Voucher Document Scrollable Body */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-7 space-y-5 text-slate-800" id="settlement-voucher-printable">
               {/* Branding & Header */}
-              <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-6 border-b border-slate-200">
-                <div>
-                  <h2 className="text-xl font-black text-slate-900 tracking-tight">STRIDENEX ACADEMY LMS</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Instructor Royalty & Commission Remittance Advice</p>
-                  <div className="mt-2 text-[11px] text-slate-600 space-y-0.5">
-                    <p>GSTIN: 27AABCS1429B1Z8</p>
-                    <p>Sec 194J Compliant Educational Payment Voucher</p>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-5 border-b border-slate-200">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                      STRIDENEX ACADEMY LMS
+                    </h2>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      Verified
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                    Instructor Royalty & Commission Remittance Advice
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-slate-500 font-mono">
+                    <span>GSTIN: 27AABCS1429B1Z8</span>
+                    <span className="text-slate-300">•</span>
+                    <span>Sec 194J Compliant Educational Voucher</span>
                   </div>
                 </div>
 
-                <div className="sm:text-right bg-slate-50 p-3 rounded-xl border border-slate-200 sm:min-w-[180px]">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Statement ID</span>
-                  <span className="text-sm font-mono font-bold text-slate-900 block">{selectedVoucher.name}</span>
-                  <span className="text-[10px] text-slate-500 mt-1 block">
+                <div className="w-full sm:w-auto bg-slate-50 p-3 rounded-xl border border-slate-200/90 sm:text-right shrink-0">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                    Statement ID
+                  </span>
+                  <div className="flex items-center sm:justify-end gap-1.5 mt-0.5">
+                    <span className="text-xs sm:text-sm font-mono font-bold text-slate-900">
+                      {selectedVoucher.name}
+                    </span>
+                    <button
+                      onClick={() => handleCopy(selectedVoucher.name, `voucher-stmt-${selectedVoucher.name}`)}
+                      className="text-slate-400 hover:text-slate-700 p-0.5 rounded cursor-pointer transition-colors"
+                      title="Copy Statement ID"
+                    >
+                      {copiedKey === `voucher-stmt-${selectedVoucher.name}` ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-mono mt-0.5 block">
                     Sheet: {selectedVoucher.payout_sheet || "Direct"}
                   </span>
                 </div>
               </div>
 
               {/* Beneficiary & Cycle Meta */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <div>
-                  <span className="text-slate-400 block text-[10px] font-semibold uppercase">Instructor / Payee</span>
-                  <span className="font-bold text-slate-900 block mt-0.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3.5 sm:p-4 rounded-xl border border-slate-200/80 text-xs">
+                <div className="min-w-0">
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">
+                    Instructor / Payee
+                  </span>
+                  <span className="font-bold text-slate-900 block mt-0.5 truncate text-xs">
                     {selectedVoucher.instructor_name || dashboardData?.instructor_name || "Instructor"}
                   </span>
-                  <span className="text-[11px] text-slate-500">{selectedVoucher.instructor || dashboardData?.instructor}</span>
-                </div>
-
-                <div>
-                  <span className="text-slate-400 block text-[10px] font-semibold uppercase">Settlement Cycle</span>
-                  <span className="font-bold text-slate-900 block mt-0.5 capitalize">
-                    {selectedVoucher.billing_cycle || "Monthly"}
-                  </span>
-                  <span className="text-[11px] text-slate-500">
-                    {formatDate(selectedVoucher.start_date)} to {formatDate(selectedVoucher.end_date)}
+                  <span className="text-[11px] text-slate-500 block truncate font-mono">
+                    {selectedVoucher.instructor || dashboardData?.instructor}
                   </span>
                 </div>
 
-                <div>
-                  <span className="text-slate-400 block text-[10px] font-semibold uppercase">Disbursement Status</span>
-                  <span className="font-bold text-emerald-700 block mt-0.5">
-                    {selectedVoucher.status}
+                <div className="min-w-0">
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">
+                    Settlement Cycle
                   </span>
-                  <span className="text-[10px] text-slate-500">
-                    {selectedVoucher.paid_on ? `Paid on ${formatDate(selectedVoucher.paid_on)}` : "Awaiting processing"}
+                  <span className="font-bold text-slate-900 block mt-0.5 capitalize text-xs">
+                    {selectedVoucher.billing_cycle || "Monthly"} Cycle
+                  </span>
+                  <span className="text-[11px] text-slate-500 block font-medium">
+                    {formatDate(selectedVoucher.start_date)} → {formatDate(selectedVoucher.end_date)}
+                  </span>
+                </div>
+
+                <div className="min-w-0">
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">
+                    Disbursement Status
+                  </span>
+                  <div className="mt-1">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                        selectedVoucher.status === "Paid"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : selectedVoucher.status === "Approved"
+                          ? "bg-blue-50 text-blue-700 border-blue-200"
+                          : "bg-amber-50 text-amber-700 border-amber-200"
+                      }`}
+                    >
+                      {selectedVoucher.status === "Paid" && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
+                      {selectedVoucher.status === "Approved" && <ShieldCheck className="w-3 h-3 text-blue-600" />}
+                      {selectedVoucher.status === "Draft" && <Clock className="w-3 h-3 text-amber-600" />}
+                      {selectedVoucher.status}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block mt-1">
+                    {selectedVoucher.paid_on ? `Paid on ${formatDate(selectedVoucher.paid_on)}` : "Awaiting bank processing"}
                   </span>
                 </div>
               </div>
 
               {/* Remittance Banking Details */}
               {selectedVoucher.payment_reference && (
-                <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase text-emerald-800 block">Bank Transaction Reference</span>
-                    <span className="font-mono font-bold text-emerald-950 text-sm">{selectedVoucher.payment_reference}</span>
+                <div className="bg-emerald-50/80 border border-emerald-200/90 rounded-xl p-3.5 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold uppercase text-emerald-800 tracking-wider block">
+                      Bank Transaction Reference (UTR)
+                    </span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="font-mono font-bold text-emerald-950 text-sm tracking-wide">
+                        {selectedVoucher.payment_reference}
+                      </span>
+                      <button
+                        onClick={() => handleCopy(selectedVoucher.payment_reference!, `voucher-utr-${selectedVoucher.name}`)}
+                        className="text-emerald-700 hover:text-emerald-900 p-0.5 rounded cursor-pointer transition-colors"
+                        title="Copy UTR Reference"
+                      >
+                        {copiedKey === `voucher-utr-${selectedVoucher.name}` ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-[10px] font-medium text-emerald-700 block">Mode: {selectedVoucher.payment_mode || "NEFT / Direct Bank"}</span>
-                    <span className="text-[10px] text-emerald-600 font-mono">Disbursed successfully</span>
+                  <div className="text-left sm:text-right shrink-0">
+                    <span className="text-[11px] font-semibold text-emerald-800 block">
+                      Mode: {selectedVoucher.payment_mode || "NEFT / Direct Bank"}
+                    </span>
+                    <span className="text-[10px] text-emerald-600 font-medium block">
+                      Disbursed via automated clearing
+                    </span>
                   </div>
                 </div>
               )}
 
               {/* Itemized Calculation Ledger */}
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">Itemized Financial Breakdown</h4>
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-slate-100/75 border-b border-slate-200 text-slate-600 font-semibold">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Itemized Financial Breakdown
+                  </h4>
+                  <span className="text-[10px] text-slate-400 font-mono">Currency: INR (₹)</span>
+                </div>
+
+                <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-2xs bg-white">
+                  <table className="w-full text-xs min-w-[460px]">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
                       <tr>
-                        <th className="py-2.5 px-4 text-left">Description</th>
-                        <th className="py-2.5 px-4 text-center">Rate / Basis</th>
-                        <th className="py-2.5 px-4 text-right">Amount (INR)</th>
+                        <th className="py-2.5 px-3.5 sm:px-4 text-left">Description</th>
+                        <th className="py-2.5 px-3 text-center w-28 whitespace-nowrap">Rate / Basis</th>
+                        <th className="py-2.5 px-3.5 sm:px-4 text-right w-36 whitespace-nowrap">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       <tr>
-                        <td className="py-2.5 px-4 font-medium text-slate-800">
+                        <td className="py-2.5 px-3.5 sm:px-4 font-medium text-slate-800">
                           Gross Student Enrollment Sales
                         </td>
-                        <td className="py-2.5 px-4 text-center text-slate-500">100% Volume</td>
-                        <td className="py-2.5 px-4 text-right font-bold text-slate-900">
+                        <td className="py-2.5 px-3 text-center text-slate-500 font-mono">
+                          100% Volume
+                        </td>
+                        <td className="py-2.5 px-3.5 sm:px-4 text-right font-bold text-slate-900 font-mono">
                           ₹ {formatINR(selectedVoucher.gross_sales)}
                         </td>
                       </tr>
 
                       {selectedVoucher.refunds > 0 && (
                         <tr className="text-rose-600">
-                          <td className="py-2.5 px-4 font-medium">Refunds & Reversals Deducted</td>
-                          <td className="py-2.5 px-4 text-center">Reversal</td>
-                          <td className="py-2.5 px-4 text-right font-medium">
+                          <td className="py-2.5 px-3.5 sm:px-4 font-medium">
+                            Refunds & Reversals Deducted
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-mono">
+                            Reversal
+                          </td>
+                          <td className="py-2.5 px-3.5 sm:px-4 text-right font-medium font-mono">
                             - ₹ {formatINR(selectedVoucher.refunds)}
                           </td>
                         </tr>
                       )}
 
                       <tr>
-                        <td className="py-2.5 px-4 font-medium text-slate-700">
+                        <td className="py-2.5 px-3.5 sm:px-4 font-medium text-slate-700">
                           Platform Infrastructure & Gateway Commission
                         </td>
-                        <td className="py-2.5 px-4 text-center text-slate-500 font-mono">
+                        <td className="py-2.5 px-3 text-center text-slate-500 font-mono">
                           {selectedVoucher.platform_commission_rate}%
                         </td>
-                        <td className="py-2.5 px-4 text-right font-medium text-purple-700">
+                        <td className="py-2.5 px-3.5 sm:px-4 text-right font-medium text-purple-700 font-mono">
                           - ₹ {formatINR(selectedVoucher.platform_commission)}
                         </td>
                       </tr>
 
                       <tr>
-                        <td className="py-2.5 px-4 font-medium text-slate-700">
+                        <td className="py-2.5 px-3.5 sm:px-4 font-medium text-slate-700">
                           GST on Platform Commission (CGST 9% + SGST 9%)
                         </td>
-                        <td className="py-2.5 px-4 text-center text-slate-500 font-mono">18.0%</td>
-                        <td className="py-2.5 px-4 text-right font-medium text-purple-700">
+                        <td className="py-2.5 px-3 text-center text-slate-500 font-mono">
+                          18.0%
+                        </td>
+                        <td className="py-2.5 px-3.5 sm:px-4 text-right font-medium text-purple-700 font-mono">
                           - ₹ {formatINR(selectedVoucher.gst_on_commission)}
                         </td>
                       </tr>
 
                       <tr className="bg-slate-50 font-semibold text-slate-800">
-                        <td className="py-2.5 px-4">Subtotal Net Earnings (Pre-Tax)</td>
-                        <td className="py-2.5 px-4 text-center">-</td>
-                        <td className="py-2.5 px-4 text-right">
+                        <td className="py-2.5 px-3.5 sm:px-4">
+                          Subtotal Net Earnings (Pre-Tax)
+                        </td>
+                        <td className="py-2.5 px-3 text-center text-slate-400 font-mono">
+                          —
+                        </td>
+                        <td className="py-2.5 px-3.5 sm:px-4 text-right font-mono">
                           ₹ {formatINR(selectedVoucher.net_earnings)}
                         </td>
                       </tr>
 
                       <tr>
-                        <td className="py-2.5 px-4 font-medium text-slate-700">
-                          TDS Withheld under Section 194J (Professional / Royalty)
+                        <td className="py-2.5 px-3.5 sm:px-4 font-medium text-slate-700">
+                          TDS Withheld u/s 194J (Professional / Royalty)
                         </td>
-                        <td className="py-2.5 px-4 text-center text-slate-500 font-mono">
+                        <td className="py-2.5 px-3 text-center text-slate-500 font-mono">
                           {(selectedVoucher.tds_rate || 0) > 0 ? `${selectedVoucher.tds_rate}%` : "0.0%"}
                         </td>
-                        <td className="py-2.5 px-4 text-right font-medium text-blue-700">
-                          - ₹ {formatINR(selectedVoucher.tds_amount)}
+                        <td className="py-2.5 px-3.5 sm:px-4 text-right font-medium text-blue-700 font-mono">
+                          {(selectedVoucher.tds_amount || 0) > 0 ? `- ₹ ${formatINR(selectedVoucher.tds_amount)}` : "₹ 0.00"}
                         </td>
                       </tr>
 
-                      <tr className="bg-emerald-500/10 border-t-2 border-emerald-400 font-extrabold text-sm">
-                        <td className="py-3 px-4 text-emerald-950">
+                      <tr className="bg-emerald-500/10 border-t-2 border-emerald-400 font-extrabold text-sm sm:text-base">
+                        <td className="py-3 px-3.5 sm:px-4 text-emerald-950 font-bold">
                           TOTAL NET DISBURSED PAYOUT
                         </td>
-                        <td className="py-3 px-4 text-center text-emerald-800 text-xs font-normal">
+                        <td className="py-3 px-3 text-center text-emerald-800 text-xs font-normal">
                           Bank Transfer
                         </td>
-                        <td className="py-3 px-4 text-right text-emerald-900 text-base">
+                        <td className="py-3 px-3.5 sm:px-4 text-right text-emerald-900 font-mono font-extrabold">
                           ₹ {formatINR(selectedVoucher.net_payout)}
                         </td>
                       </tr>
@@ -1256,17 +1664,29 @@ export default function InstructorPayoutsTab({
               </div>
 
               {/* Digital Certification Footer */}
-              <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center text-[11px] text-slate-400 gap-2">
-                <span>System generated digital voucher • No physical signature required</span>
+              <div className="pt-3 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center text-[11px] text-slate-400 gap-2">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>System generated digital voucher • No physical signature required</span>
+                </div>
                 <span className="font-mono">Generated: {formatDate(selectedVoucher.created_at)}</span>
               </div>
             </div>
 
             {/* Modal Bottom Bar */}
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <div className="px-4 sm:px-6 py-3 sm:py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setSelectedSlipBilling(selectedVoucher.name)}
+                className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+              >
+                <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Download PDF Slip</span>
+              </button>
+
               <button
                 onClick={() => setSelectedVoucher(null)}
-                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer"
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer transition-all shadow-xs"
               >
                 Close Voucher
               </button>
@@ -1279,9 +1699,9 @@ export default function InstructorPayoutsTab({
           MODAL 2: ADMIN - GENERATE PAYOUT SHEET
       ═════════════════════════════════════════════════════════ */}
       {showGenerateModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-start justify-center p-3 sm:p-5 md:p-6 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full mt-24 sm:mt-28 md:mt-32 mb-12 max-h-[calc(100vh-8.5rem)] sm:max-h-[calc(100vh-9.5rem)] flex flex-col border border-slate-200 shadow-2xl overflow-hidden shrink-0">
+            <div className="px-5 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <Plus className="w-4 h-4 text-indigo-400" />
                 <h3 className="text-sm font-bold">Generate Instructor Payout Sheet</h3>
@@ -1294,7 +1714,7 @@ export default function InstructorPayoutsTab({
               </button>
             </div>
 
-            <form onSubmit={handleGenerateSheet} className="p-6 space-y-4 text-xs">
+            <form onSubmit={handleGenerateSheet} className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto flex-1">
               {generateError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -1397,9 +1817,9 @@ export default function InstructorPayoutsTab({
           MODAL 3: ADMIN - MARK PAYOUT PAID (DISBURSE)
       ═════════════════════════════════════════════════════════ */}
       {showMarkPaidModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-start justify-center p-3 sm:p-5 md:p-6 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full mt-24 sm:mt-28 md:mt-32 mb-12 max-h-[calc(100vh-8.5rem)] sm:max-h-[calc(100vh-9.5rem)] flex flex-col border border-slate-200 shadow-2xl overflow-hidden shrink-0">
+            <div className="px-5 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-emerald-400" />
                 <h3 className="text-sm font-bold">Record Bank Disbursement</h3>
@@ -1412,7 +1832,7 @@ export default function InstructorPayoutsTab({
               </button>
             </div>
 
-            <form onSubmit={handleMarkPaid} className="p-6 space-y-4 text-xs">
+            <form onSubmit={handleMarkPaid} className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto flex-1">
               {markPaidError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
