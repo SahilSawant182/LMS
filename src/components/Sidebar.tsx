@@ -23,7 +23,8 @@ import {
   Percent,
   Tags,
   UserCheck,
-  Code2
+  Code2,
+  DollarSign
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -184,6 +185,14 @@ export default function Sidebar({
       icon: UserCheck, 
       badge: 'Staff', 
       badgeColor: 'bg-violet-100 text-violet-700 font-semibold',
+      instructorOnly: true 
+    },
+    { 
+      name: 'Sales & Earnings', 
+      href: '/sales-earnings', 
+      icon: DollarSign, 
+      badge: 'Finance', 
+      badgeColor: 'bg-emerald-100 text-emerald-700 font-semibold',
       instructorOnly: true 
     },
   ];

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet } from 'lucide-react';
+import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/services/auth.services';
@@ -288,12 +288,12 @@ export default function Navbar() {
                           </Link>
                           {isInstructor ? (
                             <Link
-                              href="/dashboard?tab=payouts"
+                              href="/sales-earnings"
                               onClick={() => setIsDropdownOpen(false)}
                               className="flex items-center px-4 py-2 text-xs text-emerald-700 hover:bg-emerald-50 transition-colors font-medium"
                             >
-                              <Wallet className="w-4 h-4 mr-2 text-emerald-600" />
-                              Payout Dashboard
+                              <TrendingUp className="w-4 h-4 mr-2 text-emerald-600" />
+                              Sales & Earnings
                             </Link>
                           ) : (
                             <Link
