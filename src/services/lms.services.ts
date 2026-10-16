@@ -1876,6 +1876,44 @@ export const deleteBatchDiscussionReply = async (replyName: string): Promise<unk
   }
 };
 
+export interface UpdateBatchDiscussionReplyPayload {
+  reply_name: string;
+  reply: string;
+}
+
+/**
+ * Updates an existing discussion reply for an LMS Batch thread.
+ * Endpoint: lms.lms.doctype.lms_batch.lms_batch.update_discussion_reply
+ * Arguments: reply_name, reply
+ */
+export const updateBatchDiscussionReply = async (
+  payload: UpdateBatchDiscussionReplyPayload
+): Promise<unknown> => {
+  const body = {
+    reply_name: payload.reply_name,
+    reply: payload.reply,
+  };
+
+  try {
+    const res = await apiService.post(
+      "method/lms.lms.doctype.lms_batch.lms_batch.update_discussion_reply",
+      body
+    );
+    return res?.data || res?.message || res;
+  } catch (err: unknown) {
+    console.warn("update_discussion_reply RPC failed, trying resource fallback:", err);
+    try {
+      const res = await apiService.put(
+        `resource/LMS Discussion Reply/${encodeURIComponent(payload.reply_name)}`,
+        { reply: payload.reply }
+      );
+      return res?.data || res?.message || res;
+    } catch {
+      throw err;
+    }
+  }
+};
+
 /**
  * Resolves the single-thread discussion topic name for an LMS Batch.
  */

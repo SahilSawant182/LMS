@@ -24,11 +24,13 @@ import {
   ShieldCheck,
   GraduationCap,
   X,
-  Trash2
+  Trash2,
+  Check
 } from "lucide-react";
 import {
   getBatchDiscussionReplies,
   createBatchDiscussionReply,
+  updateBatchDiscussionReply,
   deleteBatchDiscussionReply,
   BatchDiscussionReply
 } from "@/services/lms.services";
@@ -127,6 +129,50 @@ function formatMessageToHtml(raw: string): string {
   return paragraphs.join("");
 }
 
+// Convert stored HTML back into editable markdown/plain text
+function htmlToEditText(html: string): string {
+  if (!html) return "";
+  if (!/<[a-z][\s\S]*>/i.test(html)) {
+    return html;
+  }
+
+  let text = html;
+  // Code blocks: <pre ...><code ...>...</code></pre>
+  text = text.replace(/<pre[^>]*><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi, "```\n$1\n```");
+  // Inline code: <code>...</code>
+  text = text.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, "`$1`");
+  // Blockquotes: <blockquote>...</blockquote>
+  text = text.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, "> $1\n");
+  // Lists: <li>...</li>
+  text = text.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, "- $1\n");
+  // Remove wrapper list tags
+  text = text.replace(/<\/?(ul|ol)[^>]*>/gi, "");
+  // Links: <a href="url"...>text</a> -> [text](url)
+  text = text.replace(/<a\s+[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, "[$2]($1)");
+  // Strong / Bold
+  text = text.replace(/<\/?(strong|b)[^>]*>/gi, "**");
+  // Em / Italic
+  text = text.replace(/<\/?(em|i)[^>]*>/gi, "*");
+  // Line breaks
+  text = text.replace(/<br\s*\/?>/gi, "\n");
+  // Paragraphs
+  text = text.replace(/<\/p>\s*<p[^>]*>/gi, "\n\n");
+  text = text.replace(/<\/?p[^>]*>/gi, "");
+  // Divs
+  text = text.replace(/<\/div>\s*<div[^>]*>/gi, "\n");
+  text = text.replace(/<\/?div[^>]*>/gi, "");
+  // HTML entities
+  text = text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+
+  return text.trim();
+}
+
 export default function BatchDiscussions({
   batchId,
   batchTitle,
@@ -143,12 +189,16 @@ export default function BatchDiscussions({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [deletingReplyId, setDeletingReplyId] = useState<string | null>(null);
+  const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState<string>("");
+  const [updatingReplyId, setUpdatingReplyId] = useState<string | null>(null);
 
   const [userEmail, setUserEmail] = useState<string>("");
   const [userName, setUserName] = useState<string>("");
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const repliesEndRef = useRef<HTMLDivElement>(null);
 
   // Load user information from local storage
@@ -329,6 +379,66 @@ export default function BatchDiscussions({
       setTimeout(() => setSubmitError(null), 6000);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Start editing a reply
+  const handleStartEdit = (reply: BatchDiscussionReply) => {
+    const replyId = reply.name || reply.reply_name || "";
+    setEditingReplyId(replyId);
+    setEditingText(htmlToEditText(reply.reply || ""));
+    setTimeout(() => {
+      editTextareaRef.current?.focus();
+    }, 50);
+  };
+
+  // Cancel edit
+  const handleCancelEdit = () => {
+    setEditingReplyId(null);
+    setEditingText("");
+  };
+
+  // Save edited discussion reply
+  const handleSaveEdit = async (replyName: string) => {
+    if (!replyName) return;
+    if (!editingText.trim()) {
+      setSubmitError("Reply content cannot be empty.");
+      setTimeout(() => setSubmitError(null), 4000);
+      return;
+    }
+
+    setUpdatingReplyId(replyName);
+    const updatedHtml = formatMessageToHtml(editingText);
+
+    try {
+      await updateBatchDiscussionReply({
+        reply_name: replyName,
+        reply: updatedHtml,
+      });
+
+      // Optimistically update replies in state
+      setReplies((prev) =>
+        prev.map((r) =>
+          (r.name || r.reply_name) === replyName
+            ? { ...r, reply: updatedHtml, modified: new Date().toISOString() }
+            : r
+        )
+      );
+
+      setEditingReplyId(null);
+      setEditingText("");
+      setSuccessToast("Reply updated successfully!");
+      setTimeout(() => setSuccessToast(null), 4000);
+    } catch (err: any) {
+      console.error("Failed to update discussion reply:", err);
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to update reply. Please try again.";
+      setSubmitError(errMsg);
+      setTimeout(() => setSubmitError(null), 5000);
+    } finally {
+      setUpdatingReplyId(null);
     }
   };
 
@@ -560,36 +670,117 @@ export default function BatchDiscussions({
                         </div>
                       </div>
 
-                      {/* Delete action for message owner or instructor */}
+                      {/* Edit & Delete actions for message owner or instructor */}
                       {(reply.owner === userEmail || isInstructor) && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleDeleteReply(reply.name || reply.reply_name || "")
-                          }
-                          disabled={
-                            deletingReplyId === (reply.name || reply.reply_name)
-                          }
-                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer disabled:opacity-50 shrink-0"
-                          title="Delete message"
-                          aria-label="Delete message"
-                        >
-                          {deletingReplyId === (reply.name || reply.reply_name) ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-rose-500" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+                          {/* Edit button */}
+                          {editingReplyId !== (reply.name || reply.reply_name) && (
+                            <button
+                              type="button"
+                              onClick={() => handleStartEdit(reply)}
+                              disabled={
+                                deletingReplyId === (reply.name || reply.reply_name) ||
+                                updatingReplyId === (reply.name || reply.reply_name)
+                              }
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all cursor-pointer disabled:opacity-50"
+                              title="Edit message"
+                              aria-label="Edit message"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
                           )}
-                        </button>
+
+                          {/* Delete button */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDeleteReply(reply.name || reply.reply_name || "")
+                            }
+                            disabled={
+                              deletingReplyId === (reply.name || reply.reply_name) ||
+                              editingReplyId === (reply.name || reply.reply_name)
+                            }
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer disabled:opacity-50"
+                            title="Delete message"
+                            aria-label="Delete message"
+                          >
+                            {deletingReplyId === (reply.name || reply.reply_name) ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-rose-500" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
                       )}
                     </div>
 
-                    {/* Message Content */}
-                    <div className="pl-0 sm:pl-13">
-                      <div
-                        className="prose prose-sm max-w-none text-slate-700 leading-relaxed break-words"
-                        dangerouslySetInnerHTML={{ __html: reply.reply }}
-                      />
-                    </div>
+                    {/* Message Content or Inline Editor */}
+                    {editingReplyId === (reply.name || reply.reply_name) ? (
+                      <div className="pl-0 sm:pl-13 mt-1 space-y-3">
+                        <div className="bg-slate-50/70 rounded-xl border border-slate-200 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 transition-all p-3">
+                          <textarea
+                            ref={editTextareaRef}
+                            value={editingText}
+                            onChange={(e) => setEditingText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveEdit(reply.name || reply.reply_name || "");
+                              } else if (e.key === "Escape") {
+                                e.preventDefault();
+                                handleCancelEdit();
+                              }
+                            }}
+                            rows={3}
+                            className="w-full bg-transparent text-sm text-slate-800 outline-none resize-y placeholder:text-slate-400 leading-relaxed font-normal"
+                            placeholder="Edit your message... (Markdown or HTML supported)"
+                          />
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <span className="text-[11px] text-slate-400">
+                            Press <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-mono text-slate-600">Ctrl+Enter</kbd> to save, <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-mono text-slate-600">Esc</kbd> to cancel
+                          </span>
+                          <div className="flex items-center gap-2 self-end sm:self-auto">
+                            <button
+                              type="button"
+                              onClick={handleCancelEdit}
+                              disabled={updatingReplyId === (reply.name || reply.reply_name)}
+                              className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSaveEdit(reply.name || reply.reply_name || "")}
+                              disabled={
+                                updatingReplyId === (reply.name || reply.reply_name) ||
+                                !editingText.trim()
+                              }
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer disabled:opacity-50 disabled:transform-none"
+                            >
+                              {updatingReplyId === (reply.name || reply.reply_name) ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Saving...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Save Changes</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="pl-0 sm:pl-13">
+                        <div
+                          className="prose prose-sm max-w-none text-slate-700 leading-relaxed break-words"
+                          dangerouslySetInnerHTML={{ __html: reply.reply }}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}
