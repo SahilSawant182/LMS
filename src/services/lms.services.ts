@@ -1797,6 +1797,252 @@ export const updateLmsSettings = async (payload: Record<string, any>): Promise<a
   return apiService.post("method/lms.lms.doctype.lms_settings.lms_settings.update_lms_settings", payload);
 };
 
+// ==========================================
+// Batch Discussions Services
+// ==========================================
+
+export interface CreateBatchDiscussionReplyPayload {
+  doctype?: string; // default: 'LMS Batch'
+  docname: string;  // batch name/id, e.g. "BATCH-001"
+  reply: string;    // message content/HTML string
+  title?: string;   // batch title
+}
+
+export interface BatchDiscussionReply {
+  name: string;
+  reply_name?: string;
+  reply: string;
+  owner: string;
+  user?: string;
+  user_name?: string;
+  full_name?: string;
+  user_image?: string | null;
+  creation: string;
+  modified?: string;
+  topic?: string;
+  [key: string]: unknown;
+}
+
+export interface GetBatchDiscussionRepliesResponse {
+  topic?: string;
+  replies: BatchDiscussionReply[];
+}
+
+/**
+ * Creates a discussion reply for an LMS Batch thread.
+ * Endpoint: lms.lms.doctype.lms_batch.lms_batch.create_discussion_reply
+ */
+export const createBatchDiscussionReply = async (
+  payload: CreateBatchDiscussionReplyPayload
+): Promise<unknown> => {
+  const body = {
+    doctype: payload.doctype || "LMS Batch",
+    docname: payload.docname,
+    reply: payload.reply,
+    title: payload.title || payload.docname,
+  };
+
+  const res = await apiService.post(
+    "method/lms.lms.doctype.lms_batch.lms_batch.create_discussion_reply",
+    body
+  );
+  return res?.data || res?.message || res;
+};
+
+/**
+ * Deletes a discussion reply from an LMS Batch thread.
+ * Endpoint: lms.lms.doctype.lms_batch.lms_batch.delete_discussion_reply
+ * Arguments: reply_name only
+ */
+export const deleteBatchDiscussionReply = async (replyName: string): Promise<unknown> => {
+  const body = { reply_name: replyName };
+  try {
+    const res = await apiService.post(
+      "method/lms.lms.doctype.lms_batch.lms_batch.delete_discussion_reply",
+      body,
+      { params: body }
+    );
+    return res?.data || res?.message || res;
+  } catch (err: unknown) {
+    console.warn("delete_discussion_reply RPC failed, trying resource fallback:", err);
+    try {
+      const res = await apiService.delete(
+        `resource/LMS Discussion Reply/${encodeURIComponent(replyName)}`
+      );
+      return res?.data || res?.message || res;
+    } catch {
+      throw err;
+    }
+  }
+};
+
+export interface UpdateBatchDiscussionReplyPayload {
+  reply_name: string;
+  reply: string;
+}
+
+/**
+ * Updates an existing discussion reply for an LMS Batch thread.
+ * Endpoint: lms.lms.doctype.lms_batch.lms_batch.update_discussion_reply
+ * Arguments: reply_name, reply
+ */
+export const updateBatchDiscussionReply = async (
+  payload: UpdateBatchDiscussionReplyPayload
+): Promise<unknown> => {
+  const body = {
+    reply_name: payload.reply_name,
+    reply: payload.reply,
+  };
+
+  try {
+    const res = await apiService.post(
+      "method/lms.lms.doctype.lms_batch.lms_batch.update_discussion_reply",
+      body
+    );
+    return res?.data || res?.message || res;
+  } catch (err: unknown) {
+    console.warn("update_discussion_reply RPC failed, trying resource fallback:", err);
+    try {
+      const res = await apiService.put(
+        `resource/LMS Discussion Reply/${encodeURIComponent(payload.reply_name)}`,
+        { reply: payload.reply }
+      );
+      return res?.data || res?.message || res;
+    } catch {
+      throw err;
+    }
+  }
+};
+
+/**
+ * Resolves the single-thread discussion topic name for an LMS Batch.
+ */
+export const getBatchDiscussionTopic = async (batchId: string): Promise<string> => {
+  if (!batchId) return "";
+  try {
+    const topicRes = await apiService.get("method/lms.lms.utils.get_discussion_topics", {
+      params: {
+        doctype: "LMS Batch",
+        docname: batchId,
+        single_thread: true,
+      },
+    });
+
+    const topicsData =
+      topicRes?.message?.data || topicRes?.data || topicRes?.message || topicRes;
+
+    let topicName = "";
+    if (Array.isArray(topicsData) && topicsData.length > 0) {
+      topicName = topicsData[0]?.name || topicsData[0]?.topic || "";
+    } else if (topicsData && typeof topicsData === "object") {
+      const obj = topicsData as Record<string, unknown>;
+      topicName = (obj.name as string) || (obj.topic as string) || "";
+    } else if (typeof topicsData === "string") {
+      topicName = topicsData;
+    }
+
+    return topicName;
+  } catch (error) {
+    console.warn(`Could not resolve discussion topic for batch ${batchId}:`, error);
+    return "";
+  }
+};
+
+/**
+ * Fetches discussion replies for a given batch.
+ * Strategy:
+ * 1. Resolves topic name (either provided or retrieved via getBatchDiscussionTopic).
+ * 2. Calls lms.lms.doctype.lms_batch.lms_batch.get_discussion_replies with { topic: topicName } in request body (POST) and params.
+ * 3. Falls back to GET on dedicated endpoint or interim lms.lms.utils.get_discussion_replies.
+ */
+export const getBatchDiscussionReplies = async (
+  batchId: string,
+  topicId?: string
+): Promise<GetBatchDiscussionRepliesResponse> => {
+  if (!batchId && !topicId) {
+    return { topic: "", replies: [] };
+  }
+
+  // 1. Resolve topic
+  let topicName = topicId || "";
+  if (!topicName) {
+    topicName = await getBatchDiscussionTopic(batchId);
+  }
+
+  if (!topicName) {
+    return { topic: "", replies: [] };
+  }
+
+  // 2. Primary call: POST dedicated endpoint with {"topic": topicName} in body and params
+  try {
+    const postRes = await apiService.post(
+      "method/lms.lms.doctype.lms_batch.lms_batch.get_discussion_replies",
+      { topic: topicName, batch: batchId, docname: batchId },
+      { params: { topic: topicName, batch: batchId, docname: batchId } }
+    );
+    const postData = postRes?.message?.data || postRes?.data || postRes?.message || postRes;
+    const replies = Array.isArray(postData)
+      ? postData
+      : Array.isArray(postData?.replies)
+      ? postData.replies
+      : null;
+
+    if (replies !== null) {
+      return { topic: topicName, replies };
+    }
+  } catch (postErr) {
+    console.warn("POST to lms_batch.get_discussion_replies failed, trying GET:", postErr);
+  }
+
+  // 3. Fallback: GET dedicated endpoint with ?topic=...
+  try {
+    const directRes = await apiService.get(
+      "method/lms.lms.doctype.lms_batch.lms_batch.get_discussion_replies",
+      {
+        params: { topic: topicName, batch: batchId, docname: batchId },
+      }
+    );
+    const directData = directRes?.message?.data || directRes?.data || directRes?.message || directRes;
+    const replies = Array.isArray(directData)
+      ? directData
+      : Array.isArray(directData?.replies)
+      ? directData.replies
+      : null;
+
+    if (replies !== null) {
+      return { topic: topicName, replies };
+    }
+  } catch (getErr) {
+    console.warn("GET to lms_batch.get_discussion_replies failed, trying utils:", getErr);
+  }
+
+  // 4. Fallback: Interim standard Frappe LMS discussion utilities (get_discussion_replies)
+  try {
+    const repliesRes = await apiService.get("method/lms.lms.utils.get_discussion_replies", {
+      params: {
+        topic: topicName,
+      },
+    });
+
+    const rawReplies =
+      repliesRes?.message?.data || repliesRes?.data || repliesRes?.message || repliesRes;
+
+    const repliesList: BatchDiscussionReply[] = Array.isArray(rawReplies)
+      ? rawReplies
+      : Array.isArray(rawReplies?.replies)
+      ? rawReplies.replies
+      : [];
+
+    return {
+      topic: topicName,
+      replies: repliesList,
+    };
+  } catch (error) {
+    console.error(`Failed to fetch discussion replies for topic ${topicName}:`, error);
+    throw error;
+  }
+};
+
 export * from './payment.services';
 
 
