@@ -180,8 +180,8 @@ export default function BatchDetailsPage() {
         <div className="flex-grow flex flex-col justify-center items-center p-8">
           <h2 className="text-2xl font-bold text-red-600 mb-4">Batch Error</h2>
           <p className="text-slate-600">{error || 'Batch not found.'}</p>
-          <Link href="/" className="mt-6 px-6 py-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-colors">
-            Back to Home
+          <Link href="/batches" className="mt-6 px-6 py-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-colors">
+            Back to Batches
           </Link>
         </div>
       </div>
@@ -217,11 +217,11 @@ export default function BatchDetailsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="mb-3">
             <Link 
-              href="/" 
+              href="/batches" 
               className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-200 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              Back to Home
+              Back to Batches
             </Link>
           </div>
           <div className="flex flex-col lg:flex-row justify-between items-start gap-6">

@@ -5,6 +5,7 @@ import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { HelpCircle, FileText, ChevronRight, Search, PlusCircle, AlignLeft, CheckSquare, List, MessageSquare } from 'lucide-react';
 import { getQuestions } from '@/services/lms.services';
+import { isAuthorizedInstructor } from '@/services/auth.services';
 import { formatDate } from '@/utils/formatters';
 
 interface Question {
@@ -21,8 +22,10 @@ export default function QuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isInstructor, setIsInstructor] = useState(false);
 
   useEffect(() => {
+    setIsInstructor(isAuthorizedInstructor());
     const fetchQuestions = async () => {
       setLoading(true);
       try {
@@ -99,12 +102,14 @@ export default function QuestionsPage() {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
                 <input type="text" placeholder="Search questions..." className="pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-full sm:w-64 transition-all" />
               </div>
-              <Link 
-                href="/quizzes/create-question"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 shadow-sm whitespace-nowrap"
-              >
-                <PlusCircle className="w-4 h-4" /> New Question
-              </Link>
+              {isInstructor && (
+                <Link 
+                  href="/quizzes/create-question"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 shadow-sm whitespace-nowrap"
+                >
+                  <PlusCircle className="w-4 h-4" /> New Question
+                </Link>
+              )}
             </div>
           </div>
 
@@ -161,12 +166,14 @@ export default function QuestionsPage() {
               <p className="text-slate-500 max-w-sm mx-auto mb-6">
                 Your question bank is empty. Create your first question to get started.
               </p>
-              <Link 
-                href="/quizzes/create-question"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm"
-              >
-                Create Question
-              </Link>
+              {isInstructor && (
+                <Link 
+                  href="/quizzes/create-question"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm"
+                >
+                  Create Question
+                </Link>
+              )}
             </div>
           )}
         </div>

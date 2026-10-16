@@ -150,7 +150,7 @@ export default function MyPaymentsPage() {
             </p>
           </div>
           <Link
-            href="/"
+            href="/courses"
             className="inline-flex items-center gap-2 text-sm font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-xl transition-colors border border-indigo-100"
           >
             Explore Courses
@@ -252,7 +252,7 @@ export default function MyPaymentsPage() {
               You haven&apos;t completed any paid course enrollments yet. Discover our hands-on programs to start learning!
             </p>
             <Link
-              href="/"
+              href="/courses"
               className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3 rounded-xl shadow-md text-sm transition-all"
             >
               Browse Course Catalog

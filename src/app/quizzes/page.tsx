@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getQuizzes } from "@/services/lms.services";
+import { isAuthorizedInstructor } from "@/services/auth.services";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 
@@ -18,8 +19,11 @@ export default function QuizzesPage() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isInstructor, setIsInstructor] = useState(false);
 
   useEffect(() => {
+    setIsInstructor(isAuthorizedInstructor());
+
     const fetchQuizzes = async () => {
       try {
         const res = await getQuizzes();
@@ -59,15 +63,17 @@ export default function QuizzesPage() {
               Browse and take available quizzes to test your knowledge.
             </p>
           </div>
-          <div>
-            <Link 
-              href="/quizzes/create-question" 
-              className="inline-flex items-center px-3.5 py-2 bg-indigo-500 hover:bg-indigo-400 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors border border-indigo-400/50"
-            >
-              <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-              Create Question
-            </Link>
-          </div>
+          {isInstructor && (
+            <div>
+              <Link 
+                href="/quizzes/create-question" 
+                className="inline-flex items-center px-3.5 py-2 bg-indigo-500 hover:bg-indigo-400 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors border border-indigo-400/50"
+              >
+                <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                Create Question
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 

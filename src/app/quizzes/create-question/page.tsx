@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createQuestion, CreateQuestionPayload } from "@/services/lms.services";
+import { isAuthorizedInstructor } from "@/services/auth.services";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import { ShieldAlert, ArrowLeft } from "lucide-react";
 
 export default function CreateQuestionPage() {
   const router = useRouter();
@@ -12,6 +14,8 @@ export default function CreateQuestionPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
   const [question, setQuestion] = useState("");
   const [type, setType] = useState("Single Choice");
@@ -20,6 +24,19 @@ export default function CreateQuestionPage() {
   const [explanations, setExplanations] = useState(["", "", "", ""]);
   const [correctOption, setCorrectOption] = useState<number>(0); // for Single Choice
   const [correctOptions, setCorrectOptions] = useState<boolean[]>([false, false, false, false]); // for Multiple Choice
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const apiKey = localStorage.getItem("apiKey");
+      if (!apiKey) {
+        router.push("/login");
+        return;
+      }
+      const authorized = isAuthorizedInstructor();
+      setIsAuthorized(authorized);
+      setCheckingAuth(false);
+    }
+  }, [router]);
 
   const handlePossibilityChange = (index: number, value: string) => {
     const newPossibilities = [...possibilities];
@@ -41,6 +58,10 @@ export default function CreateQuestionPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAuthorized) {
+      setError("Unauthorized. Question creation is restricted to instructors and administrators.");
+      return;
+    }
     setLoading(true);
     setError(null);
     setSuccess(false);
@@ -107,6 +128,46 @@ export default function CreateQuestionPage() {
     }
   };
 
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+        <Navbar />
+        <div className="flex-grow flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+        <Navbar />
+        <div className="flex-grow flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-100 p-8 text-center animate-fade-in">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-5 border border-amber-100 shadow-inner">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-full inline-block mb-3">
+              Instructor Role Required
+            </span>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Access Restricted</h2>
+            <p className="text-xs sm:text-sm text-slate-500 mb-6 leading-relaxed">
+              Creating assessment questions is restricted to authorized instructors and administrators. As a student, you can view and take quizzes from the assessments catalog.
+            </p>
+            <Link
+              href="/quizzes"
+              className="inline-flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all shadow-md shadow-indigo-600/20"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Assessments
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Navbar />
@@ -115,7 +176,7 @@ export default function CreateQuestionPage() {
       <div className="bg-slate-900 text-white pt-10 pb-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           <Link href="/quizzes" className="inline-flex items-center text-indigo-300 hover:text-white mb-6 transition-colors text-sm font-medium">
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+            <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Assessments
           </Link>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">Create Question</h1>

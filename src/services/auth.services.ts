@@ -31,3 +31,24 @@ export const validateMobileOtp = async (payload: { mobile_no: string, otp: strin
 export const validateEmailOtp = async (payload: { email: string, otp: string }) => {
   return apiService.post("method/lms.lms.lms_login.validate_email_otp", payload);
 };
+
+export const isAuthorizedInstructor = (): boolean => {
+  if (typeof window === "undefined") return false;
+  try {
+    const isInst = localStorage.getItem("isInstructor");
+    if (isInst === "true") return true;
+
+    const rolesStr = localStorage.getItem("roles");
+    if (!rolesStr) return false;
+
+    const roles = rolesStr.startsWith("[") ? JSON.parse(rolesStr) : rolesStr;
+    const authorizedRoles = ["Instructor", "Course Creator", "Moderator", "Administrator", "System Manager"];
+
+    if (Array.isArray(roles)) {
+      return roles.some((r: string) => authorizedRoles.includes(r));
+    }
+    return authorizedRoles.some((r: string) => rolesStr.includes(r));
+  } catch {
+    return false;
+  }
+};

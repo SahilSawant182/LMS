@@ -575,7 +575,7 @@ export function DashboardContent() {
                     <span>Billing & Receipts</span>
                   </Link>
                   <Link
-                    href="/"
+                    href="/courses"
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold transition-all shadow-sm"
                   >
                     <BookOpen className="w-4 h-4" />
@@ -1633,7 +1633,7 @@ export function DashboardContent() {
                       Explore our comprehensive catalog of industry-ready courses and start learning today.
                     </p>
                     <Link
-                      href="/"
+                      href="/courses"
                       className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-all shadow-sm"
                     >
                       <BookOpen className="w-4 h-4" />
