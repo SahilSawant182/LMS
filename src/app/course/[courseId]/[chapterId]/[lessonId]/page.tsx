@@ -8,6 +8,7 @@ import { getImageUrl } from '@/services/api.services';
 import { CourseWithEnrollment } from '@/types/payment.types';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
+import { showToast } from '@/components/ui/Toast';
 import { 
   ArrowLeft, 
   CheckCircle, 
@@ -28,7 +29,11 @@ import {
   Copy,
   Check,
   FileText,
-  Download
+  Download,
+  Trophy,
+  X,
+  CheckCircle2,
+  RotateCcw
 } from 'lucide-react';
 
 interface EditorBlock {
@@ -560,6 +565,7 @@ export default function LessonPage() {
   const [updatingProgress, setUpdatingProgress] = useState(false);
   const [isCompletedLocally, setIsCompletedLocally] = useState(false);
   const [isCurriculumSidebarOpen, setIsCurriculumSidebarOpen] = useState(true);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
 
   // Automatically shrink the navigation sidebar when opening a particular lesson
   useEffect(() => {
@@ -792,11 +798,31 @@ export default function LessonPage() {
       });
       setIsCompletedLocally(true);
       const progressRes = await getCourseProgress(courseId);
+      const updatedProgress = progressRes?.message?.data || progressRes?.data || progressRes?.message || progressRes;
       if (progressRes?.message || progressRes?.data || progressRes) {
         setProgress(progressRes);
       }
+
+      // Check if all lessons across all chapters are now completed
+      const updatedRecords = updatedProgress?.records || updatedProgress?.data?.records || [];
+      const updatedPercent = Number(updatedProgress?.progress || 0);
+      const allDone = updatedPercent >= 100 || (flatLessons.length > 0 && flatLessons.every(l => {
+        const lName = l.lessonName || l.name;
+        const lTitle = l.title || l.lesson_name;
+        if (lName === (lessonData.name || lessonId)) return true;
+        return updatedRecords.some((r: any) => 
+          (r.lesson === lName || (lTitle && r.lesson === lTitle)) && 
+          (r.status === 'Complete' || r.status === 'Completed' || r.completed === 1)
+        );
+      }));
+
+      if (allDone) {
+        setShowCompletionModal(true);
+      } else {
+        showToast.success('Lesson marked as completed!');
+      }
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || 'Failed to update progress');
+      showToast.error(err.response?.data?.message || err.message || 'Failed to update progress');
     } finally {
       setUpdatingProgress(false);
     }
@@ -843,7 +869,42 @@ export default function LessonPage() {
   const currentIndex = flatLessons.findIndex(l => l.chapterName === chapterId && l.lessonName === currentTargetId);
   const prevLesson = currentIndex > 0 ? flatLessons[currentIndex - 1] : null;
   const nextLesson = currentIndex !== -1 && currentIndex < flatLessons.length - 1 ? flatLessons[currentIndex + 1] : null;
+  const isLastLesson = currentIndex !== -1 && currentIndex === flatLessons.length - 1;
   
+  // Normalized progress calculations
+  const normalizedProgress = progress?.message?.data || progress?.data || progress?.message || progress || {};
+  const progressPercent = typeof normalizedProgress.progress === 'number'
+    ? normalizedProgress.progress
+    : Number(normalizedProgress.progress || 0);
+  const completedLessonsCount = typeof normalizedProgress.completed_lessons === 'number'
+    ? normalizedProgress.completed_lessons
+    : Number(normalizedProgress.completed_lessons || 0);
+  const totalLessonsCount = typeof normalizedProgress.total_lessons === 'number'
+    ? normalizedProgress.total_lessons
+    : Number(normalizedProgress.total_lessons || 0);
+  const progressRecords = normalizedProgress.records || normalizedProgress.data?.records || [];
+
+  const isLessonComplete = (lessonItem: { lessonName?: string; name?: string; title?: string; lesson_name?: string }) => {
+    const lName = lessonItem.lessonName || lessonItem.name || '';
+    const lTitle = lessonItem.title || lessonItem.lesson_name || '';
+    if (isCompletedLocally && (lName === currentTargetId || lName === lessonId)) {
+      return true;
+    }
+    if (!Array.isArray(progressRecords)) return false;
+    return progressRecords.some((r: any) => 
+      (r.lesson === lName || (lTitle && r.lesson === lTitle)) && 
+      (r.status === 'Complete' || r.status === 'Completed' || r.completed === 1)
+    );
+  };
+
+  const currentLessonIsCompleted = isCompletedLocally || isLessonComplete({ lessonName: currentTargetId, title: lessonData?.title || lessonData?.lesson_name || '' });
+
+  const isCourseComplete = Boolean(
+    progressPercent >= 100 ||
+    (totalLessonsCount > 0 && completedLessonsCount >= totalLessonsCount) ||
+    (flatLessons.length > 0 && flatLessons.every(l => isLessonComplete(l)))
+  );
+
   // Find current lesson title from outline if lessonData is null
   const currentLessonFromOutline = flatLessons.find(l => l.lessonName === currentTargetId || l.lessonName === lessonId);
   const lessonDisplayTitle = lessonData?.title || lessonData?.lesson_name || lessonData?.name || currentLessonFromOutline?.title || `Lesson ${lessonId}`;
@@ -874,11 +935,33 @@ export default function LessonPage() {
               <div className="mt-5">
                 <div className="flex justify-between text-xs font-medium text-slate-400 mb-2">
                   <span>Course Progress</span>
-                  <span className="text-indigo-400">{progress.progress || 0}%</span>
+                  <span className={isCourseComplete ? "text-emerald-400 font-bold" : "text-indigo-400"}>
+                    {isCourseComplete ? "100%" : `${progressPercent}%`}
+                  </span>
                 </div>
                 <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-all duration-1000" style={{ width: `${progress.progress || 0}%` }}></div>
+                  <div 
+                    className={`h-full rounded-full transition-all duration-1000 ${
+                      isCourseComplete 
+                        ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.6)]" 
+                        : "bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]"
+                    }`} 
+                    style={{ width: `${isCourseComplete ? 100 : progressPercent}%` }}
+                  ></div>
                 </div>
+
+                {isCourseComplete && (
+                  <button
+                    onClick={() => setShowCompletionModal(true)}
+                    className="mt-3 w-full flex items-center justify-between p-2 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold hover:bg-emerald-500/25 transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Award className="w-4 h-4 text-emerald-400" />
+                      Course Completed
+                    </span>
+                    <span className="text-[10px] bg-emerald-500/30 px-2 py-0.5 rounded text-emerald-200">100%</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -894,10 +977,10 @@ export default function LessonPage() {
                     const isActive = l.name === lessonId && chapter.name === chapterId;
                     const isLessonLocked = isInstructor ? false : Boolean(l.is_locked);
                     const isLessonPreview = Number(l.include_in_preview) === 1;
-                    const isCompleted = 
-                      progress?.data?.records?.some((r: any) => (r.lesson === l.name || r.lesson === l.title || r.lesson === l.lesson_name) && r.status === 'Complete') || 
-                      progress?.records?.some((r: any) => (r.lesson === l.name || r.lesson === l.title || r.lesson === l.lesson_name) && r.status === 'Complete') || 
-                      (isCompletedLocally && isActive);
+                    const isCompleted = isLessonComplete({
+                      lessonName: l.name,
+                      title: l.title || l.lesson_name
+                    }) || (isCompletedLocally && isActive);
 
                     return (
                       <li key={l.name || lIndex}>
@@ -996,13 +1079,31 @@ export default function LessonPage() {
               >
                 Previous
               </button>
-              <button 
-                onClick={() => nextLesson && router.push(`/course/${courseId}/${encodeURIComponent(nextLesson.chapterName)}/${encodeURIComponent(nextLesson.lessonName)}`)}
-                disabled={!nextLesson}
-                className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm transition-all shadow-sm shadow-indigo-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                Next Lesson <ChevronRight className="w-4 h-4" />
-              </button>
+              
+              {nextLesson ? (
+                <button 
+                  onClick={() => router.push(`/course/${courseId}/${encodeURIComponent(nextLesson.chapterName)}/${encodeURIComponent(nextLesson.lessonName)}`)}
+                  className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm transition-all shadow-sm shadow-indigo-200 flex items-center gap-2 cursor-pointer"
+                >
+                  Next Lesson <ChevronRight className="w-4 h-4" />
+                </button>
+              ) : isCourseComplete ? (
+                <button
+                  onClick={() => setShowCompletionModal(true)}
+                  className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm rounded-lg shadow-sm shadow-emerald-200 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
+                >
+                  <Award className="w-4 h-4" /> Course Completed
+                </button>
+              ) : (
+                <button
+                  onClick={handleMarkComplete}
+                  disabled={updatingProgress}
+                  className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold text-sm rounded-lg shadow-sm shadow-indigo-200 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
+                >
+                  {updatingProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  Complete Course
+                </button>
+              )}
             </div>
           </div>
 
@@ -1214,44 +1315,147 @@ export default function LessonPage() {
                 </div>
               </div>
 
-              {/* Bottom Action: Mark as Complete */}
-              <div className="mt-10 flex justify-end">
-                {(() => {
-                  const targetLessonStr = lessonData?.name || lessonId;
-                  const targetLessonTitle = lessonData?.title || lessonData?.lesson_name || '';
-                  const isLessonCompleted = isCompletedLocally || 
-                    progress?.data?.records?.some((r: any) => (r.lesson === targetLessonStr || r.lesson === targetLessonTitle) && r.status === 'Complete') ||
-                    progress?.records?.some((r: any) => (r.lesson === targetLessonStr || r.lesson === targetLessonTitle) && r.status === 'Complete');
-                  
-                  if (isLessonCompleted) {
-                    return (
+              {/* Bottom Action: Mark as Complete / Course Completion */}
+              <div className="mt-10">
+                {isCourseComplete ? (
+                  <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 border-2 border-emerald-300/80 rounded-2xl p-6 md:p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0">
+                        <Award className="w-8 h-8" />
+                      </div>
+                      <div className="text-left">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wide mb-1">
+                          <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> 100% Course Completed
+                        </div>
+                        <h3 className="text-lg md:text-xl font-extrabold text-slate-900">
+                          All Lessons & Chapters Completed!
+                        </h3>
+                        <p className="text-xs md:text-sm text-slate-600 mt-0.5">
+                          You have finished every lesson and chapter in this course. You can claim or view your certificate or return to the course overview.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 shrink-0">
+                      <button
+                        onClick={() => setShowCompletionModal(true)}
+                        className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+                      >
+                        <Award className="w-4 h-4" /> View Certificate
+                      </button>
+                      <Link
+                        href={`/course/${courseId}`}
+                        className="px-5 py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-sm rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                      >
+                        <ArrowLeft className="w-4 h-4" /> Course Overview
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-end">
+                    {currentLessonIsCompleted ? (
                       <div className="px-8 py-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl font-bold flex items-center gap-2">
                         <CheckCircle className="w-5 h-5 text-emerald-500" />
                         Completed
                       </div>
-                    );
-                  }
-                  
-                  return (
-                    <button 
-                      onClick={handleMarkComplete}
-                      disabled={updatingProgress}
-                      className="px-8 py-3.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 font-bold transition-all flex items-center gap-2 transform hover:-translate-y-0.5 disabled:opacity-50 cursor-pointer"
-                    >
-                      {updatingProgress ? (
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        <CheckCircle className="w-5 h-5" />
-                      )}
-                      {updatingProgress ? 'Updating...' : 'Mark as Complete'}
-                    </button>
-                  );
-                })()}
+                    ) : (
+                      <button 
+                        onClick={handleMarkComplete}
+                        disabled={updatingProgress}
+                        className="px-8 py-3.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 font-bold transition-all flex items-center gap-2 transform hover:-translate-y-0.5 disabled:opacity-50 cursor-pointer"
+                      >
+                        {updatingProgress ? (
+                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <CheckCircle className="w-5 h-5" />
+                        )}
+                        {updatingProgress ? 'Updating...' : isLastLesson ? 'Complete & Finish Course' : 'Mark as Complete'}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
         </main>
       </div>
+
+      {/* Course Completion Celebration Modal */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden text-center p-8 md:p-10">
+            {/* Top decorative gradient band */}
+            <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600" />
+            
+            {/* Close button */}
+            <button 
+              onClick={() => setShowCompletionModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+              aria-label="Close modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Trophy & celebration graphic */}
+            <div className="relative mx-auto w-24 h-24 mb-6">
+              <div className="absolute inset-0 bg-emerald-500/20 rounded-full blur-xl animate-pulse" />
+              <div className="relative w-full h-full rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 ring-8 ring-emerald-50">
+                <Trophy className="w-12 h-12" />
+              </div>
+            </div>
+
+            {/* Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-extrabold uppercase tracking-wider mb-3">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+              Course 100% Completed
+            </div>
+
+            <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight mb-2">
+              Congratulations!
+            </h2>
+            <p className="text-sm md:text-base text-slate-600 mb-6 leading-relaxed">
+              You have successfully completed all lessons and chapters of <span className="font-bold text-slate-900">{courseData?.title || courseId.replace(/-/g, ' ')}</span>!
+            </p>
+
+            {/* Stats summary pill */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mb-6 flex items-center justify-around">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Lessons</p>
+                <p className="text-lg font-extrabold text-slate-800">{flatLessons.length || totalLessonsCount} / {flatLessons.length || totalLessonsCount}</p>
+              </div>
+              <div className="w-px h-8 bg-slate-200" />
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Status</p>
+                <p className="text-lg font-extrabold text-emerald-600 flex items-center gap-1">
+                  <CheckCircle className="w-4 h-4" /> Completed
+                </p>
+              </div>
+              <div className="w-px h-8 bg-slate-200" />
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Chapters</p>
+                <p className="text-lg font-extrabold text-slate-800">{outline.length}</p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Link
+                href="/certificates"
+                className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              >
+                <Award className="w-4 h-4" />
+                View Certificate
+              </Link>
+              <Link
+                href={`/course/${courseId}`}
+                className="w-full sm:w-auto px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Course Overview
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -16,10 +16,13 @@ import {
   PlayCircle, Clock, BookOpen, Users, Award,
   Globe, Tags, ChevronRight, Star, CheckCircle2,
   BookMarked, ArrowLeft, Edit, Plus, Loader2, FileText, CheckCircle,
-  MessageSquare, Sparkles, Send, Check, Trash2, Lock, HelpCircle
+  MessageSquare, Sparkles, Send, Check, Trash2, Lock, HelpCircle,
+  RotateCcw, Trophy
 } from 'lucide-react';
 import InlineBlockEditor from '@/components/admin/InlineBlockEditor';
 import Pagination from '@/components/ui/Pagination';
+import { showToast } from '@/components/ui/Toast';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 // Helper to format review creation timestamp nicely (e.g. 'Oct 12, 2026')
 const formatReviewDate = (dateStr?: string) => {
@@ -83,6 +86,7 @@ export default function CourseDetailPage() {
   const [reviewDeleting, setReviewDeleting] = useState(false);
   const [reviewSuccessMsg, setReviewSuccessMsg] = useState<string | null>(null);
   const [reviewErrorMsg, setReviewErrorMsg] = useState<string | null>(null);
+  const [deleteReviewConfirmName, setDeleteReviewConfirmName] = useState<string | null>(null);
 
   // Review Pagination State
   const [reviewPage, setReviewPage] = useState<number>(1);
@@ -139,8 +143,8 @@ export default function CourseDetailPage() {
     return () => window.removeEventListener("chapter-created", handleChapterCreated);
   }, [courseId]);
 
-  const fetchCourseData = async () => {
-    setLoading(true);
+  const fetchCourseData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [detailsRes, outlineRes, reviewsRes, lessonsRes, progressRes, assignmentsRes, submissionsRes, courseReviewsRes, enrollRes] = await Promise.allSettled([
         getCourse(courseId),
@@ -377,18 +381,18 @@ export default function CourseDetailPage() {
     } catch (err: any) {
       setError(err.message || 'An error occurred loading the course.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isEnrolled) {
-      setReviewErrorMsg('You must be enrolled in the course to submit a review.');
+      showToast.warning('You must be enrolled in the course to submit a review.');
       return;
     }
     if (!reviewText.trim()) {
-      setReviewErrorMsg('Please enter your review text.');
+      showToast.warning('Please enter your review text.');
       return;
     }
 
@@ -397,20 +401,16 @@ export default function CourseDetailPage() {
     setReviewSuccessMsg(null);
 
     try {
-      // Create new course review (user can only create or delete reviews)
       await createCourseReview({
         course: courseId,
         rating: Number(reviewRating),
         review: reviewText.trim()
       });
-      setReviewSuccessMsg('Thank you! Your course review has been submitted.');
-
-      // Refresh reviews list
-      await fetchCourseData();
-      setTimeout(() => {
-        setIsReviewModalOpen(false);
-        setReviewSuccessMsg(null);
-      }, 1500);
+      showToast.success('Thank you! Your course review has been submitted.');
+      setIsReviewModalOpen(false);
+      setReviewText('');
+      setReviewRating(5);
+      await fetchCourseData(true);
     } catch (err: any) {
       console.error('Submit review error:', err);
       let msg = err.message || 'Failed to submit review.';
@@ -429,13 +429,14 @@ export default function CourseDetailPage() {
           ? err.response.data.message 
           : err.response.data.message?.message || JSON.stringify(err.response.data.message);
       }
+      showToast.error(msg);
       setReviewErrorMsg(msg);
     } finally {
       setReviewSubmitting(false);
     }
   };
 
-  const handleDeleteReview = async (reviewName?: string) => {
+  const handleDeleteReview = (reviewName?: string) => {
     let targetName = reviewName || userExistingReview?.name;
 
     if (!targetName) {
@@ -451,27 +452,31 @@ export default function CourseDetailPage() {
     }
 
     if (!targetName) {
-      alert('Review document identifier not found. Please refresh the page and try again.');
+      showToast.error('Review document identifier not found. Please refresh the page and try again.');
       return;
     }
 
-    if (!confirm('Are you sure you want to delete this course review?')) {
-      return;
-    }
+    setDeleteReviewConfirmName(targetName);
+  };
+
+  const executeDeleteReview = async () => {
+    if (!deleteReviewConfirmName) return;
 
     setReviewDeleting(true);
     try {
-      await deleteCourseReview(targetName);
+      await deleteCourseReview(deleteReviewConfirmName);
+      showToast.success('Your course review has been deleted successfully.');
       setIsReviewModalOpen(false);
       setUserExistingReview(null);
       setReviewText('');
       setReviewRating(5);
-      await fetchCourseData();
+      await fetchCourseData(true);
     } catch (err: any) {
       console.error('Delete review error:', err);
-      alert(err.response?.data?.message || err.message || 'Failed to delete review.');
+      showToast.error(err.response?.data?.message || err.message || 'Failed to delete review.');
     } finally {
       setReviewDeleting(false);
+      setDeleteReviewConfirmName(null);
     }
   };
 
@@ -480,13 +485,14 @@ export default function CourseDetailPage() {
     setEnrollLoading(true);
     try {
       await enrollInCourse({ course: courseId });
-      alert('Successfully enrolled!');
+      showToast.success('Successfully enrolled in this course!');
       setIsEnrolled(true);
       // Refresh progress data to show "Continue Learning"
       const progressRes = await getCourseProgress(courseId);
       setProgress(progressRes?.message || progressRes?.data || progressRes);
+      await fetchCourseData(true);
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || 'Failed to enroll in course');
+      showToast.error(err.response?.data?.message || err.message || 'Failed to enroll in course');
     } finally {
       setEnrollLoading(false);
     }
@@ -501,13 +507,13 @@ export default function CourseDetailPage() {
       fd.append('course', courseId);
       fd.append('title', newChapterTitle);
       await createChapter(fd);
-      alert('Chapter created successfully');
+      showToast.success('Chapter created successfully!');
       setNewChapterTitle('');
       setIsAddingChapter(false);
-      await fetchCourseData();
-    } catch (err) {
+      await fetchCourseData(true);
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to add chapter');
+      showToast.error(err?.response?.data?.message || err?.message || 'Failed to add chapter');
     } finally {
       setActionLoading(false);
     }
@@ -524,14 +530,14 @@ export default function CourseDetailPage() {
       fd.append('title', newLessonTitle);
       fd.append('body', `<p>${newLessonBody}</p>`);
       await createLesson(fd);
-      alert('Lesson created successfully');
+      showToast.success('Lesson created successfully!');
       setNewLessonTitle('');
       setNewLessonBody('');
       setActiveChapterForLesson(null);
-      await fetchCourseData();
-    } catch (err) {
+      await fetchCourseData(true);
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to add lesson');
+      showToast.error(err?.response?.data?.message || err?.message || 'Failed to add lesson');
     } finally {
       setActionLoading(false);
     }
@@ -578,6 +584,33 @@ export default function CourseDetailPage() {
     ? "₹"
     : (enrollmentData?.currency || details?.currency || "₹");
   const isFree = !isPaid || currentPrice === 0;
+
+  // Normalized progress calculations
+  const normalizedProgress = progress?.message?.data || progress?.data || progress?.message || progress || {};
+  const progressPercent = typeof normalizedProgress.progress === 'number'
+    ? normalizedProgress.progress
+    : Number(normalizedProgress.progress || 0);
+  const completedLessonsCount = typeof normalizedProgress.completed_lessons === 'number'
+    ? normalizedProgress.completed_lessons
+    : Number(normalizedProgress.completed_lessons || 0);
+  const totalLessonsCount = typeof normalizedProgress.total_lessons === 'number'
+    ? normalizedProgress.total_lessons
+    : Number(normalizedProgress.total_lessons || 0);
+  const progressRecords = normalizedProgress.records || normalizedProgress.data?.records || [];
+
+  const allOutlineLessons = outline.flatMap((c: any) => c.lessons || []);
+  const isAllOutlineLessonsComplete = allOutlineLessons.length > 0 && allOutlineLessons.every((l: any) => {
+    return progressRecords.some((r: any) => 
+      (r.lesson === l.name || r.lesson === l.title || r.lesson === l.lesson_name) && 
+      (r.status === 'Complete' || r.status === 'Completed' || r.completed === 1)
+    );
+  });
+
+  const isCourseComplete = Boolean(isEnrolled && (
+    progressPercent >= 100 ||
+    (totalLessonsCount > 0 && completedLessonsCount >= totalLessonsCount) ||
+    isAllOutlineLessonsComplete
+  ));
 
   const gradientMap: Record<string, string> = {
     Blue: "from-blue-950 via-slate-900 to-indigo-950",
@@ -633,6 +666,11 @@ export default function CourseDetailPage() {
           </div>
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2 mb-2">
+              {isCourseComplete && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold tracking-wide text-emerald-300 uppercase bg-emerald-900/60 border border-emerald-500/50 rounded-md backdrop-blur-sm shadow-sm">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Course Completed
+                </span>
+              )}
               {details.category && (
                 <span className="inline-block px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-indigo-300 uppercase bg-indigo-900/50 border border-indigo-700/50 rounded-md backdrop-blur-sm">
                   {details.category}
@@ -758,6 +796,32 @@ export default function CourseDetailPage() {
               </form>
             )}
 
+            {/* Course Completion Banner */}
+            {isCourseComplete && (
+              <div className="mb-6 p-5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-500/20">
+                    <Award className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                      Course 100% Completed!
+                      <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">Finished</span>
+                    </h4>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      You have successfully completed all lessons and chapters of this course.
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href="/certificates"
+                  className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center justify-center gap-1.5 shrink-0 transition-all active:scale-95 cursor-pointer"
+                >
+                  <Award className="w-3.5 h-3.5" /> View Certificate
+                </Link>
+              </div>
+            )}
+
             {outline.length > 0 ? (
               <div className="space-y-3">
                 {outline.map((chapter: any, index: number) => (
@@ -776,6 +840,10 @@ export default function CourseDetailPage() {
                           {chapter.lessons.map((lesson: any, lIndex: number) => {
                             const isLocked = !isInstructor && !isEnrolled && isPaid && !isFree && (lesson.is_locked === true || (!lesson.include_in_preview && lesson.include_in_preview !== 1));
                             const isPreview = !isInstructor && !isEnrolled && Boolean(lesson.include_in_preview === 1 || lesson.include_in_preview === true);
+                            const isLessonCompleted = isEnrolled && progressRecords.some((r: any) => 
+                              (r.lesson === lesson.name || r.lesson === lesson.title || r.lesson === lesson.lesson_name) && 
+                              (r.status === 'Complete' || r.status === 'Completed' || r.completed === 1)
+                            );
 
                             return (
                               <li key={lesson.name || lIndex} className="py-3 flex justify-between items-center group/lesson">
@@ -784,12 +852,19 @@ export default function CourseDetailPage() {
                                     <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
                                       <Lock className="w-3 h-3" />
                                     </div>
+                                  ) : isLessonCompleted ? (
+                                    <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
                                   ) : (
                                     <PlayCircle className="w-4 h-4 text-slate-300 group-hover/lesson:text-indigo-500 transition-colors shrink-0" />
                                   )}
-                                  <span className={`text-sm font-medium transition-colors ${isLocked ? "text-slate-500" : "text-slate-700 group-hover/lesson:text-slate-900"}`}>
+                                  <span className={`text-sm font-medium transition-colors ${isLocked ? "text-slate-500" : isLessonCompleted ? "text-slate-800 font-semibold" : "text-slate-700 group-hover/lesson:text-slate-900"}`}>
                                     {lesson.title || lesson.lesson_name || lesson.name}
                                   </span>
+                                  {isLessonCompleted && (
+                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full ml-1.5 shadow-2xs">
+                                      Completed
+                                    </span>
+                                  )}
                                   {isPreview && (
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full ml-1.5 shadow-xs">
                                       Free Preview
@@ -1429,54 +1504,102 @@ export default function CourseDetailPage() {
                   </div>
                 )}
 
-                {isEnrolled && progress && (
+                {isEnrolled && (
                   <div className="mt-4 mb-5 bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Your Progress</span>
-                      <span className="text-xs font-bold text-indigo-600">{progress.progress || 0}%</span>
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                        {isCourseComplete ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="text-emerald-700">Course Completed</span>
+                          </>
+                        ) : (
+                          "Your Progress"
+                        )}
+                      </span>
+                      <span className={`text-xs font-bold ${isCourseComplete ? "text-emerald-600" : "text-indigo-600"}`}>
+                        {isCourseComplete ? "100%" : `${progressPercent}%`}
+                      </span>
                     </div>
                     <div className="w-full bg-slate-200 rounded-full h-2 mb-2 overflow-hidden">
-                      <div className="bg-gradient-to-r from-indigo-500 to-violet-500 h-2 rounded-full transition-all duration-1000 ease-out" style={{ width: `${progress.progress || 0}%` }}></div>
+                      <div 
+                        className={`h-2 rounded-full transition-all duration-1000 ease-out ${
+                          isCourseComplete
+                            ? "bg-gradient-to-r from-emerald-500 to-teal-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                            : "bg-gradient-to-r from-indigo-500 to-violet-500"
+                        }`} 
+                        style={{ width: `${isCourseComplete ? 100 : progressPercent}%` }}
+                      ></div>
                     </div>
-                    {(progress.completed_lessons !== undefined || progress.total_lessons !== undefined) && (
-                      <p className="text-[11px] text-slate-500 text-center">
-                        {progress.completed_lessons || 0} of {progress.total_lessons || details.lessons || 0} lessons completed
-                      </p>
-                    )}
+                    <p className="text-[11px] text-slate-500 text-center">
+                      {isCourseComplete 
+                        ? `All ${allOutlineLessons.length || totalLessonsCount || completedLessonsCount} lessons completed` 
+                        : `${completedLessonsCount} of ${totalLessonsCount || details.lessons || allOutlineLessons.length || 0} lessons completed`}
+                    </p>
                   </div>
                 )}
 
-                <button
-                  onClick={() => {
-                    if (isEnrolled) {
-                      const firstChapter = outline?.find(c => c.lessons && c.lessons.length > 0) || outline?.[0];
-                      const firstLesson = firstChapter?.lessons?.[0];
-                      if (firstChapter && firstLesson) {
-                        router.push(`/course/${courseId}/${encodeURIComponent(firstChapter.name)}/${encodeURIComponent(firstLesson.name)}`);
+                {isCourseComplete ? (
+                  <div className="space-y-2.5 mt-3">
+                    <div className="w-full py-3 px-4 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-xs font-bold flex items-center justify-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      Status: Course Completed
+                    </div>
+                    <Link
+                      href="/certificates"
+                      className="w-full font-bold py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md hover:shadow-lg shadow-emerald-500/20 transition-all transform hover:-translate-y-0.5 flex justify-center items-center gap-2 text-sm cursor-pointer active:scale-95"
+                    >
+                      <Award className="w-4 h-4" />
+                      Claim / View Certificate
+                      <ChevronRight className="w-4 h-4" />
+                    </Link>
+                    <button
+                      onClick={() => {
+                        const firstChapter = outline?.find(c => c.lessons && c.lessons.length > 0) || outline?.[0];
+                        const firstLesson = firstChapter?.lessons?.[0];
+                        if (firstChapter && firstLesson) {
+                          router.push(`/course/${courseId}/${encodeURIComponent(firstChapter.name)}/${encodeURIComponent(firstLesson.name)}`);
+                        }
+                      }}
+                      className="w-full font-semibold py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs transition-colors flex justify-center items-center gap-1.5 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Review Course Lessons
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (isEnrolled) {
+                        const firstChapter = outline?.find(c => c.lessons && c.lessons.length > 0) || outline?.[0];
+                        const firstLesson = firstChapter?.lessons?.[0];
+                        if (firstChapter && firstLesson) {
+                          router.push(`/course/${courseId}/${encodeURIComponent(firstChapter.name)}/${encodeURIComponent(firstLesson.name)}`);
+                        } else {
+                          const elem = document.getElementById("curriculum");
+                          if (elem) elem.scrollIntoView({ behavior: "smooth" });
+                        }
+                      } else if (isPaid && !isFree) {
+                        router.push(`/checkout?item_type=course&item_id=${encodeURIComponent(courseId)}`);
                       } else {
-                        const elem = document.getElementById("curriculum");
-                        if (elem) elem.scrollIntoView({ behavior: "smooth" });
+                        handleEnroll();
                       }
-                    } else if (isPaid && !isFree) {
-                      router.push(`/checkout?item_type=course&item_id=${encodeURIComponent(courseId)}`);
-                    } else {
-                      handleEnroll();
-                    }
-                  }}
-                  disabled={enrollLoading}
-                  className={`w-full font-bold py-3.5 px-4 rounded-xl transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 mt-3 flex justify-center items-center gap-2 text-sm disabled:opacity-50 active:scale-95 cursor-pointer ${isEnrolled
-                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-200"
-                      : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-200"
-                    }`}
-                >
-                  {enrollLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {isEnrolled
-                    ? 'Continue Learning'
-                    : isPaid && !isFree
-                      ? `Buy Now for ${currencySymbol} ${currentPrice.toLocaleString("en-IN")}`
-                      : (enrollLoading ? 'Enrolling...' : 'Enroll for Free')}
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                    }}
+                    disabled={enrollLoading}
+                    className={`w-full font-bold py-3.5 px-4 rounded-xl transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 mt-3 flex justify-center items-center gap-2 text-sm disabled:opacity-50 active:scale-95 cursor-pointer ${isEnrolled
+                        ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-200"
+                        : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-200"
+                      }`}
+                  >
+                    {enrollLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    {isEnrolled
+                      ? 'Continue Learning'
+                      : isPaid && !isFree
+                        ? `Buy Now for ${currencySymbol} ${currentPrice.toLocaleString("en-IN")}`
+                        : (enrollLoading ? 'Enrolling...' : 'Enroll for Free')}
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
                 {isInstructor && (
                   <Link
                     href={`/course/${courseId}/edit`}
@@ -1616,6 +1739,18 @@ export default function CourseDetailPage() {
           <p className="font-medium">© 2026 Stridenex Inc. All rights reserved.</p>
         </div>
       </footer>
+
+      {/* Delete Review Confirmation Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deleteReviewConfirmName)}
+        title="Delete Course Review"
+        message="Are you sure you want to delete your course review? This action cannot be undone."
+        confirmLabel="Delete Review"
+        confirmVariant="danger"
+        isLoading={reviewDeleting}
+        onConfirm={executeDeleteReview}
+        onCancel={() => setDeleteReviewConfirmName(null)}
+      />
     </div>
   );
 }
