@@ -10,6 +10,9 @@ import Link from 'next/link';
 import { BookOpen, Users, Calendar, ArrowLeft, Clock, Tag, User, Star, MessageSquare, Quote, Award, FileText, Video, PlayCircle, ClipboardList, CheckCircle2 } from 'lucide-react';
 import CourseCard from '@/components/CourseCard';
 import { formatDate } from '@/utils/formatters';
+import BatchDiscussions from '@/components/batch/BatchDiscussions';
+
+export type BatchTab = 'overview' | 'courses' | 'discussions' | 'students' | 'feedback';
 
 export default function BatchDetailsPage() {
   const params = useParams();
@@ -28,6 +31,38 @@ export default function BatchDetailsPage() {
   const [enrolling, setEnrolling] = useState(false);
   const [enrollSuccess, setEnrollSuccess] = useState(false);
   const [enrolledStudents, setEnrolledStudents] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<BatchTab>('overview');
+
+  // Sync URL hash (#discussions, #courses, etc.) with active tab
+  useEffect(() => {
+    const handleHash = () => {
+      if (typeof window !== 'undefined') {
+        const hash = window.location.hash.toLowerCase().replace('#', '');
+        if (hash === 'discussions') {
+          setActiveTab('discussions');
+        } else if (hash === 'courses') {
+          setActiveTab('courses');
+        } else if (hash === 'overview') {
+          setActiveTab('overview');
+        } else if (hash === 'students') {
+          setActiveTab('students');
+        } else if (hash === 'feedback' || hash === 'reviews') {
+          setActiveTab('feedback');
+        }
+      }
+    };
+
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+
+  const handleTabChange = (tab: BatchTab) => {
+    setActiveTab(tab);
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `#${tab}`);
+    }
+  };
 
   useEffect(() => {
     const checkRoles = () => {
@@ -318,13 +353,29 @@ export default function BatchDetailsPage() {
                     <span>{batchData.feedback.overall_rating} ({batchData.feedback.total_reviews} reviews)</span>
                   </div>
                 )}
+
+                {/* Discussions Hero Pill Button */}
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('discussions')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all cursor-pointer ${
+                    activeTab === 'discussions'
+                      ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
+                      : 'bg-white/10 hover:bg-white/20 backdrop-blur-sm border-white/10 text-indigo-100 hover:text-white'
+                  }`}
+                >
+                  <MessageSquare className="w-4 h-4 text-indigo-300" />
+                  <span>Discussions</span>
+                </button>
               </div>
+
               {/* Batch Action Button */}
               <div className="mt-8">
                 {isEnrolled ? (
                   <button
                     onClick={() => {
-                      const elem = document.getElementById("batch-courses");
+                      handleTabChange('courses');
+                      const elem = document.getElementById("batch-tab-content");
                       if (elem) elem.scrollIntoView({ behavior: "smooth" });
                     }}
                     className="px-8 py-3.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95 text-sm"
@@ -386,104 +437,240 @@ export default function BatchDetailsPage() {
         </div>
       </div>
 
-      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full -mt-6 relative z-20">
-        {false && batchData.video_link && (
-          <section className="mb-8 rounded-xl overflow-hidden shadow-sm border border-slate-100 bg-black flex justify-center w-full">
-            {(batchData.video_link.endsWith('.mp4') || batchData.video_link.endsWith('.webm') || batchData.video_link.includes('.mp4')) ? (
-               <video 
-                 controls 
-                 preload="metadata"
-                 className="w-full h-full max-h-[600px] object-contain aspect-video"
-               >
-                 <source src={getImageUrl(batchData.video_link)} type="video/mp4" />
-                 Your browser does not support the video tag.
-               </video>
-             ) : (
-               <div className="w-full p-6 md:p-12 text-center bg-slate-50 flex flex-col items-center justify-center">
-                 <PlayCircle className="w-12 h-12 text-indigo-400 mb-3" />
-                 <h3 className="text-lg font-semibold text-slate-800 mb-2">Introductory Video Available</h3>
-                 <a href={getImageUrl(batchData.video_link)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">
-                   Watch Video
-                 </a>
-               </div>
-             )}
+      <main id="batch-tab-content" className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full -mt-6 relative z-20">
+        {/* Navigation Tabs Bar */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-1.5 mb-8 flex items-center gap-1.5 overflow-x-auto">
+          <button
+            onClick={() => handleTabChange('overview')}
+            className={`px-4 py-2.5 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'overview'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>Overview</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('courses')}
+            className={`px-4 py-2.5 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'courses'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Courses</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                activeTab === 'courses'
+                  ? 'bg-indigo-700 text-white'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {batchCourses.length || batchData.courses?.length || 0}
+            </span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('discussions')}
+            className={`px-4 py-2.5 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'discussions'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Discussions</span>
+          </button>
+
+          {isInstructor && (
+            <button
+              onClick={() => handleTabChange('students')}
+              className={`px-4 py-2.5 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'students'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>Students</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                  activeTab === 'students'
+                    ? 'bg-indigo-700 text-white'
+                    : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {enrolledStudents.length}
+              </span>
+            </button>
+          )}
+
+          <button
+            onClick={() => handleTabChange('feedback')}
+            className={`px-4 py-2.5 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'feedback'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <Star className="w-4 h-4" />
+            <span>Feedback</span>
+            {batchFeedback.length > 0 && (
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                  activeTab === 'feedback'
+                    ? 'bg-indigo-700 text-white'
+                    : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {batchFeedback.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Tab 1: Overview */}
+        {activeTab === 'overview' && (
+          <div className="space-y-8">
+            {(batchData.batch_details || batchData.description) && (
+              <section className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200/80">
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-900">
+                  <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                  About this Batch
+                </h2>
+                <div 
+                  className="prose prose-indigo max-w-none text-sm text-slate-600 leading-relaxed" 
+                  dangerouslySetInnerHTML={{ __html: batchData.batch_details || batchData.description }} 
+                />
+              </section>
+            )}
+
+            {batchData.assessment && batchData.assessment.length > 0 && (
+              <section className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200/80">
+                <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
+                  <ClipboardList className="w-5 h-5 text-indigo-600" />
+                  Assessments
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {batchData.assessment.map((ass: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between p-4 border border-slate-100 rounded-xl bg-slate-50 hover:border-indigo-100 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-slate-800 text-sm">{ass.assessment || ass.name || `Assessment ${idx + 1}`}</h3>
+                          <p className="text-xs text-slate-500">Required</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Quick Curriculum Preview */}
+            <section className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200/80">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900">
+                  <BookOpen className="w-5 h-5 text-indigo-600" />
+                  Curriculum Courses
+                </h2>
+                {batchCourses.length > 3 && (
+                  <button
+                    onClick={() => handleTabChange('courses')}
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                  >
+                    View All {batchCourses.length} Courses →
+                  </button>
+                )}
+              </div>
+
+              {batchCourses.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {batchCourses.slice(0, 3).map((course: any, index: number) => (
+                    <Link key={course.name || index} href={`/course/${course.course || course.name}`} className="block h-full transition-transform hover:-translate-y-1 duration-300">
+                      <CourseCard 
+                        image={getImageUrl(course.image)}
+                        providerLogo={getImageUrl(course.instructors?.[0]?.user_image)}
+                        providerName={course.instructors?.[0]?.full_name}
+                        title={course.title || course.course || course.name}
+                        rating={course.rating}
+                        enrollments={course.enrollments}
+                        category={course.category || undefined}
+                        lessons={course.lessons}
+                        status={course.status || undefined}
+                        cardGradient={course.card_gradient || undefined}
+                        description={course.short_introduction || course.description || undefined}
+                        price={course.paid_course ? `${course.currency || '$'} ${course.course_price || 0}` : 'Free'}
+                      />
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  <p className="text-slate-500 text-sm font-medium">No courses have been added to this batch yet.</p>
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+        {/* Tab 2: Courses */}
+        {activeTab === 'courses' && (
+          <section id="batch-courses" className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200/80">
+            <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
+              <BookOpen className="w-5 h-5 text-indigo-600" />
+              Courses in this Batch
+            </h2>
+
+            {batchCourses.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {batchCourses.map((course: any, index: number) => (
+                  <Link key={course.name || index} href={`/course/${course.course || course.name}`} className="block h-full transition-transform hover:-translate-y-1 duration-300">
+                    <CourseCard 
+                      image={getImageUrl(course.image)}
+                      providerLogo={getImageUrl(course.instructors?.[0]?.user_image)}
+                      providerName={course.instructors?.[0]?.full_name}
+                      title={course.title || course.course || course.name}
+                      rating={course.rating}
+                      enrollments={course.enrollments}
+                      category={course.category || undefined}
+                      lessons={course.lessons}
+                      status={course.status || undefined}
+                      cardGradient={course.card_gradient || undefined}
+                      description={course.short_introduction || course.description || undefined}
+                      price={course.paid_course ? `${course.currency || '$'} ${course.course_price || 0}` : 'Free'}
+                    />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <p className="text-slate-500 font-medium">No courses have been added to this batch yet.</p>
+              </div>
+            )}
           </section>
         )}
 
-        {(batchData.batch_details || batchData.description) && (
-          <section className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-100 mb-8">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-900">
-              <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              About this Batch
-            </h2>
-            <div 
-              className="prose prose-indigo max-w-none text-sm text-slate-600 leading-relaxed" 
-              dangerouslySetInnerHTML={{ __html: batchData.batch_details || batchData.description }} 
+        {/* Tab 3: Discussions */}
+        {activeTab === 'discussions' && (
+          <section id="discussions">
+            <BatchDiscussions
+              batchId={batchId}
+              batchTitle={batchData.title || batchData.name}
+              isEnrolled={isEnrolled}
+              isInstructor={isInstructor}
             />
           </section>
         )}
 
-        {batchData.assessment && batchData.assessment.length > 0 && (
-          <section className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-100 mb-8">
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
-              <ClipboardList className="w-5 h-5 text-indigo-600" />
-              Assessments
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {batchData.assessment.map((ass: any, idx: number) => (
-                <div key={idx} className="flex items-center justify-between p-4 border border-slate-100 rounded-xl bg-slate-50 hover:border-indigo-100 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
-                      <FileText className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-800 text-sm">{ass.assessment || ass.name || `Assessment ${idx + 1}`}</h3>
-                      <p className="text-xs text-slate-500">Required</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section id="batch-courses" className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-100 mb-8">
-          <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
-            <BookOpen className="w-5 h-5 text-indigo-600" />
-            Courses in this Batch
-          </h2>
-
-          
-          {batchCourses.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {batchCourses.map((course: any, index: number) => (
-                <Link key={course.name || index} href={`/course/${course.course || course.name}`} className="block h-full transition-transform hover:-translate-y-1 duration-300">
-                  <CourseCard 
-                    image={getImageUrl(course.image)}
-                    providerLogo={getImageUrl(course.instructors?.[0]?.user_image)}
-                    providerName={course.instructors?.[0]?.full_name}
-                    title={course.title || course.course || course.name}
-                    rating={course.rating}
-                    enrollments={course.enrollments}
-                    category={course.category || undefined}
-                    lessons={course.lessons}
-                    status={course.status || undefined}
-                    cardGradient={course.card_gradient || undefined}
-                    description={course.short_introduction || course.description || undefined}
-                    price={course.paid_course ? `${course.currency || '$'} ${course.course_price || 0}` : 'Free'}
-                  />
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 bg-slate-50 rounded-lg border border-dashed border-slate-200">
-              <p className="text-slate-500 font-medium">No courses have been added to this batch yet.</p>
-            </div>
-          )}
-        </section>
-
-        {isInstructor && (
-          <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 mb-8">
+        {/* Tab 4: Students */}
+        {activeTab === 'students' && isInstructor && (
+          <section className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200/80">
             <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
               <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800">
                 <Users className="w-4 h-4 text-indigo-500" />
@@ -551,74 +738,77 @@ export default function BatchDetailsPage() {
           </section>
         )}
 
-        <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 mb-8">
-          <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800">
-              <MessageSquare className="w-4 h-4 text-indigo-500" />
-              Student Feedback
-            </h2>
-            {batchFeedback.length > 0 && (
-              <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
-                {batchFeedback.length} Reviews
-              </span>
-            )}
-          </div>
+        {/* Tab 5: Feedback */}
+        {activeTab === 'feedback' && (
+          <section className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200/80">
+            <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
+              <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800">
+                <MessageSquare className="w-4 h-4 text-indigo-500" />
+                Student Feedback
+              </h2>
+              {batchFeedback.length > 0 && (
+                <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
+                  {batchFeedback.length} Reviews
+                </span>
+              )}
+            </div>
 
-          {batchFeedback.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {batchFeedback.map((feedback: any, idx: number) => {
-                const avgScore = ((feedback.content || 0) + (feedback.instructors || 0) + (feedback.value || 0)) / 3;
-                const rating = avgScore > 0 ? Math.round(avgScore * 5) : 5;
+            {batchFeedback.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {batchFeedback.map((feedback: any, idx: number) => {
+                  const avgScore = ((feedback.content || 0) + (feedback.instructors || 0) + (feedback.value || 0)) / 3;
+                  const rating = avgScore > 0 ? Math.round(avgScore * 5) : 5;
 
-                return (
-                  <div key={idx} className="p-4 bg-white border border-slate-100 rounded-xl hover:border-indigo-100 hover:shadow-sm transition-all flex flex-col gap-3">
-                    <div className="flex items-center gap-3">
-                      {feedback.member_image ? (
-                        <img 
-                          src={getImageUrl(feedback.member_image)} 
-                          alt={feedback.member_name || 'Student'} 
-                          className="w-10 h-10 rounded-full object-cover border border-slate-100"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-semibold text-sm border border-slate-200">
-                          {(feedback.member_name || feedback.member || 'A').charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div>
-                        <h4 className="font-semibold text-slate-800 text-sm">
-                          {feedback.member_name || feedback.member || 'Anonymous'}
-                        </h4>
-                        <div className="flex items-center gap-0.5 mt-0.5">
-                          {[...Array(5)].map((_, i) => (
-                            <Star 
-                              key={i} 
-                              className={`w-3 h-3 ${i < rating ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}`} 
-                            />
-                          ))}
+                  return (
+                    <div key={idx} className="p-4 bg-white border border-slate-100 rounded-xl hover:border-indigo-100 hover:shadow-sm transition-all flex flex-col gap-3">
+                      <div className="flex items-center gap-3">
+                        {feedback.member_image ? (
+                          <img 
+                            src={getImageUrl(feedback.member_image)} 
+                            alt={feedback.member_name || 'Student'} 
+                            className="w-10 h-10 rounded-full object-cover border border-slate-100"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-semibold text-sm border border-slate-200">
+                            {(feedback.member_name || feedback.member || 'A').charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <h4 className="font-semibold text-slate-800 text-sm">
+                            {feedback.member_name || feedback.member || 'Anonymous'}
+                          </h4>
+                          <div className="flex items-center gap-0.5 mt-0.5">
+                            {[...Array(5)].map((_, i) => (
+                              <Star 
+                                key={i} 
+                                className={`w-3 h-3 ${i < rating ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}`} 
+                              />
+                            ))}
+                          </div>
                         </div>
                       </div>
+                      
+                      <div className="relative mt-1">
+                        <Quote className="absolute -top-1 -left-1 w-6 h-6 text-slate-100 opacity-50" />
+                        <p className="text-slate-600 text-sm leading-relaxed relative z-10 pl-2">
+                          {feedback.feedback || 'No comments provided.'}
+                        </p>
+                      </div>
                     </div>
-                    
-                    <div className="relative mt-1">
-                      <Quote className="absolute -top-1 -left-1 w-6 h-6 text-slate-100 opacity-50" />
-                      <p className="text-slate-600 text-sm leading-relaxed relative z-10 pl-2">
-                        {feedback.feedback || 'No comments provided.'}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-10">
-              <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                <MessageSquare className="w-6 h-6 text-slate-300" />
+                  );
+                })}
               </div>
-              <h3 className="text-sm font-semibold text-slate-700 mb-1">No feedback yet</h3>
-              <p className="text-slate-500 text-xs">Be the first to share your thoughts.</p>
-            </div>
-          )}
-        </section>
+            ) : (
+              <div className="text-center py-10">
+                <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <MessageSquare className="w-6 h-6 text-slate-300" />
+                </div>
+                <h3 className="text-sm font-semibold text-slate-700 mb-1">No feedback yet</h3>
+                <p className="text-slate-500 text-xs">Be the first to share your thoughts.</p>
+              </div>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );
