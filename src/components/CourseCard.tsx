@@ -43,23 +43,38 @@ export default function CourseCard({
     const c = (color || '').toLowerCase();
     if (c === 'red') return 'from-red-500/80 to-transparent';
     if (c === 'blue') return 'from-blue-500/80 to-transparent';
-    if (c === 'green') return 'from-green-500/80 to-transparent';
-    if (c === 'purple') return 'from-purple-500/80 to-transparent';
+    if (c === 'green' || c === 'emerald') return 'from-green-500/80 to-transparent';
+    if (c === 'amber') return 'from-amber-500/80 to-transparent';
+    if (c === 'cyan') return 'from-cyan-500/80 to-transparent';
     if (c === 'orange') return 'from-orange-500/80 to-transparent';
+    if (c === 'pink') return 'from-pink-500/80 to-transparent';
+    if (c === 'purple') return 'from-purple-500/80 to-transparent';
+    if (c === 'teal') return 'from-teal-500/80 to-transparent';
+    if (c === 'violet' || c === 'indigo') return 'from-violet-500/80 to-transparent';
+    if (c === 'yellow') return 'from-yellow-500/80 to-transparent';
+    if (c === 'gray') return 'from-gray-500/80 to-transparent';
     return 'from-gray-900/60 to-transparent';
   };
 
   return (
     <div className="group flex flex-col bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_40px_-12px_rgba(0,0,0,0.1)] hover:-translate-y-1 transition-all duration-300 cursor-pointer h-full relative">
       {/* Course Image */}
-      <div className="relative h-48 w-full overflow-hidden bg-gray-100 flex items-center justify-center">
-        <div className={`absolute inset-0 bg-gradient-to-t ${getGradientClass(cardGradient || '')} z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></div>
+      <div className="relative h-48 w-full overflow-hidden bg-slate-950 flex items-center justify-center">
+        <div className={`absolute inset-0 bg-gradient-to-t ${getGradientClass(cardGradient || '')} z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none`}></div>
         {image ? (
-          <img
-            src={image}
-            alt={title}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-in-out"
-          />
+          <>
+            <img
+              src={image}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 w-full h-full object-cover blur-md opacity-30 scale-110 pointer-events-none"
+            />
+            <img
+              src={image}
+              alt={title}
+              className="relative z-10 max-h-full max-w-full object-contain p-1.5 group-hover:scale-105 transition-transform duration-500 ease-in-out"
+            />
+          </>
         ) : (
           <div className="text-gray-400 font-medium bg-gray-200 w-full h-full flex items-center justify-center">No Image</div>
         )}

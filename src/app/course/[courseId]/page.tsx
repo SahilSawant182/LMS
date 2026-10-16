@@ -559,8 +559,8 @@ export default function CourseDetailPage() {
           <div className="bg-white p-10 rounded-3xl shadow-xl max-w-md w-full">
             <h2 className="text-3xl font-extrabold text-gray-900 mb-4">Oops!</h2>
             <p className="text-gray-500 mb-8">{error || 'Course not found'}</p>
-            <button onClick={() => router.push('/')} className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white font-bold rounded-xl shadow-lg shadow-indigo-200">
-              Back to Home
+            <button onClick={() => router.push('/courses')} className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white font-bold rounded-xl shadow-lg shadow-indigo-200">
+              Back to Courses
             </button>
           </div>
         </div>
@@ -589,9 +589,14 @@ export default function CourseDetailPage() {
     Amber: "from-amber-950 via-slate-900 to-yellow-950",
     Indigo: "from-indigo-950 via-slate-900 to-slate-950",
     Teal: "from-teal-950 via-slate-900 to-slate-950",
+    Violet: "from-violet-950 via-slate-900 to-purple-950",
+    Cyan: "from-cyan-950 via-slate-900 to-blue-950",
+    Pink: "from-pink-950 via-slate-900 to-rose-950",
+    Yellow: "from-yellow-950 via-slate-900 to-amber-950",
+    Gray: "from-slate-900 via-gray-900 to-slate-950",
   };
-  const heroGradientClass = (details?.card_gradient && gradientMap[details.card_gradient])
-    ? gradientMap[details.card_gradient]
+  const heroGradientClass = ((details?.card_gradient || details?.color) && (gradientMap[details?.card_gradient] || gradientMap[details?.color]))
+    ? (gradientMap[details?.card_gradient] || gradientMap[details?.color])
     : "from-slate-900 via-indigo-950 to-slate-900";
 
   return (
@@ -609,7 +614,7 @@ export default function CourseDetailPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="mb-3 flex items-center justify-between">
             <Link
-              href="/"
+              href="/courses"
               className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-200 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
@@ -1366,10 +1371,11 @@ export default function CourseDetailPage() {
                   onClick={() => {
                     if (details.video_link) setIsVideoModalOpen(true);
                   }}
-                  className={`w-full h-44 rounded-xl overflow-hidden mb-5 relative shadow-inner group ${details.video_link ? 'cursor-pointer' : ''}`}
+                  className={`w-full h-48 rounded-xl overflow-hidden mb-5 relative shadow-inner bg-slate-950 flex items-center justify-center group ${details.video_link ? 'cursor-pointer' : ''}`}
                 >
-                  <img src={getImageUrl(details.image)} alt="Course Thumbnail" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
+                  <img src={getImageUrl(details.image)} alt="" className="absolute inset-0 w-full h-full object-cover blur-md opacity-30 scale-110 pointer-events-none" />
+                  <img src={getImageUrl(details.image)} alt="Course Thumbnail" className="relative z-10 max-h-full max-w-full object-contain p-1 group-hover:scale-105 transition-transform duration-300" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none"></div>
                   {details.video_link ? (
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className="w-12 h-12 bg-white/30 backdrop-blur-md rounded-full flex items-center justify-center group-hover:bg-indigo-600 group-hover:scale-110 transition-all shadow-lg">

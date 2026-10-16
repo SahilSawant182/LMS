@@ -35,7 +35,8 @@ import {
   ArrowUpRight,
   Activity,
   Flame,
-  Info
+  Info,
+  ClipboardCheck
 } from "lucide-react";
 import {
   getStudentDashboard,
@@ -715,6 +716,12 @@ export function DashboardContent() {
                   className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center gap-1.5"
                 >
                   <TrendingUp className="w-3.5 h-3.5" /> Sales & Earnings
+                </Link>
+                <Link
+                  href="/certificate-evaluations"
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors flex items-center gap-1.5"
+                >
+                  <ClipboardCheck className="w-3.5 h-3.5" /> Evaluations
                 </Link>
               </div>
 

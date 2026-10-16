@@ -235,6 +235,33 @@ export const getCertificate = async (name: string) => {
   });
 };
 
+export const VALID_COURSE_COLORS = [
+  "Red",
+  "Blue",
+  "Green",
+  "Amber",
+  "Cyan",
+  "Orange",
+  "Pink",
+  "Purple",
+  "Teal",
+  "Violet",
+  "Yellow",
+  "Gray"
+] as const;
+
+export function normalizeCourseColor(color?: string | null): string {
+  if (!color || typeof color !== 'string') return 'Blue';
+  const trimmed = color.trim();
+  const matched = VALID_COURSE_COLORS.find(
+    c => c.toLowerCase() === trimmed.toLowerCase()
+  );
+  if (matched) return matched;
+  if (trimmed.toLowerCase() === 'indigo') return 'Violet';
+  if (trimmed.toLowerCase() === 'emerald') return 'Green';
+  return 'Blue';
+}
+
 export interface CreateCoursePayload {
   title: string;
   course?: string;
@@ -248,6 +275,7 @@ export interface CreateCoursePayload {
   category?: string;
   image?: string;
   card_gradient?: string;
+  color?: string;
   upcoming?: number;
   featured?: number;
   disable_self_learning?: number;
@@ -265,15 +293,30 @@ export const createCourse = async (data: CreateCoursePayload | FormData | any) =
     ? `token ${localStorage.getItem("apiKey")}:${localStorage.getItem("apiSecret")}`
     : `token ${API_TOKEN}`;
 
+  let payload = data;
   if (typeof window !== "undefined" && data instanceof FormData) {
+    const rawGrad = data.get('card_gradient') as string | null;
+    const rawColor = data.get('color') as string | null;
+    const norm = normalizeCourseColor(rawColor || rawGrad || 'Blue');
+    data.set('card_gradient', norm);
+    data.set('color', norm);
+
     return apiService.post("method/lms.lms.stride_lms.create_course", data, {
       headers: {
         'Content-Type': 'multipart/form-data',
         'Authorization': token
       }
     });
+  } else if (data && typeof data === 'object') {
+    const norm = normalizeCourseColor(data.color || data.card_gradient || 'Blue');
+    payload = {
+      ...data,
+      card_gradient: norm,
+      color: norm
+    };
   }
-  return apiService.post("method/lms.lms.stride_lms.create_course", data, {
+
+  return apiService.post("method/lms.lms.stride_lms.create_course", payload, {
     headers: {
       'Authorization': token
     }
@@ -285,15 +328,30 @@ export const updateCourse = async (data: CreateCoursePayload | FormData | any) =
     ? `token ${localStorage.getItem("apiKey")}:${localStorage.getItem("apiSecret")}`
     : `token ${API_TOKEN}`;
 
+  let payload = data;
   if (typeof window !== "undefined" && data instanceof FormData) {
+    const rawGrad = data.get('card_gradient') as string | null;
+    const rawColor = data.get('color') as string | null;
+    const norm = normalizeCourseColor(rawColor || rawGrad || 'Blue');
+    data.set('card_gradient', norm);
+    data.set('color', norm);
+
     return apiService.post("method/lms.lms.stride_lms.update_course", data, {
       headers: {
         'Content-Type': 'multipart/form-data',
         'Authorization': token
       }
     });
+  } else if (data && typeof data === 'object') {
+    const norm = normalizeCourseColor(data.color || data.card_gradient || 'Blue');
+    payload = {
+      ...data,
+      card_gradient: norm,
+      color: norm
+    };
   }
-  return apiService.post("method/lms.lms.stride_lms.update_course", data, {
+
+  return apiService.post("method/lms.lms.stride_lms.update_course", payload, {
     headers: {
       'Authorization': token
     }

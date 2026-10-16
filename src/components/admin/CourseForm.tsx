@@ -6,9 +6,9 @@ import {
   BookOpen, Check, X, Loader2, Sparkles, Upload, 
   PlayCircle, DollarSign, Award, Layers, Eye, 
   Palette, Tag, ShieldCheck, Clock, Trash2, ArrowLeft,
-  CheckCircle2, Lock
+  CheckCircle2, Lock, Image as ImageIcon
 } from 'lucide-react';
-import { createCourse, updateCourse, deleteCourse, getMasterData, getCategoryList, CreateCoursePayload } from '@/services/lms.services';
+import { createCourse, updateCourse, deleteCourse, getMasterData, getCategoryList, CreateCoursePayload, normalizeCourseColor } from '@/services/lms.services';
 import { uploadFile, getImageUrl } from '@/services/api.services';
 
 interface CourseFormProps {
@@ -25,6 +25,7 @@ interface CourseFormProps {
     category?: string;
     image?: string;
     card_gradient?: string;
+    color?: string;
     upcoming?: number;
     featured?: number;
     disable_self_learning?: number;
@@ -41,14 +42,17 @@ interface CourseFormProps {
 
 const GRADIENT_OPTIONS = [
   { label: 'Blue', value: 'Blue', class: 'from-blue-600 to-indigo-700', bg: 'bg-blue-600' },
-  { label: 'Red', value: 'Red', class: 'from-rose-600 to-red-700', bg: 'bg-rose-600' },
+  { label: 'Violet', value: 'Violet', class: 'from-violet-600 to-purple-800', bg: 'bg-violet-600' },
   { label: 'Purple', value: 'Purple', class: 'from-purple-600 to-indigo-800', bg: 'bg-purple-600' },
+  { label: 'Teal', value: 'Teal', class: 'from-teal-600 to-cyan-700', bg: 'bg-teal-600' },
+  { label: 'Cyan', value: 'Cyan', class: 'from-cyan-500 to-blue-600', bg: 'bg-cyan-500' },
   { label: 'Green', value: 'Green', class: 'from-emerald-600 to-teal-700', bg: 'bg-emerald-600' },
-  { label: 'Orange', value: 'Orange', class: 'from-amber-600 to-orange-700', bg: 'bg-amber-600' },
-  { label: 'Emerald', value: 'Emerald', class: 'from-teal-600 to-emerald-800', bg: 'bg-teal-600' },
   { label: 'Amber', value: 'Amber', class: 'from-amber-500 to-yellow-600', bg: 'bg-amber-500' },
-  { label: 'Indigo', value: 'Indigo', class: 'from-indigo-600 to-slate-900', bg: 'bg-indigo-600' },
-  { label: 'Teal', value: 'Teal', class: 'from-teal-600 to-cyan-700', bg: 'bg-teal-500' },
+  { label: 'Orange', value: 'Orange', class: 'from-amber-600 to-orange-700', bg: 'bg-orange-600' },
+  { label: 'Red', value: 'Red', class: 'from-rose-600 to-red-700', bg: 'bg-rose-600' },
+  { label: 'Pink', value: 'Pink', class: 'from-pink-500 to-rose-600', bg: 'bg-pink-500' },
+  { label: 'Yellow', value: 'Yellow', class: 'from-yellow-400 to-amber-500', bg: 'bg-yellow-500' },
+  { label: 'Gray', value: 'Gray', class: 'from-slate-600 to-gray-800', bg: 'bg-gray-600' },
 ];
 
 const DEFAULT_CATEGORIES = [
@@ -75,7 +79,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
     tags: initialData?.tags || '',
     category: initialData?.category || 'Business',
     image: initialData?.image || '/assets/lms/images/course_card.jpeg',
-    card_gradient: initialData?.card_gradient || 'Blue',
+    card_gradient: normalizeCourseColor(initialData?.card_gradient || initialData?.color || 'Blue'),
     upcoming: Boolean(initialData?.upcoming),
     featured: Boolean(initialData?.featured !== undefined ? initialData?.featured : 1),
     disable_self_learning: Boolean(initialData?.disable_self_learning),
@@ -93,6 +97,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
   const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const courseId = formData.name || initialData?.name || initialData?.course || '';
 
   const isInitializedRef = React.useRef(Boolean(initialData?.name || initialData?.course));
 
@@ -110,7 +115,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
         tags: initialData.tags || '',
         category: initialData.category || 'Business',
         image: initialData.image || '/assets/lms/images/course_card.jpeg',
-        card_gradient: initialData.card_gradient || 'Blue',
+        card_gradient: normalizeCourseColor(initialData.card_gradient || initialData.color || 'Blue'),
         upcoming: Boolean(initialData.upcoming),
         featured: Boolean(initialData.featured !== undefined ? initialData.featured : 1),
         disable_self_learning: Boolean(initialData.disable_self_learning),
@@ -216,6 +221,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
       const isPaid = Boolean(formData.paid_course || parsedPrice > 0);
 
       // Build clean JSON payload matching API specification
+      const normalizedColor = normalizeCourseColor(formData.card_gradient || 'Blue');
       const payload: CreateCoursePayload = {
         name: courseId,
         course: courseId,
@@ -228,7 +234,8 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
         tags: formData.tags.trim(),
         category: formData.category.trim() || 'Business',
         image: formData.image.trim() || '/assets/lms/images/course_card.jpeg',
-        card_gradient: formData.card_gradient || 'Blue',
+        card_gradient: normalizedColor,
+        color: normalizedColor,
         upcoming: formData.upcoming ? 1 : 0,
         featured: formData.featured ? 1 : 0,
         disable_self_learning: formData.disable_self_learning ? 1 : 0,
@@ -252,7 +259,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
           if (createdName) {
             router.push(`/course/${encodeURIComponent(createdName)}`);
           } else {
-            router.push('/');
+            router.push('/courses');
           }
           router.refresh();
         }, 1200);
@@ -263,7 +270,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
         if (courseId) {
           router.push(`/course/${encodeURIComponent(courseId)}`);
         } else {
-          router.push('/');
+          router.push('/courses');
         }
         router.refresh();
       }, 1200);
@@ -305,10 +312,16 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
 
           <button
             type="button"
-            onClick={() => router.back()}
-            className="self-start md:self-auto inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-sm border border-white/10 transition-colors"
+            onClick={() => {
+              if (isEditing && courseId) {
+                router.push(`/course/${encodeURIComponent(courseId)}`);
+              } else {
+                router.push('/courses');
+              }
+            }}
+            className="self-start md:self-auto inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-sm border border-white/10 transition-colors cursor-pointer"
           >
-            <ArrowLeft className="w-4 h-4" /> Cancel & Back
+            <ArrowLeft className="w-4 h-4" /> {isEditing ? 'Back to Course' : 'Back to Courses'}
           </button>
         </div>
       </div>
@@ -484,6 +497,47 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
               <p className="text-[11px] text-slate-400">
                 Enter an image URL, path, or upload a local file (.jpg, .png).
               </p>
+
+              {/* Designed Space / Container for Cover Image */}
+              <div className="mt-3 relative w-full h-48 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-950 overflow-hidden flex items-center justify-center shadow-inner group">
+                {formData.image ? (
+                  <>
+                    <img
+                      src={getImageUrl(formData.image) || '/assets/lms/images/course_card.jpeg'}
+                      alt=""
+                      aria-hidden="true"
+                      className="absolute inset-0 w-full h-full object-cover blur-md opacity-30 scale-110 pointer-events-none"
+                    />
+                    <img
+                      src={getImageUrl(formData.image) || '/assets/lms/images/course_card.jpeg'}
+                      alt="Course Cover"
+                      className="relative z-10 max-h-full max-w-full object-contain p-2 transition-transform duration-300 group-hover:scale-[1.02]"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/assets/lms/images/course_card.jpeg';
+                      }}
+                    />
+                    <div className="absolute top-2.5 left-2.5 z-20 px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md text-[10px] text-slate-200 font-semibold border border-white/10 flex items-center gap-1.5">
+                      <ImageIcon className="w-3 h-3 text-indigo-400" /> Cover Preview (Fits Container)
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
+                      className="absolute top-2.5 right-2.5 z-20 p-1.5 rounded-lg bg-black/60 hover:bg-rose-600/80 text-white backdrop-blur-md transition-colors border border-white/10 cursor-pointer"
+                      title="Clear image"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-6 text-center text-slate-400">
+                    <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-2 text-slate-400">
+                      <ImageIcon className="w-6 h-6" />
+                    </div>
+                    <p className="text-xs font-semibold text-slate-300">No cover image selected</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Upload or enter an image URL to preview how it fits in the container.</p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Video Link */}
@@ -542,16 +596,22 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                 Live Card Preview
               </span>
               <div className="max-w-sm rounded-2xl overflow-hidden shadow-md border border-slate-200 bg-white">
-                <div className="h-32 relative overflow-hidden bg-slate-900">
+                <div className="aspect-[16/9] w-full relative overflow-hidden bg-slate-950 flex items-center justify-center">
+                  <img
+                    src={getImageUrl(formData.image) || '/assets/lms/images/course_card.jpeg'}
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 w-full h-full object-cover blur-md opacity-25 scale-110 pointer-events-none"
+                  />
                   <img
                     src={getImageUrl(formData.image) || '/assets/lms/images/course_card.jpeg'}
                     alt="Course Preview"
-                    className="w-full h-full object-cover"
+                    className="relative z-10 max-h-full max-w-full object-contain p-2"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = '/assets/lms/images/course_card.jpeg';
                     }}
                   />
-                  <div className={`absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white shadow-xs bg-gradient-to-r ${selectedGradient.class}`}>
+                  <div className={`absolute top-2.5 right-2.5 z-20 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white shadow-xs bg-gradient-to-r ${selectedGradient.class}`}>
                     {formData.category || 'Course'}
                   </div>
                 </div>
@@ -876,7 +936,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                       await deleteCourse(formData.name);
                       setSuccess('Course deleted successfully.');
                       setTimeout(() => {
-                        router.push('/');
+                        router.push('/courses');
                         router.refresh();
                       }, 1200);
                     } catch (err: any) {
@@ -895,8 +955,14 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <button
               type="button"
-              onClick={() => router.back()}
-              className="flex-1 sm:flex-none px-6 py-3 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
+              onClick={() => {
+                if (isEditing && courseId) {
+                  router.push(`/course/${encodeURIComponent(courseId)}`);
+                } else {
+                  router.push('/courses');
+                }
+              }}
+              className="flex-1 sm:flex-none px-6 py-3 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             >
               Cancel
             </button>

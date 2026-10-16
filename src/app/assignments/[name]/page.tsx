@@ -167,7 +167,7 @@ export default function AssignmentDetailPage() {
     setDeleting(true);
     try {
       await deleteAssignment(name);
-      router.push(assignment?.course ? `/course/${assignment.course}` : '/dashboard');
+      router.push('/assignments');
     } catch (err: any) {
       setError(err.message || 'Failed to delete assignment');
       setDeleting(false);
@@ -181,9 +181,9 @@ export default function AssignmentDetailPage() {
       {/* Header */}
       <div className="bg-slate-900 text-white py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
-          <Link href={assignment?.course ? `/course/${assignment.course}` : '/dashboard'} className="inline-flex items-center text-indigo-300 hover:text-white mb-6 transition-colors text-sm font-medium">
+          <Link href="/assignments" className="inline-flex items-center text-indigo-300 hover:text-white mb-6 transition-colors text-sm font-medium">
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Course
+            Back to Assignments
           </Link>
           
           {loading ? (

@@ -6,7 +6,7 @@ import CourseForm from '@/components/admin/CourseForm';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { getCourseDetails } from '@/services/lms.services';
+import { getCourseDetails, normalizeCourseColor } from '@/services/lms.services';
 
 export default function EditCoursePage() {
   const params = useParams();
@@ -36,7 +36,7 @@ export default function EditCoursePage() {
             tags: data.tags || '',
             category: data.category || 'Business',
             image: data.image || '',
-            card_gradient: data.card_gradient || 'Blue',
+            card_gradient: normalizeCourseColor(data.card_gradient || data.color || 'Blue'),
             upcoming: data.upcoming ?? 0,
             featured: data.featured ?? 1,
             disable_self_learning: data.disable_self_learning ?? 0,
