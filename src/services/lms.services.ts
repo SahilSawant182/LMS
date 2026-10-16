@@ -690,12 +690,21 @@ export const deleteCertificateEvaluation = async (name: string) => {
 };
 
 export const getCourseProgress = async (course: string) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_course_progress`, {
-    params: { course },
-    headers: {
-      'Authorization': `token ${API_TOKEN}`
-    }
-  });
+  try {
+    return await apiService.get(`method/${API_METHOD_PREFIX}.get_course_progress`, {
+      params: { course },
+      headers: {
+        'Authorization': `token ${API_TOKEN}`
+      }
+    });
+  } catch (err) {
+    return await apiService.get(`method/lms.lms.doctype.lms_course_progress.lms_course_progress.get_course_progress`, {
+      params: { course },
+      headers: {
+        'Authorization': `token ${API_TOKEN}`
+      }
+    });
+  }
 };
 
 export const getAssignments = async () => {

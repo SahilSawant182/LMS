@@ -585,20 +585,28 @@ export default function CourseDetailPage() {
     : (enrollmentData?.currency || details?.currency || "₹");
   const isFree = !isPaid || currentPrice === 0;
 
-  // Normalized progress calculations
+  // Normalized progress calculations from backend sources
   const normalizedProgress = progress?.message?.data || progress?.data || progress?.message || progress || {};
   const progressPercent = typeof normalizedProgress.progress === 'number'
     ? normalizedProgress.progress
-    : Number(normalizedProgress.progress || 0);
+    : typeof enrollmentData?.progress === 'number'
+      ? enrollmentData.progress
+      : Number(normalizedProgress.progress || enrollmentData?.progress || 0);
+
   const completedLessonsCount = typeof normalizedProgress.completed_lessons === 'number'
     ? normalizedProgress.completed_lessons
-    : Number(normalizedProgress.completed_lessons || 0);
-  const totalLessonsCount = typeof normalizedProgress.total_lessons === 'number'
-    ? normalizedProgress.total_lessons
-    : Number(normalizedProgress.total_lessons || 0);
-  const progressRecords = normalizedProgress.records || normalizedProgress.data?.records || [];
+    : typeof enrollmentData?.completed_lessons === 'number'
+      ? enrollmentData.completed_lessons
+      : Number(normalizedProgress.completed_lessons || enrollmentData?.completed_lessons || 0);
 
   const allOutlineLessons = outline.flatMap((c: any) => c.lessons || []);
+  const progressRecords = normalizedProgress.records || normalizedProgress.data?.records || [];
+
+  const totalLessonsCount = typeof normalizedProgress.total_lessons === 'number'
+    ? normalizedProgress.total_lessons
+    : typeof enrollmentData?.total_lessons === 'number'
+      ? enrollmentData.total_lessons
+      : Number(normalizedProgress.total_lessons || enrollmentData?.total_lessons || details?.lessons || allOutlineLessons.length || 0);
   const isAllOutlineLessonsComplete = allOutlineLessons.length > 0 && allOutlineLessons.every((l: any) => {
     return progressRecords.some((r: any) => 
       (r.lesson === l.name || r.lesson === l.title || r.lesson === l.lesson_name) && 
@@ -609,8 +617,11 @@ export default function CourseDetailPage() {
   const isCourseComplete = Boolean(isEnrolled && (
     progressPercent >= 100 ||
     (totalLessonsCount > 0 && completedLessonsCount >= totalLessonsCount) ||
-    isAllOutlineLessonsComplete
+    isAllOutlineLessonsComplete ||
+    enrollmentData?.status === 'Completed'
   ));
+
+  const hasCertificate = Boolean(details?.has_certificate || enrollmentData?.has_certificate || enrollmentData?.certificate);
 
   const gradientMap: Record<string, string> = {
     Blue: "from-blue-950 via-slate-900 to-indigo-950",
@@ -796,31 +807,7 @@ export default function CourseDetailPage() {
               </form>
             )}
 
-            {/* Course Completion Banner */}
-            {isCourseComplete && (
-              <div className="mb-6 p-5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-500/20">
-                    <Award className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                      Course 100% Completed!
-                      <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">Finished</span>
-                    </h4>
-                    <p className="text-xs text-slate-600 mt-0.5">
-                      You have successfully completed all lessons and chapters of this course.
-                    </p>
-                  </div>
-                </div>
-                <Link
-                  href="/certificates"
-                  className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center justify-center gap-1.5 shrink-0 transition-all active:scale-95 cursor-pointer"
-                >
-                  <Award className="w-3.5 h-3.5" /> View Certificate
-                </Link>
-              </div>
-            )}
+
 
             {outline.length > 0 ? (
               <div className="space-y-3">
@@ -1545,14 +1532,15 @@ export default function CourseDetailPage() {
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       Status: Course Completed
                     </div>
-                    <Link
-                      href="/certificates"
-                      className="w-full font-bold py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md hover:shadow-lg shadow-emerald-500/20 transition-all transform hover:-translate-y-0.5 flex justify-center items-center gap-2 text-sm cursor-pointer active:scale-95"
-                    >
-                      <Award className="w-4 h-4" />
-                      Claim / View Certificate
-                      <ChevronRight className="w-4 h-4" />
-                    </Link>
+                    {hasCertificate && (
+                      <Link
+                        href="/certificates"
+                        className="w-full font-bold py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm transition-all flex justify-center items-center gap-2 text-xs cursor-pointer active:scale-95"
+                      >
+                        <Award className="w-4 h-4" />
+                        View Certificate
+                      </Link>
+                    )}
                     <button
                       onClick={() => {
                         const firstChapter = outline?.find(c => c.lessons && c.lessons.length > 0) || outline?.[0];

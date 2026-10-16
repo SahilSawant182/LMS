@@ -1630,15 +1630,17 @@ export function DashboardContent() {
                                   href={`/course/${encodeURIComponent(course.course)}`}
                                   className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-2xs"
                                 >
-                                  <span>Review</span>
+                                  <span>Review Course</span>
                                 </Link>
-                                <Link
-                                  href="/certificates"
-                                  className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-sm active:scale-95"
-                                >
-                                  <Award className="w-3.5 h-3.5" />
-                                  <span>Certificate</span>
-                                </Link>
+                                {Boolean((course as any).has_certificate || (course as any).certificate) && (
+                                  <Link
+                                    href="/certificates"
+                                    className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-sm active:scale-95"
+                                  >
+                                    <Award className="w-3.5 h-3.5" />
+                                    <span>Certificate</span>
+                                  </Link>
+                                )}
                               </div>
                             ) : (
                               <Link
