@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { createBatch, updateBatch, getMasterData } from '@/services/lms.services';
+import { createBatch, updateBatch, getMasterData, getQuizzes } from '@/services/lms.services';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, Plus, Trash2, Calendar as CalendarIcon, Clock, Users, BookOpen, Tag, Video } from 'lucide-react';
 import Link from 'next/link';
@@ -18,6 +18,65 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
   const [error, setError] = useState<string | null>(null);
   
   const [activeTab, setActiveTab] = useState<'details' | 'assessment' | 'timetable' | 'pricing'>('details');
+  const [assessmentOptions, setAssessmentOptions] = useState<Array<{ value: string; label: string }>>([]);
+
+  // Fetch available assessments and quizzes for the dropdown
+  useEffect(() => {
+    const fetchAssessments = async () => {
+      try {
+        const optionMap = new Map<string, string>();
+
+        // 1. Fetch from getMasterData('LMS Assessment')
+        try {
+          const lmsAssessments = await getMasterData('LMS Assessment');
+          if (Array.isArray(lmsAssessments)) {
+            lmsAssessments.forEach((item: any) => {
+              const val = typeof item === 'string' ? item : item.name || item.value || item.title || '';
+              const lbl = typeof item === 'string' ? item : item.title || item.name || item.label || val;
+              if (val) optionMap.set(val, lbl);
+            });
+          }
+        } catch {}
+
+        // 2. Fetch from getMasterData('LMS Quiz')
+        try {
+          const lmsQuizzes = await getMasterData('LMS Quiz');
+          if (Array.isArray(lmsQuizzes)) {
+            lmsQuizzes.forEach((item: any) => {
+              const val = typeof item === 'string' ? item : item.name || item.value || item.title || '';
+              const lbl = typeof item === 'string' ? item : item.title || item.name || item.label || val;
+              if (val) optionMap.set(val, lbl);
+            });
+          }
+        } catch {}
+
+        // 3. Fetch from getQuizzes()
+        try {
+          const quizzesRes = await getQuizzes();
+          const qList = Array.isArray(quizzesRes) 
+            ? quizzesRes 
+            : (quizzesRes?.data || quizzesRes?.message || []);
+          if (Array.isArray(qList)) {
+            qList.forEach((q: any) => {
+              const val = q.name || q.title || '';
+              const lbl = q.title && q.title !== q.name ? `${q.title} (${q.name})` : val;
+              if (val) optionMap.set(val, lbl);
+            });
+          }
+        } catch {}
+
+        if (optionMap.size > 0) {
+          setAssessmentOptions(
+            Array.from(optionMap.entries()).map(([value, label]) => ({ value, label }))
+          );
+        }
+      } catch (err) {
+        console.warn('Failed to load assessment options:', err);
+      }
+    };
+
+    fetchAssessments();
+  }, []);
 
   const [formData, setFormData] = useState<any>({
     title: '',
@@ -108,8 +167,14 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
     setError(null);
     
     try {
+      // Filter out any blank or unselected assessment rows
+      const validAssessments = (formData.assessment || [])
+        .filter((ass: any) => ass && (typeof ass === 'string' ? ass.trim() : (ass.assessment && ass.assessment.trim())))
+        .map((ass: any) => (typeof ass === 'string' ? { assessment: ass.trim() } : { ...ass, assessment: ass.assessment.trim() }));
+
       const payload = {
         ...formData,
+        assessment: validAssessments,
         name: formData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
         batch: formData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')
       };
@@ -322,18 +387,44 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
 
                 <div className="border border-slate-100 bg-slate-50 rounded-md p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-slate-700">Assessments</h3>
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-700">Assessments</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">Select existing assessments from the assessment &amp; quiz bank.</p>
+                    </div>
                     <button type="button" onClick={() => handleArrayAdd('assessment', { assessment: '' })} className="text-xs text-indigo-600 font-medium flex items-center gap-1 hover:text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md"><Plus className="w-3 h-3" /> Add Assessment</button>
                   </div>
                   
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-3">
                     {formData.assessment.map((ass: any, idx: number) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <input type="text" value={ass.assessment || ''} onChange={(e) => handleArrayChange('assessment', idx, 'assessment', e.target.value)} placeholder="Assessment Name" className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 outline-none" />
-                        <button type="button" onClick={() => handleArrayRemove('assessment', idx)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4" /></button>
+                      <div key={idx} className="flex items-start gap-2">
+                        <div className="flex-1">
+                          <Dropdown
+                            id={`assessment-${idx}`}
+                            value={ass.assessment || ''}
+                            onChange={(value: string) => handleArrayChange('assessment', idx, 'assessment', value)}
+                            endpoint="https://devlms.stridenex.ai/api/method/lms.lms.master.get_dropdown_options"
+                            params={{ doctype: "LMS Assessment" }}
+                            placeholder="Select Assessment"
+                            options={assessmentOptions.length > 0 ? assessmentOptions : undefined}
+                            searchable
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleArrayRemove('assessment', idx)}
+                          className="text-red-400 hover:text-red-600 p-2 mt-0.5 rounded-md hover:bg-red-50 transition-colors"
+                          title="Remove assessment"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     ))}
-                    {formData.assessment.length === 0 && <p className="text-xs text-slate-400 text-center py-4 bg-white rounded-md border border-dashed border-slate-200">No assessments added.</p>}
+                    {formData.assessment.length === 0 && (
+                      <div className="text-center py-5 bg-white rounded-md border border-dashed border-slate-200">
+                        <p className="text-xs text-slate-500 font-medium">No assessments added to this batch.</p>
+                        <p className="text-[11px] text-slate-400 mt-1">Click &quot;Add Assessment&quot; to pick from available quizzes &amp; assessments.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

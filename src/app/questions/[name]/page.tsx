@@ -4,13 +4,14 @@ import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { ArrowLeft, HelpCircle, CheckSquare, AlignLeft, CheckCircle2, AlertCircle } from 'lucide-react';
-import { getQuestion } from '@/services/lms.services';
+import { getQuestion, getQuestions } from '@/services/lms.services';
 import { formatDate } from '@/utils/formatters';
+import { useParams } from 'next/navigation';
 
-export default function QuestionDetailsPage({ params }: { params: Promise<{ name: string }> | { name: string } }) {
-  // Unwrap params for Next.js 15+ compatibility
-  const resolvedParams = params instanceof Promise ? React.use(params) : params;
-  const name = resolvedParams.name;
+export default function QuestionDetailsPage() {
+  const params = useParams();
+  const rawName = (params?.name as string) || '';
+  const name = decodeURIComponent(rawName);
 
   const [questionData, setQuestionData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -18,17 +19,66 @@ export default function QuestionDetailsPage({ params }: { params: Promise<{ name
 
   useEffect(() => {
     const fetchQuestion = async () => {
+      if (!name) return;
       setLoading(true);
+      setError(null);
       try {
         const rawResponse = await getQuestion(name);
-        const data = rawResponse?.message?.data || rawResponse?.data?.message || rawResponse?.data || rawResponse?.message;
-        if (data) {
+        
+        // Extract data properly across various API response wrappers
+        let data: any = null;
+        if (rawResponse) {
+          if (rawResponse.data?.data) {
+            data = rawResponse.data.data;
+          } else if (rawResponse.message?.data) {
+            data = rawResponse.message.data;
+          } else if (rawResponse.data && typeof rawResponse.data === 'object' && (rawResponse.data.name || rawResponse.data.question)) {
+            data = rawResponse.data;
+          } else if (rawResponse.message && typeof rawResponse.message === 'object' && (rawResponse.message.name || rawResponse.message.question)) {
+            data = rawResponse.message;
+          } else if (rawResponse.name || rawResponse.question) {
+            data = rawResponse;
+          }
+        }
+
+        // Secondary fallback: if single get returned null, try searching question list
+        if (!data) {
+          try {
+            const listRes = await getQuestions();
+            const list = Array.isArray(listRes)
+              ? listRes
+              : (listRes?.data?.questions || listRes?.message?.data?.questions || listRes?.data || listRes?.message || []);
+            if (Array.isArray(list)) {
+              const found = list.find((q: any) => q.name === name || q.name === rawName || q.question === name);
+              if (found) data = found;
+            }
+          } catch (listErr) {
+            console.warn('Fallback list search failed:', listErr);
+          }
+        }
+
+        if (data && (data.name || data.question)) {
           setQuestionData(data);
         } else {
           setError('Question not found.');
         }
       } catch (err: any) {
-        setError(err.message || 'Failed to fetch question');
+        // Last-resort fallback: check questions list
+        try {
+          const listRes = await getQuestions();
+          const list = Array.isArray(listRes)
+            ? listRes
+            : (listRes?.data?.questions || listRes?.message?.data?.questions || listRes?.data || listRes?.message || []);
+          if (Array.isArray(list)) {
+            const found = list.find((q: any) => q.name === name || q.name === rawName || q.question === name);
+            if (found) {
+              setQuestionData(found);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {}
+        setError(err.response?.data?.message?.message || err.message || 'Failed to fetch question');
       } finally {
         setLoading(false);
       }
@@ -37,7 +87,7 @@ export default function QuestionDetailsPage({ params }: { params: Promise<{ name
     if (name) {
       fetchQuestion();
     }
-  }, [name]);
+  }, [name, rawName]);
 
   const getQuestionTypeIcon = (type: string) => {
     switch (type) {
@@ -53,6 +103,58 @@ export default function QuestionDetailsPage({ params }: { params: Promise<{ name
     }
   };
 
+interface RenderOption {
+  num: number;
+  value: string;
+  isCorrect: boolean;
+  explanation?: string;
+}
+
+  // Helper to get normalized choice options
+  const getRenderOptions = (): RenderOption[] => {
+    if (!questionData) return [];
+
+    // 1. If options array (Frappe child table) exists
+    if (Array.isArray(questionData.options) && questionData.options.length > 0) {
+      return questionData.options.map((opt: any, idx: number) => ({
+        num: idx + 1,
+        value: typeof opt === 'string' ? opt : (opt.option || opt.title || opt.name || ''),
+        isCorrect: opt.is_correct === 1 || opt.is_correct === true || opt.correct === 1,
+        explanation: opt.explanation || '',
+      })).filter((o: RenderOption) => Boolean(o.value));
+    }
+
+    // 2. Flat option_1..4 columns
+    return [1, 2, 3, 4].map((num) => {
+      const optionKey = `option_${num}`;
+      const isCorrectKey = `is_correct_${num}`;
+      const explanationKey = `explanation_${num}`;
+      
+      const optionValue = questionData[optionKey];
+      const isCorrect = questionData[isCorrectKey] === 1 || questionData[isCorrectKey] === true;
+      const explanation = questionData[explanationKey];
+
+      return {
+        num,
+        value: optionValue || '',
+        isCorrect,
+        explanation,
+      };
+    }).filter((o: RenderOption) => Boolean(o.value));
+  };
+
+  // Helper to get normalized user input possibilities
+  const getUserInputPossibilities = () => {
+    if (!questionData) return [];
+    if (Array.isArray(questionData.possibilities) && questionData.possibilities.length > 0) {
+      return questionData.possibilities.map((p: any) => typeof p === 'string' ? p : (p.possibility || p.value || '')).filter(Boolean);
+    }
+    return [1, 2, 3, 4].map((num) => questionData[`possibility_${num}`]).filter(Boolean);
+  };
+
+  const choiceOptions = getRenderOptions();
+  const userInputPossibilities = getUserInputPossibilities();
+
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
       <Navbar />
@@ -61,7 +163,7 @@ export default function QuestionDetailsPage({ params }: { params: Promise<{ name
         
         <div className="mb-6">
           <Link href="/questions" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors">
-            <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Question Bank
+            <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Practice Questions
           </Link>
         </div>
 
@@ -73,7 +175,13 @@ export default function QuestionDetailsPage({ params }: { params: Promise<{ name
           <div className="text-center py-20 bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col items-center">
              <AlertCircle className="w-12 h-12 text-slate-300 mb-4" />
              <h3 className="text-xl font-bold text-slate-900 mb-2">Question Not Found</h3>
-             <p className="text-slate-500 max-w-sm mx-auto">{error || "The question you're looking for doesn't exist."}</p>
+             <p className="text-slate-500 max-w-sm mx-auto mb-6">{error || "The question you're looking for doesn't exist."}</p>
+             <Link
+               href="/questions"
+               className="inline-flex items-center px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold rounded-lg text-sm transition-colors"
+             >
+               <ArrowLeft className="w-4 h-4 mr-1.5" /> Return to Practice Questions
+             </Link>
           </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
@@ -87,7 +195,7 @@ export default function QuestionDetailsPage({ params }: { params: Promise<{ name
                 <div>
                   <div className="flex items-center gap-3 mb-1">
                     <span className="text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                      {questionData.type}
+                      {questionData.type || 'Question'}
                     </span>
                     <span className="text-slate-400 font-mono text-sm">ID: {questionData.name}</span>
                   </div>
@@ -111,60 +219,45 @@ export default function QuestionDetailsPage({ params }: { params: Promise<{ name
                   {questionData.type === 'User Input' ? 'Accepted Answers' : 'Options & Answers'}
                 </h3>
                 
-                {questionData.type === 'Choices' || questionData.type === 'Single Choice' || questionData.type === 'Multiple Choice' ? (
+                {questionData.type === 'Choices' || questionData.type === 'Single Choice' || questionData.type === 'Multiple Choice' || choiceOptions.length > 0 ? (
                   <div className="space-y-4">
-                    {[1, 2, 3, 4].map((num) => {
-                      const optionKey = `option_${num}`;
-                      const isCorrectKey = `is_correct_${num}`;
-                      const explanationKey = `explanation_${num}`;
-                      
-                      const optionValue = questionData[optionKey];
-                      const isCorrect = questionData[isCorrectKey] === 1 || questionData[isCorrectKey] === true;
-                      const explanation = questionData[explanationKey];
-
-                      if (!optionValue) return null;
-
-                      return (
-                        <div key={num} className={`p-5 rounded-xl border-2 transition-all flex gap-4 ${isCorrect ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-100 bg-white'}`}>
-                          <div className="pt-1 shrink-0">
-                            {isCorrect ? (
-                              <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-                            ) : (
-                              <div className="w-6 h-6 rounded-full border-2 border-slate-300 flex items-center justify-center text-xs font-bold text-slate-400">
-                                {String.fromCharCode(64 + num)}
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            <p className={`text-lg font-medium ${isCorrect ? 'text-emerald-900' : 'text-slate-700'}`}>
-                              <span dangerouslySetInnerHTML={{ __html: optionValue }} />
-                            </p>
-                            {explanation && (
-                              <div className="mt-3 text-sm text-slate-600 bg-white p-3 rounded-lg border border-slate-200">
-                                <span className="font-semibold text-slate-800">Explanation:</span> <span dangerouslySetInnerHTML={{ __html: explanation }} />
-                              </div>
-                            )}
-                          </div>
+                    {choiceOptions.map(({ num, value, isCorrect, explanation }) => (
+                      <div key={num} className={`p-5 rounded-xl border-2 transition-all flex gap-4 ${isCorrect ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-100 bg-white'}`}>
+                        <div className="pt-1 shrink-0">
+                          {isCorrect ? (
+                            <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full border-2 border-slate-300 flex items-center justify-center text-xs font-bold text-slate-400">
+                              {String.fromCharCode(64 + num)}
+                            </div>
+                          )}
                         </div>
-                      );
-                    })}
+                        <div className="flex-grow">
+                          <p className={`text-lg font-medium ${isCorrect ? 'text-emerald-900' : 'text-slate-700'}`}>
+                            <span dangerouslySetInnerHTML={{ __html: value }} />
+                          </p>
+                          {explanation && (
+                            <div className="mt-3 text-sm text-slate-600 bg-white p-3 rounded-lg border border-slate-200">
+                              <span className="font-semibold text-slate-800">Explanation:</span> <span dangerouslySetInnerHTML={{ __html: explanation }} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   // User Input Handling
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {[1, 2, 3, 4].map((num) => {
-                      const possibilityKey = `possibility_${num}`;
-                      const possibility = questionData[possibilityKey];
-                      
-                      if (!possibility) return null;
-
-                      return (
-                        <div key={num} className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
+                    {userInputPossibilities.length > 0 ? (
+                      userInputPossibilities.map((possibility: string, idx: number) => (
+                        <div key={idx} className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
                           <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
                           <span className="font-medium text-emerald-900" dangerouslySetInnerHTML={{ __html: possibility }} />
                         </div>
-                      );
-                    })}
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-400 italic">No specific accepted answer possibilities defined.</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -173,10 +266,10 @@ export default function QuestionDetailsPage({ params }: { params: Promise<{ name
             {/* Footer metadata */}
             <div className="bg-slate-50 p-6 border-t border-slate-100 text-sm text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-4">
               <div>
-                Created by <span className="font-semibold text-slate-700">{questionData.owner || questionData.modified_by}</span>
+                Created by <span className="font-semibold text-slate-700">{questionData.owner || questionData.modified_by || 'Instructor'}</span>
               </div>
               <div className="flex gap-4">
-                <span>Created: {formatDate(questionData.creation)}</span>
+                {questionData.creation && <span>Created: {formatDate(questionData.creation)}</span>}
                 {questionData.modified && <span>Modified: {formatDate(questionData.modified)}</span>}
               </div>
             </div>

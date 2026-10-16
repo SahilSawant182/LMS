@@ -149,22 +149,30 @@ export default function Dropdown({
             data = responseData;
           } else if (responseData.data && Array.isArray(responseData.data)) {
             data = responseData.data;
+          } else if (responseData.message?.data && Array.isArray(responseData.message.data)) {
+            data = responseData.message.data;
           } else if (responseData.message && Array.isArray(responseData.message)) {
             data = responseData.message;
           } else {
-            data = responseData;
+            data = Array.isArray(responseData) ? responseData : [];
           }
         }
       }
 
-      const mappedOptions = mapOptions
+      let mappedOptions = mapOptions
         ? mapOptions(data)
         : (Array.isArray(data)
           ? data.map((item: any) => ({
-            value: item.name || item.value || String(item),
-            label: item.label || item.name || item.value || String(item)
+            value: item.value !== undefined ? String(item.value) : (item.name || String(item)),
+            label: item.label || item.title || item.name || item.value || String(item)
           }))
           : []);
+
+      if (mappedOptions.length === 0 && optionsProp && optionsProp.length > 0) {
+        mappedOptions = optionsProp.map((opt: any) =>
+          typeof opt === "string" ? { value: opt, label: opt } : opt
+        );
+      }
 
       setOptions(mappedOptions);
       setHasNext(nextFlag || (Array.isArray(data) && data.length === 20));
@@ -178,8 +186,16 @@ export default function Dropdown({
       }
     } catch (err: any) {
       console.error(`Error fetching ${label || id}:`, err);
-      setFetchError("Failed to load");
-      setOptions([]);
+      if (optionsProp && optionsProp.length > 0) {
+        const fallbackMapped = optionsProp.map((opt: any) =>
+          typeof opt === "string" ? { value: opt, label: opt } : opt
+        );
+        setOptions(fallbackMapped);
+        setFetchError("");
+      } else {
+        setFetchError("Failed to load");
+        setOptions([]);
+      }
     } finally {
       setLoading(false);
     }

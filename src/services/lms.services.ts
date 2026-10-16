@@ -83,14 +83,17 @@ export const getMasterData = async (doctype: string, additionalPayload: any = {}
       arr = response.data.data;
     } else if (response?.data && Array.isArray(response?.data)) {
       arr = response.data;
+    } else if (response?.message?.data && Array.isArray(response?.message?.data)) {
+      arr = response.message.data;
     } else if (response?.message && Array.isArray(response?.message)) {
       arr = response.message;
-    } else if (response?.message && response?.message?.data && Array.isArray(response?.message?.data)) {
-      arr = response.message.data;
+    } else if (Array.isArray(response)) {
+      arr = response;
     }
-    return arr.map((item: any) =>
-      typeof item === "string" ? item : item.name || item.id || item.title || item.course || item.category || ""
-    );
+    return arr.map((item: any) => {
+      if (typeof item === "string") return item;
+      return item.value || item.label || item.name || item.id || item.title || item.course || item.category || "";
+    }).filter(Boolean);
   } catch (error) {
     console.error(`Error fetching master data for ${doctype}:`, error);
     return [];
@@ -207,15 +210,32 @@ export const getBatches = async () => {
 };
 
 export const createBatch = async (payload: any) => {
-  return apiService.post(`method/lms.lms.stride_lms.create_batch`, payload, {
-    headers: { 'Authorization': `token ${API_TOKEN}` }
-  });
+  const headers = getQuestionAuthHeaders("application/json");
+  try {
+    return await apiService.post(`method/lms.lms.stride_lms.create_batch`, payload, {
+      headers
+    });
+  } catch (err: any) {
+    console.warn("create_batch method failed, falling back to resource/LMS Batch:", err);
+    return await apiService.post("resource/LMS Batch", payload, {
+      headers
+    });
+  }
 };
 
 export const updateBatch = async (payload: any) => {
-  return apiService.post(`method/lms.lms.stride_lms.update_batch`, payload, {
-    headers: { 'Authorization': `token ${API_TOKEN}` }
-  });
+  const headers = getQuestionAuthHeaders("application/json");
+  const batchName = payload.name || payload.batch;
+  try {
+    return await apiService.post(`method/lms.lms.stride_lms.update_batch`, payload, {
+      headers
+    });
+  } catch (err: any) {
+    console.warn("update_batch method failed, falling back to resource/LMS Batch:", err);
+    return await apiService.put(`resource/LMS Batch/${encodeURIComponent(batchName)}`, payload, {
+      headers
+    });
+  }
 };
 
 export const getCertificates = async () => {
@@ -431,24 +451,150 @@ export interface CreateQuestionPayload {
   explanation_4?: string;
   multiple?: number;
 }
-export const getQuestions = async () => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_questions`, {
-    headers: {
-      'Authorization': `token ${API_TOKEN}`
+
+const getQuestionAuthHeaders = (contentType = "application/json") => {
+  const headers: Record<string, string> = {
+    "Content-Type": contentType,
+  };
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
     }
-  });
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+  return headers;
+};
+
+export const getQuestions = async () => {
+  const headers = getQuestionAuthHeaders();
+
+  // 1. Try custom method
+  try {
+    const res = await apiService.get(`method/${API_METHOD_PREFIX}.get_questions`, { headers });
+    const data = res?.data || res?.message || res;
+    if (Array.isArray(data) && data.length > 0) return data;
+    if (Array.isArray(data?.questions) && data.questions.length > 0) return data.questions;
+    if (Array.isArray(res?.questions) && res.questions.length > 0) return res.questions;
+    if (data && typeof data === 'object' && Object.keys(data).length > 0) return data;
+  } catch (methodErr) {
+    console.warn("get_questions method failed, falling back to resource/LMS Question:", methodErr);
+  }
+
+  // 2. Fallback to standard DocType resource
+  try {
+    const resourceRes = await apiService.get("resource/LMS Question", {
+      params: {
+        fields: JSON.stringify(["*"]),
+        limit_page_length: 100,
+        order_by: "creation desc"
+      },
+      headers
+    });
+    const items = resourceRes?.data || resourceRes?.message || resourceRes;
+    if (Array.isArray(items)) return items;
+    if (Array.isArray(items?.data)) return items.data;
+  } catch (resourceErr) {
+    console.error("Resource fallback for LMS Question failed:", resourceErr);
+  }
+
+  return [];
 };
 
 export const getQuestion = async (name: string) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_question`, {
-    params: { name },
-    headers: {
-      'Authorization': `token ${API_TOKEN}`
+  const decodedName = decodeURIComponent(name || "").trim();
+  if (!decodedName) return null;
+
+  const headers = getQuestionAuthHeaders();
+
+  // Helper to check and extract valid question object
+  const extractQuestion = (raw: any) => {
+    if (!raw) return null;
+    let item = raw?.data || raw?.message || raw;
+    if (item?.data && typeof item.data === 'object' && !Array.isArray(item.data)) {
+      item = item.data;
     }
-  });
+    if (item && typeof item === 'object' && (item.name || item.question || item.question_detail)) {
+      return item;
+    }
+    return null;
+  };
+
+  // 1. Try custom method with ?name=
+  try {
+    const res1 = await apiService.get(`method/${API_METHOD_PREFIX}.get_question`, {
+      params: { name: decodedName },
+      headers
+    });
+    const item1 = extractQuestion(res1);
+    if (item1) return item1;
+  } catch (err1) {
+    // Continue to next fallback
+  }
+
+  // 2. Try custom method with ?question=
+  try {
+    const res2 = await apiService.get(`method/${API_METHOD_PREFIX}.get_question`, {
+      params: { question: decodedName },
+      headers
+    });
+    const item2 = extractQuestion(res2);
+    if (item2) return item2;
+  } catch (err2) {
+    // Continue to next fallback
+  }
+
+  // 3. Fallback to Frappe standard DocType resource: resource/LMS Question/:name
+  try {
+    const res3 = await apiService.get(`resource/LMS Question/${encodeURIComponent(decodedName)}`, {
+      headers
+    });
+    const item3 = extractQuestion(res3);
+    if (item3) return item3;
+  } catch (err3) {
+    // Continue to next fallback
+  }
+
+  // 4. Fallback to Frappe standard DocType filter query
+  try {
+    const res4 = await apiService.get("resource/LMS Question", {
+      params: {
+        filters: JSON.stringify([["name", "=", decodedName]]),
+        fields: JSON.stringify(["*"]),
+        limit_page_length: 1
+      },
+      headers
+    });
+    const list = res4?.data || res4?.message || res4;
+    if (Array.isArray(list) && list.length > 0) {
+      return list[0];
+    }
+  } catch (err4) {
+    // Continue to next fallback
+  }
+
+  // 5. Fallback: check if question exists in questions list
+  try {
+    const allQuestions = await getQuestions();
+    const list = Array.isArray(allQuestions)
+      ? allQuestions
+      : (allQuestions?.data || allQuestions?.message || []);
+    if (Array.isArray(list)) {
+      const match = list.find((q: any) => q.name === decodedName || q.name === name || q.question === decodedName);
+      if (match) return match;
+    }
+  } catch (err5) {
+    console.warn("Fallback allQuestions search in getQuestion failed:", err5);
+  }
+
+  return null;
 };
+
 export const createQuestion = async (data: CreateQuestionPayload) => {
-  // Convert object to URLSearchParams for x-www-form-urlencoded
+  const headers = getQuestionAuthHeaders("application/x-www-form-urlencoded");
   const params = new URLSearchParams();
   Object.entries(data).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
@@ -456,12 +602,16 @@ export const createQuestion = async (data: CreateQuestionPayload) => {
     }
   });
 
-  return apiService.post(`method/${API_METHOD_PREFIX}.create_question`, params, {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': `token ${API_TOKEN}`
-    }
-  });
+  try {
+    return await apiService.post(`method/${API_METHOD_PREFIX}.create_question`, params, {
+      headers
+    });
+  } catch (err) {
+    console.warn("create_question method failed, falling back to resource/LMS Question:", err);
+    return await apiService.post("resource/LMS Question", data, {
+      headers: getQuestionAuthHeaders("application/json")
+    });
+  }
 };
 
 export interface CreateCertificateEvaluationPayload {

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { createCourse, updateCourse, deleteCourse, getMasterData, getCategoryList, CreateCoursePayload, normalizeCourseColor } from '@/services/lms.services';
 import { uploadFile, getImageUrl } from '@/services/api.services';
+import Dropdown from '@/components/ui/Dropdown';
 
 interface CourseFormProps {
   initialData?: {
@@ -136,17 +137,22 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
       try {
         let catList: string[] = [];
         try {
-          const res = await getCategoryList();
-          const items = Array.isArray(res) 
-            ? res 
-            : (res?.data?.categories || res?.message?.data?.categories || res?.message?.categories || res?.message?.data || res?.data || []);
-          if (Array.isArray(items)) {
-            catList = items.map((i: any) => typeof i === 'string' ? i : (i.category || i.name || i.title || '')).filter(Boolean);
+          const res = await getMasterData('LMS Category');
+          if (Array.isArray(res) && res.length > 0) {
+            catList = res.filter(Boolean);
           }
         } catch (e) {}
 
         if (catList.length === 0) {
-          catList = await getMasterData('LMS Category');
+          try {
+            const res = await getCategoryList();
+            const items = Array.isArray(res) 
+              ? res 
+              : (res?.data?.categories || res?.message?.data?.categories || res?.message?.categories || res?.message?.data || res?.data || []);
+            if (Array.isArray(items)) {
+              catList = items.map((i: any) => typeof i === 'string' ? i : (i.value || i.label || i.category || i.name || i.title || '')).filter(Boolean);
+            }
+          } catch (e) {}
         }
 
         if (Array.isArray(catList) && catList.length > 0) {
@@ -379,19 +385,16 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
               <label htmlFor="category" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                 Category
               </label>
-              <select
+              <Dropdown
                 id="category"
-                name="category"
                 value={formData.category}
-                onChange={handleChange}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm font-medium text-slate-900"
-              >
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
+                onChange={(value: string) => setFormData(prev => ({ ...prev, category: value }))}
+                endpoint="https://devlms.stridenex.ai/api/method/lms.lms.master.get_dropdown_options"
+                params={{ doctype: "LMS Category" }}
+                placeholder="Select Category"
+                searchable
+                options={categories.map((cat) => ({ value: cat, label: cat }))}
+              />
             </div>
 
             {/* Tags */}

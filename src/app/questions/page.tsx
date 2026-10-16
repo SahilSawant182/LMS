@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { HelpCircle, FileText, ChevronRight, Search, PlusCircle, AlignLeft, CheckSquare, List, MessageSquare } from 'lucide-react';
+import { HelpCircle, ChevronRight, Search, PlusCircle, AlignLeft, CheckSquare, List, ArrowLeft } from 'lucide-react';
 import { getQuestions } from '@/services/lms.services';
 import { isAuthorizedInstructor } from '@/services/auth.services';
 import { formatDate } from '@/utils/formatters';
@@ -20,6 +20,7 @@ interface Question {
 
 export default function QuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInstructor, setIsInstructor] = useState(false);
@@ -45,6 +46,18 @@ export default function QuestionsPage() {
 
     fetchQuestions();
   }, []);
+
+  const filteredQuestions = useMemo(() => {
+    if (!searchQuery.trim()) return questions;
+    const qLower = searchQuery.toLowerCase();
+    return questions.filter((q) => {
+      const qText = (q.question || '').toLowerCase();
+      const qDetail = (q.question_detail || '').toLowerCase();
+      const qName = (q.name || '').toLowerCase();
+      const qType = (q.type || '').toLowerCase();
+      return qText.includes(qLower) || qDetail.includes(qLower) || qName.includes(qLower) || qType.includes(qLower);
+    });
+  }, [questions, searchQuery]);
 
   const getQuestionTypeIcon = (type: string) => {
     switch (type) {
@@ -76,16 +89,22 @@ export default function QuestionsPage() {
             <HelpCircle className="w-5 h-5 text-indigo-400" />
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold mb-1.5 tracking-tight">
-            Question <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-sky-400">Bank</span>
+            Practice <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-sky-400">Questions</span>
           </h1>
           <p className="text-indigo-100 max-w-2xl mx-auto text-xs md:text-sm mb-2">
-            Manage your repository of questions. Create, view, and organize questions for your quizzes and assessments.
+            Practice questions and exercises to test and reinforce your knowledge.
           </p>
         </div>
       </div>
 
       {/* Main Content */}
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full -mt-6 relative z-20">
+        <div className="mb-4">
+          <Link href="/dashboard" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors">
+            <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Dashboard
+          </Link>
+        </div>
+
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 md:p-8 mb-8 min-h-[400px]">
           
           <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 border-b border-slate-100 pb-6">
@@ -94,13 +113,21 @@ export default function QuestionsPage() {
                 <List className="w-6 h-6 text-indigo-600" /> 
                 All Questions
               </h2>
-              <p className="text-slate-500 text-sm mt-1">Found {questions.length} questions in the database</p>
+              <p className="text-slate-500 text-sm mt-1">
+                Showing {filteredQuestions.length} of {questions.length} questions
+              </p>
             </div>
             
             <div className="flex gap-4 w-full md:w-auto">
               <div className="relative flex-grow md:flex-grow-0">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-                <input type="text" placeholder="Search questions..." className="pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-full sm:w-64 transition-all" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search questions..."
+                  className="pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-full sm:w-64 transition-all"
+                />
               </div>
               {isInstructor && (
                 <Link 
@@ -121,10 +148,10 @@ export default function QuestionsPage() {
             <div className="text-center py-12 bg-red-50 text-red-600 rounded-lg border border-red-100">
               <p>{error}</p>
             </div>
-          ) : questions.length > 0 ? (
+          ) : filteredQuestions.length > 0 ? (
             <div className="grid gap-4">
-              {questions.map((q) => (
-                <Link href={`/questions/${q.name}`} key={q.name} className="block group">
+              {filteredQuestions.map((q) => (
+                <Link href={`/questions/${encodeURIComponent(q.name)}`} key={q.name} className="block group">
                   <div className="bg-white border border-slate-200 rounded-xl p-5 hover:border-indigo-300 hover:shadow-md transition-all flex items-start gap-4">
                     
                     <div className="p-3 bg-slate-50 rounded-lg group-hover:bg-indigo-50 transition-colors shrink-0">
@@ -139,7 +166,6 @@ export default function QuestionsPage() {
                         <span className="text-xs text-slate-400 font-mono">ID: {q.name}</span>
                       </div>
                       <h3 className="text-lg font-semibold text-slate-900 group-hover:text-indigo-700 transition-colors line-clamp-2 pr-8">
-                        {/* Use dangerouslySetInnerHTML if the question contains HTML, else just render */}
                         <span dangerouslySetInnerHTML={{ __html: q.question_detail || q.question }} />
                       </h3>
                       {q.creation && (
@@ -162,11 +188,15 @@ export default function QuestionsPage() {
               <div className="bg-white p-4 rounded-full shadow-sm mb-4">
                 <HelpCircle className="w-10 h-10 text-slate-300" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-1">No questions found</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-1">
+                {searchQuery ? "No matching questions found" : "No questions found"}
+              </h3>
               <p className="text-slate-500 max-w-sm mx-auto mb-6">
-                Your question bank is empty. Create your first question to get started.
+                {searchQuery
+                  ? "Try searching with different keywords."
+                  : "Your question bank is empty. Create your first question to get started."}
               </p>
-              {isInstructor && (
+              {isInstructor && !searchQuery && (
                 <Link 
                   href="/quizzes/create-question"
                   className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm"
