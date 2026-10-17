@@ -224,14 +224,14 @@ export default function SignupPage() {
   };
 
   return (
-    <div id="signup-page" className="min-h-screen flex w-full bg-white no-sidebar-page">
+    <div id="signup-page" className="min-h-screen lg:h-screen lg:overflow-hidden flex w-full bg-white no-sidebar-page">
       {/* Left side - Image & Overlay */}
-      <div className="hidden lg:flex w-1/2 relative bg-indigo-900 items-center justify-center">
+      <div className="hidden lg:flex w-1/2 h-full relative bg-indigo-900 items-center justify-center p-8 lg:p-12">
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{
             backgroundImage:
-              "url('https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=3271&auto=format&fit=crop')",
+              "url('/images/auth-signup-bg.jpg')",
           }}
         ></div>
         {/* Overlay */}
@@ -239,35 +239,35 @@ export default function SignupPage() {
         <div className="absolute inset-0 bg-gradient-to-t from-indigo-950 via-indigo-900/40 to-transparent"></div>
         
         {/* Content */}
-        <div className="relative z-10 px-12 text-white max-w-xl text-left animate-fade-in-up">
-          <h1 className="text-5xl font-bold mb-6 leading-tight">
+        <div className="relative z-10 text-white max-w-lg text-left animate-fade-in-up">
+          <h1 className="text-4xl lg:text-5xl font-extrabold mb-4 leading-tight tracking-tight">
             Start Learning Today.
           </h1>
-          <p className="text-lg text-indigo-100 mb-8 mr-auto">
+          <p className="text-base lg:text-lg text-indigo-100 mb-6 leading-relaxed">
             Unlock your potential with expert-led courses. Whether you're looking to advance your career or learn a new hobby, we have something for you.
           </p>
-          <div className="inline-block p-6 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-left">
+          <div className="inline-block p-4 sm:p-5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-left">
              <div className="flex items-center space-x-1 mb-2 text-yellow-400">
                {[...Array(5)].map((_, i) => (
-                 <svg key={i} className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                 <svg key={i} className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
                  </svg>
                ))}
              </div>
-             <p className="italic text-indigo-50 text-sm">"The best decision I made for my career. The platform is intuitive and the content is top-notch!"</p>
-             <p className="font-semibold text-white mt-3 text-sm">- Sarah Jenkins, Data Scientist</p>
+             <p className="italic text-indigo-50 text-xs sm:text-sm">"The best decision I made for my career. The platform is intuitive and the content is top-notch!"</p>
+             <p className="font-semibold text-white mt-2 text-xs sm:text-sm">- Sarah Jenkins, Data Scientist</p>
           </div>
         </div>
       </div>
 
       {/* Right side - Signup Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-24 bg-white">
-        <div className="w-full max-w-md space-y-8">
+      <div className="w-full lg:w-1/2 h-full flex items-center justify-center px-6 py-6 sm:px-10 lg:px-12 lg:py-6 bg-white overflow-y-auto">
+        <div className="w-full max-w-md my-auto space-y-3.5">
           <div className="text-center lg:text-left">
-            <h2 className="text-3xl font-extrabold text-slate-900">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               Create an account
             </h2>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-1 text-xs sm:text-sm text-slate-600">
               Already have an account?{" "}
               <Link
                 href="/login"
@@ -278,16 +278,16 @@ export default function SignupPage() {
             </p>
           </div>
 
-          <form className="mt-8 space-y-5" onSubmit={handleSignup}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <form className="space-y-2.5 sm:space-y-3" onSubmit={handleSignup}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label
                   htmlFor="first-name"
-                  className="block text-sm font-medium text-slate-700"
+                  className="block text-xs font-semibold text-slate-700 mb-1"
                 >
                   First name
                 </label>
-                <div className="mt-1">
+                <div>
                   <input
                     id="first-name"
                     name="first-name"
@@ -296,18 +296,18 @@ export default function SignupPage() {
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     placeholder="John"
-                    className="appearance-none block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-slate-900 transition-all duration-200"
+                    className="appearance-none block w-full px-3.5 py-2 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white text-slate-900 transition-all duration-200"
                   />
                 </div>
               </div>
               <div>
                 <label
                   htmlFor="last-name"
-                  className="block text-sm font-medium text-slate-700"
+                  className="block text-xs font-semibold text-slate-700 mb-1"
                 >
                   Last name
                 </label>
-                <div className="mt-1">
+                <div>
                   <input
                     id="last-name"
                     name="last-name"
@@ -316,7 +316,7 @@ export default function SignupPage() {
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="Doe"
-                    className="appearance-none block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-slate-900 transition-all duration-200"
+                    className="appearance-none block w-full px-3.5 py-2 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white text-slate-900 transition-all duration-200"
                   />
                 </div>
               </div>
@@ -325,11 +325,11 @@ export default function SignupPage() {
             <div>
               <label
                 htmlFor="email"
-                className="block text-sm font-medium text-slate-700"
+                className="block text-xs font-semibold text-slate-700 mb-1"
               >
                 Email address
               </label>
-              <div className="mt-1 flex gap-2">
+              <div className="flex gap-2">
                 <div className="relative w-full">
                   <input
                     id="email"
@@ -341,48 +341,48 @@ export default function SignupPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="student@example.com"
-                    className="appearance-none block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-slate-900 transition-all duration-200 disabled:bg-slate-100 disabled:text-slate-500"
+                    className="appearance-none block w-full px-3.5 py-2 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white text-slate-900 transition-all duration-200 disabled:bg-slate-100 disabled:text-slate-500"
                   />
                   {emailVerified && (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600 font-bold text-sm bg-green-50 px-2 py-1 rounded-md">
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600 font-bold text-xs bg-green-50 px-2 py-0.5 rounded-md">
                       ✓ Verified
                     </span>
                   )}
                 </div>
                 {!emailVerified && !emailOtpSent && (
-                  <button type="button" onClick={handleSendEmailOtp} disabled={sendingEmailOtp} className="whitespace-nowrap px-5 py-3 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-sm font-bold hover:bg-indigo-100 hover:border-indigo-300 focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-all">
+                  <button type="button" onClick={handleSendEmailOtp} disabled={sendingEmailOtp} className="whitespace-nowrap px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold hover:bg-indigo-100 hover:border-indigo-300 focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-all">
                     {sendingEmailOtp ? "Sending..." : "Get OTP"}
                   </button>
                 )}
               </div>
               {emailMsg.text && (
-                <div className={`mt-1.5 text-xs font-medium ${emailMsg.type === 'error' ? 'text-red-500' : 'text-green-600'}`}>
+                <div className={`mt-1 text-xs font-medium ${emailMsg.type === 'error' ? 'text-red-500' : 'text-green-600'}`}>
                   {emailMsg.text}
                 </div>
               )}
               {emailOtpSent && !emailVerified && (
-                <div className="mt-2 flex gap-2">
+                <div className="mt-1.5 flex gap-2">
                   <input
                     type="text"
                     value={emailOtp}
                     onChange={(e) => setEmailOtp(e.target.value)}
                     placeholder="Enter Email OTP"
-                    className="appearance-none block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-slate-900 transition-all"
+                    className="appearance-none block w-full px-3.5 py-2 border border-slate-300 rounded-xl shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white text-slate-900 transition-all"
                   />
-                  <button type="button" onClick={handleVerifyEmailOtp} disabled={verifyingEmailOtp} className="whitespace-nowrap px-5 py-3 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-colors">
+                  <button type="button" onClick={handleVerifyEmailOtp} disabled={verifyingEmailOtp} className="whitespace-nowrap px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-medium hover:bg-indigo-700 focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-colors">
                     {verifyingEmailOtp ? "Verifying..." : "Verify"}
                   </button>
                 </div>
               )}
               {emailOtpSent && !emailVerified && emailResendTimer === 0 && (
-                <div className="mt-2 text-right">
+                <div className="mt-1 text-right">
                   <button type="button" onClick={handleSendEmailOtp} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
                     Resend OTP
                   </button>
                 </div>
               )}
               {emailOtpSent && !emailVerified && emailResendTimer > 0 && (
-                <div className="mt-2 text-right">
+                <div className="mt-1 text-right">
                   <span className="text-xs text-slate-500 font-medium">Resend OTP in {emailResendTimer}s</span>
                 </div>
               )}
@@ -391,11 +391,11 @@ export default function SignupPage() {
             <div>
               <label
                 htmlFor="mobileNo"
-                className="block text-sm font-medium text-slate-700"
+                className="block text-xs font-semibold text-slate-700 mb-1"
               >
                 Mobile Number
               </label>
-              <div className="mt-1 flex gap-2">
+              <div className="flex gap-2">
                 <div className="relative w-full">
                   <input
                     id="mobileNo"
@@ -410,48 +410,48 @@ export default function SignupPage() {
                       if (val.length <= 10) setMobileNo(val);
                     }}
                     placeholder="e.g. 8767601473"
-                    className="appearance-none block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-slate-900 transition-all duration-200 disabled:bg-slate-100 disabled:text-slate-500"
+                    className="appearance-none block w-full px-3.5 py-2 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white text-slate-900 transition-all duration-200 disabled:bg-slate-100 disabled:text-slate-500"
                   />
                   {mobileVerified && (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600 font-bold text-sm bg-green-50 px-2 py-1 rounded-md">
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600 font-bold text-xs bg-green-50 px-2 py-0.5 rounded-md">
                       ✓ Verified
                     </span>
                   )}
                 </div>
                 {!mobileVerified && !mobileOtpSent && (
-                  <button type="button" onClick={handleSendMobileOtp} disabled={sendingMobileOtp} className="whitespace-nowrap px-5 py-3 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-sm font-bold hover:bg-indigo-100 hover:border-indigo-300 focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-all">
+                  <button type="button" onClick={handleSendMobileOtp} disabled={sendingMobileOtp} className="whitespace-nowrap px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold hover:bg-indigo-100 hover:border-indigo-300 focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-all">
                     {sendingMobileOtp ? "Sending..." : "Get OTP"}
                   </button>
                 )}
               </div>
               {mobileMsg.text && (
-                <div className={`mt-1.5 text-xs font-medium ${mobileMsg.type === 'error' ? 'text-red-500' : 'text-green-600'}`}>
+                <div className={`mt-1 text-xs font-medium ${mobileMsg.type === 'error' ? 'text-red-500' : 'text-green-600'}`}>
                   {mobileMsg.text}
                 </div>
               )}
               {mobileOtpSent && !mobileVerified && (
-                <div className="mt-2 flex gap-2">
+                <div className="mt-1.5 flex gap-2">
                   <input
                     type="text"
                     value={mobileOtp}
                     onChange={(e) => setMobileOtp(e.target.value)}
                     placeholder="Enter Mobile OTP"
-                    className="appearance-none block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-slate-900 transition-all"
+                    className="appearance-none block w-full px-3.5 py-2 border border-slate-300 rounded-xl shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white text-slate-900 transition-all"
                   />
-                  <button type="button" onClick={handleVerifyMobileOtp} disabled={verifyingMobileOtp} className="whitespace-nowrap px-5 py-3 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-colors">
+                  <button type="button" onClick={handleVerifyMobileOtp} disabled={verifyingMobileOtp} className="whitespace-nowrap px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-medium hover:bg-indigo-700 focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-colors">
                     {verifyingMobileOtp ? "Verifying..." : "Verify"}
                   </button>
                 </div>
               )}
               {mobileOtpSent && !mobileVerified && mobileResendTimer === 0 && (
-                <div className="mt-2 text-right">
+                <div className="mt-1 text-right">
                   <button type="button" onClick={handleSendMobileOtp} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
                     Resend OTP
                   </button>
                 </div>
               )}
               {mobileOtpSent && !mobileVerified && mobileResendTimer > 0 && (
-                <div className="mt-2 text-right">
+                <div className="mt-1 text-right">
                   <span className="text-xs text-slate-500 font-medium">Resend OTP in {mobileResendTimer}s</span>
                 </div>
               )}
@@ -460,11 +460,11 @@ export default function SignupPage() {
             <div>
               <label
                 htmlFor="password"
-                className="block text-sm font-medium text-slate-700"
+                className="block text-xs font-semibold text-slate-700 mb-1"
               >
                 Password <span className="text-red-500">*</span>
               </label>
-              <div className="mt-1 relative">
+              <div className="relative">
                 <input
                   id="password"
                   name="password"
@@ -474,14 +474,14 @@ export default function SignupPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className={`appearance-none block w-full px-4 py-3 border ${passwordError ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-indigo-500 focus:border-indigo-500'} rounded-xl shadow-sm placeholder-slate-400 focus:outline-none sm:text-sm bg-white text-slate-900 transition-all duration-200 pr-10`}
+                  className={`appearance-none block w-full px-3.5 py-2 border ${passwordError ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-indigo-500 focus:border-indigo-500'} rounded-xl shadow-sm placeholder-slate-400 focus:outline-none text-sm bg-white text-slate-900 transition-all duration-200 pr-10`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
                 >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
               {passwordError && (
@@ -492,11 +492,11 @@ export default function SignupPage() {
             <div>
               <label
                 htmlFor="confirm-password"
-                className="block text-sm font-medium text-slate-700"
+                className="block text-xs font-semibold text-slate-700 mb-1"
               >
                 Confirm Password <span className="text-red-500">*</span>
               </label>
-              <div className="mt-1 relative">
+              <div className="relative">
                 <input
                   id="confirm-password"
                   name="confirm-password"
@@ -506,14 +506,14 @@ export default function SignupPage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
-                  className={`appearance-none block w-full px-4 py-3 border ${confirmPasswordError ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-indigo-500 focus:border-indigo-500'} rounded-xl shadow-sm placeholder-slate-400 focus:outline-none sm:text-sm bg-white text-slate-900 transition-all duration-200 pr-10`}
+                  className={`appearance-none block w-full px-3.5 py-2 border ${confirmPasswordError ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-indigo-500 focus:border-indigo-500'} rounded-xl shadow-sm placeholder-slate-400 focus:outline-none text-sm bg-white text-slate-900 transition-all duration-200 pr-10`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
                 >
-                  {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
               {confirmPasswordError && (
@@ -521,25 +521,25 @@ export default function SignupPage() {
               )}
             </div>
 
-            <div className="pt-2">
-              <div className="text-center mb-4">
-                <label className="block text-sm font-semibold text-slate-900">
+            <div>
+              <div className="text-center mb-1.5">
+                <label className="block text-xs font-semibold text-slate-900">
                   Select your role to join as <span className="text-red-500">*</span>
                 </label>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2.5">
                 {ROLES.map((r) => (
                   <div
                     key={r.id}
                     onClick={() => setRole(r.id)}
-                    className={`relative flex flex-col items-center p-3 border rounded-xl cursor-pointer transition-all duration-200 ${
+                    className={`relative flex items-center gap-2.5 p-2 sm:p-2.5 border rounded-xl cursor-pointer transition-all duration-200 ${
                       role === r.id
-                        ? "border-orange-500 bg-orange-50/50 shadow-sm"
+                        ? "border-orange-500 bg-orange-50/60 shadow-sm"
                         : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
                     <div
-                      className={`p-2 rounded-full mb-2 transition-colors ${
+                      className={`p-1.5 rounded-lg shrink-0 transition-colors ${
                         role === r.id
                           ? "bg-orange-100 text-orange-600"
                           : "bg-slate-100 text-slate-500"
@@ -547,16 +547,18 @@ export default function SignupPage() {
                     >
                       {r.icon}
                     </div>
-                    <div className="font-bold text-slate-900 text-xs mb-0.5">{r.label}</div>
-                    <div className="text-[10px] text-slate-500 text-center leading-tight">
-                      {r.description}
+                    <div className="text-left min-w-0">
+                      <div className="font-bold text-slate-900 text-xs leading-none">{r.label}</div>
+                      <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                        {r.description}
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="flex items-center">
+            <div className="flex items-center pt-0.5">
               <input
                 id="terms"
                 name="terms"
@@ -566,24 +568,24 @@ export default function SignupPage() {
               />
               <label
                 htmlFor="terms"
-                className="ml-2 block text-sm text-slate-700 cursor-pointer"
+                className="ml-2 block text-xs text-slate-700 cursor-pointer"
               >
                 I agree to the{" "}
-                <a href="#" className="text-indigo-600 hover:text-indigo-500">Terms of Service</a>{" "}
+                <a href="#" className="text-indigo-600 hover:text-indigo-500 font-medium">Terms of Service</a>{" "}
                 and{" "}
-                <a href="#" className="text-indigo-600 hover:text-indigo-500">Privacy Policy</a>
+                <a href="#" className="text-indigo-600 hover:text-indigo-500 font-medium">Privacy Policy</a>
               </label>
             </div>
 
             {error && (
-              <div className="text-red-500 text-sm mt-2">{error}</div>
+              <div className="text-red-500 text-xs mt-1">{error}</div>
             )}
 
-            <div>
+            <div className="pt-1">
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? "Creating Account..." : "Create Account"}
               </button>

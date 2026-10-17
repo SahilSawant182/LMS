@@ -43,7 +43,7 @@ export default function ForgotPasswordPage() {
           className="absolute inset-0 bg-cover bg-center"
           style={{
             backgroundImage:
-              "url('https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=3149&auto=format&fit=crop')",
+              "url('/images/auth-login-bg.jpg')",
           }}
         ></div>
         {/* Overlay */}

@@ -108,7 +108,7 @@ export default function LoginPage() {
           className="absolute inset-0 bg-cover bg-center"
           style={{
             backgroundImage:
-              "url('https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=3149&auto=format&fit=crop')",
+              "url('/images/auth-login-bg.jpg')",
           }}
         ></div>
         {/* Overlay */}
@@ -126,9 +126,9 @@ export default function LoginPage() {
           </p>
           <div className="flex items-center space-x-4">
             <div className="flex -space-x-3">
-              <img className="w-10 h-10 rounded-full border-2 border-indigo-900" src="https://i.pravatar.cc/100?img=1" alt="Student" />
-              <img className="w-10 h-10 rounded-full border-2 border-indigo-900" src="https://i.pravatar.cc/100?img=2" alt="Student" />
-              <img className="w-10 h-10 rounded-full border-2 border-indigo-900" src="https://i.pravatar.cc/100?img=3" alt="Student" />
+              <img className="w-10 h-10 rounded-full border-2 border-indigo-900" src="/images/student-avatar-1.jpg" alt="Student" />
+              <img className="w-10 h-10 rounded-full border-2 border-indigo-900" src="/images/student-avatar-2.jpg" alt="Student" />
+              <img className="w-10 h-10 rounded-full border-2 border-indigo-900" src="/images/student-avatar-3.jpg" alt="Student" />
               <div className="w-10 h-10 rounded-full border-2 border-indigo-900 bg-indigo-600 flex items-center justify-center text-xs font-bold">
                 +2k
               </div>
