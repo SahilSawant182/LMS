@@ -19,6 +19,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import Link from 'next/link';
+import AddPredefinedItemModal, { PredefinedItemType } from '@/components/admin/AddPredefinedItemModal';
 
 type BlockType = 'text' | 'heading' | 'list' | 'upload' | 'table' | 'quiz' | 'assignment' | 'programming' | 'codebox';
 
@@ -26,6 +27,7 @@ interface Block {
   id: string;
   type: BlockType;
   content: any;
+  label?: string;
 }
 
 const BLOCK_OPTIONS = [
@@ -60,7 +62,119 @@ export default function LessonEditor({ courseId = "aaaaaaakk", chapterId = "" }:
   const [activeDotsMenuId, setActiveDotsMenuId] = useState<string | null>(null);
   const [menuFilter, setMenuFilter] = useState('');
 
+  // Predefined Item Dropdown Modal State
+  const [modalState, setModalState] = useState<{
+    isOpen: boolean;
+    type: PredefinedItemType | null;
+    insertIndex: number;
+    targetBlockId?: string;
+    selectedValue?: string;
+  }>({
+    isOpen: false,
+    type: null,
+    insertIndex: 0,
+    targetBlockId: undefined,
+    selectedValue: undefined,
+  });
+
+  // Restore draft if user navigated to create a quiz/assignment/exercise and returned
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const draftKey = `lms_lesson_draft_${courseId || 'default'}_${chapterId || 'default'}`;
+    const saved = localStorage.getItem(draftKey);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed) {
+          if (parsed.title) setTitle(parsed.title);
+          if (parsed.instructorNotes) setInstructorNotes(parsed.instructorNotes);
+          if (parsed.instructorNotesOpen !== undefined) setInstructorNotesOpen(parsed.instructorNotesOpen);
+          if (Array.isArray(parsed.blocks) && parsed.blocks.length > 0) {
+            setBlocks(parsed.blocks);
+          }
+          if (parsed.modalState?.type) {
+            setModalState({
+              ...parsed.modalState,
+              isOpen: true,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to restore lesson draft:", err);
+      } finally {
+        localStorage.removeItem(draftKey);
+      }
+    }
+  }, [courseId, chapterId]);
+
+  const handleModalSelectItem = (item: { value: string; label: string }) => {
+    if (modalState.targetBlockId) {
+      setBlocks(blocks.map(b => b.id === modalState.targetBlockId ? { ...b, content: item.value, label: item.label } : b));
+    } else if (modalState.type) {
+      const newBlock: Block = {
+        id: Math.random().toString(36).substring(7),
+        type: modalState.type,
+        content: item.value,
+        label: item.label,
+      };
+      const newBlocks = [...blocks];
+      newBlocks.splice(modalState.insertIndex + 1, 0, newBlock);
+      setBlocks(newBlocks);
+    }
+    setModalState(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const handleModalCreateNew = () => {
+    if (!modalState.type) return;
+
+    // 1. Save lesson draft so no user input is lost
+    const draftKey = `lms_lesson_draft_${courseId || 'default'}_${chapterId || 'default'}`;
+    const draftData = {
+      title,
+      instructorNotes,
+      instructorNotesOpen,
+      blocks,
+      modalState,
+      timestamp: Date.now()
+    };
+    try {
+      localStorage.setItem(draftKey, JSON.stringify(draftData));
+    } catch (e) {
+      console.warn("Could not save lesson draft to localStorage", e);
+    }
+
+    // 2. Save returnUrl in sessionStorage and query params
+    const currentUrl = typeof window !== 'undefined'
+      ? (window.location.pathname + window.location.search + window.location.hash)
+      : '';
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('lms_return_url', currentUrl);
+    }
+
+    // 3. Navigate directly to the corresponding creation page
+    let targetRoute = '/assignments/create';
+    if (modalState.type === 'quiz') {
+      targetRoute = '/quizzes/create';
+    } else if (modalState.type === 'programming') {
+      targetRoute = '/programming-exercises/create';
+    }
+
+    router.push(`${targetRoute}?returnUrl=${encodeURIComponent(currentUrl)}`);
+  };
+
   const addBlock = (index: number, type: BlockType) => {
+    if (type === 'quiz' || type === 'assignment' || type === 'programming') {
+      setActiveMenuId(null);
+      setModalState({
+        isOpen: true,
+        type: type as PredefinedItemType,
+        insertIndex: index,
+        targetBlockId: undefined,
+        selectedValue: undefined,
+      });
+      return;
+    }
+
     let initialContent: any = '';
     if (type === 'list') initialContent = [''];
     if (type === 'table') initialContent = [['Column 1', 'Column 2'], ['Data 1', 'Data 2']];
@@ -156,6 +270,22 @@ export default function LessonEditor({ courseId = "aaaaaaakk", chapterId = "" }:
             type: "quiz",
             data: {
               quiz: block.content
+            }
+          };
+        } else if (block.type === 'assignment') {
+          return {
+            id: block.id,
+            type: "assignment",
+            data: {
+              assignment: block.content
+            }
+          };
+        } else if (block.type === 'programming') {
+          return {
+            id: block.id,
+            type: "programming",
+            data: {
+              programming_exercise: block.content
             }
           };
         } else {
@@ -465,26 +595,81 @@ export default function LessonEditor({ courseId = "aaaaaaakk", chapterId = "" }:
       }
       case 'quiz':
       case 'assignment':
-      case 'programming':
-        const iconMap = { quiz: HelpCircle, assignment: FileText, programming: Code };
-        const Icon = iconMap[block.type as keyof typeof iconMap];
+      case 'programming': {
+        const configMap = {
+          quiz: {
+            title: 'Quiz',
+            icon: HelpCircle,
+            color: 'text-amber-500 bg-amber-50 border-amber-200',
+            badgeBg: 'bg-amber-100 text-amber-800 border-amber-200',
+          },
+          assignment: {
+            title: 'Assignment',
+            icon: FileText,
+            color: 'text-blue-500 bg-blue-50 border-blue-200',
+            badgeBg: 'bg-blue-100 text-blue-800 border-blue-200',
+          },
+          programming: {
+            title: 'Programming Exercise',
+            icon: Code,
+            color: 'text-emerald-500 bg-emerald-50 border-emerald-200',
+            badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+          },
+        };
+        const currentConfig = configMap[block.type as keyof typeof configMap];
+        const Icon = currentConfig.icon;
+
         return (
-          <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 flex items-center gap-4">
-            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-200 text-indigo-500">
-              <Icon className="w-5 h-5" />
+          <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-xs hover:border-slate-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border ${currentConfig.color}`}>
+                <Icon className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${currentConfig.badgeBg}`}>
+                    {currentConfig.title}
+                  </span>
+                </div>
+                <div className="text-sm font-semibold text-slate-800 truncate">
+                  {block.label || block.content || <span className="text-slate-400 italic font-normal">No {currentConfig.title} selected</span>}
+                </div>
+                {block.content && block.content !== block.label && (
+                  <div className="text-xs text-slate-400 font-mono truncate">
+                    ID: {block.content}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex-1">
-              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">{block.type} ID or URL</label>
-              <input
-                type="text"
-                className="w-full bg-white border border-slate-200 rounded p-2 text-sm focus:outline-none focus:border-indigo-500"
-                placeholder={`Enter ${block.type} ID...`}
-                value={block.content as string}
-                onChange={(e) => updateBlock(block.id, e.target.value)}
-              />
+
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setModalState({
+                    isOpen: true,
+                    type: block.type as PredefinedItemType,
+                    insertIndex: 0,
+                    targetBlockId: block.id,
+                    selectedValue: block.content,
+                  });
+                }}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium transition-colors shadow-2xs"
+              >
+                Change
+              </button>
+              <button
+                type="button"
+                onClick={() => removeBlock(block.id)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                title="Remove block"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
         );
+      }
       case 'codebox':
         return (
           <div className="rounded-xl overflow-hidden bg-slate-900 border border-slate-800">
@@ -644,6 +829,16 @@ export default function LessonEditor({ courseId = "aaaaaaakk", chapterId = "" }:
           </div>
         </main>
       </div>
+
+      {/* Predefined Item Picker & Creator Modal */}
+      <AddPredefinedItemModal
+        isOpen={modalState.isOpen}
+        type={modalState.type}
+        selectedValue={modalState.selectedValue}
+        onClose={() => setModalState(prev => ({ ...prev, isOpen: false }))}
+        onSelect={handleModalSelectItem}
+        onCreateNew={handleModalCreateNew}
+      />
     </div>
   );
 }

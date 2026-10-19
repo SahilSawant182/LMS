@@ -130,6 +130,55 @@ export const getMasterData = async (doctype: string, additionalPayload: any = {}
   }
 };
 
+export interface DropdownOptionItem {
+  value: string;
+  label: string;
+  description?: string;
+}
+
+export const getMasterDropdownItems = async (doctype: string, additionalPayload: any = {}): Promise<DropdownOptionItem[]> => {
+  try {
+    const payload = {
+      doctype,
+      ...additionalPayload
+    };
+    const response = await apiService.get(
+      "method/lms.lms.master.get_dropdown_options",
+      { params: payload }
+    );
+    let arr: any[] = [];
+    if (response?.data && response?.data?.data && Array.isArray(response?.data?.data)) {
+      arr = response.data.data;
+    } else if (response?.data && Array.isArray(response?.data)) {
+      arr = response.data;
+    } else if (response?.message?.data && Array.isArray(response?.message?.data)) {
+      arr = response.message.data;
+    } else if (response?.message && Array.isArray(response?.message)) {
+      arr = response.message;
+    } else if (Array.isArray(response)) {
+      arr = response;
+    }
+
+    return arr.map((item: any) => {
+      if (typeof item === "string") {
+        return { label: item, value: item };
+      }
+      const label = item.label || item.title || item.name || item.value || "";
+      const value = item.value || item.name || item.id || item.title || item.label || "";
+      const description = item.description || (value !== label ? value : undefined);
+      return {
+        label: String(label || value),
+        value: String(value || label),
+        description: description ? String(description) : undefined,
+      };
+    }).filter(it => it.label || it.value);
+  } catch (error) {
+    console.error(`Error fetching master dropdown options for ${doctype}:`, error);
+    return [];
+  }
+};
+
+
 export const enrollStudent = async (payload: { member: string, batch: string }) => {
   return apiService.post("method/lms.lms.doctype.lms_batch_enrollment.lms_batch_enrollment.enroll_student", payload);
 };
@@ -470,6 +519,29 @@ export const getQuiz = async (name: string) => {
     }
   });
 };
+
+export interface CreateQuizPayload {
+  title: string;
+  max_attempts?: number;
+  passing_percentage?: number;
+  duration?: number;
+  description?: string;
+  [key: string]: any;
+}
+
+export const createQuiz = async (payload: CreateQuizPayload) => {
+  const headers = getQuestionAuthHeaders();
+  try {
+    return await apiService.post('resource/LMS Quiz', payload, { headers });
+  } catch (err) {
+    try {
+      return await apiService.post(`method/${API_METHOD_PREFIX}.create_quiz`, payload, { headers });
+    } catch {
+      throw err;
+    }
+  }
+};
+
 
 export interface CreateQuestionPayload {
   question: string;

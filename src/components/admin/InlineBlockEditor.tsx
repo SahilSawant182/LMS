@@ -11,8 +11,11 @@ import {
   FileText, 
   Code, 
   Terminal,
-  Search
+  Search,
+  X
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import AddPredefinedItemModal, { PredefinedItemType } from '@/components/admin/AddPredefinedItemModal';
 
 type BlockType = 'text' | 'heading' | 'list' | 'upload' | 'table' | 'quiz' | 'assignment' | 'programming' | 'codebox';
 
@@ -20,6 +23,7 @@ interface Block {
   id: string;
   type: BlockType;
   content: string | string[];
+  label?: string;
 }
 
 const BLOCK_OPTIONS = [
@@ -47,6 +51,21 @@ export default function InlineBlockEditor({
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [menuFilter, setMenuFilter] = useState('');
 
+  const router = useRouter();
+  const [modalState, setModalState] = useState<{
+    isOpen: boolean;
+    type: PredefinedItemType | null;
+    insertIndex: number;
+    targetBlockId?: string;
+    selectedValue?: string;
+  }>({
+    isOpen: false,
+    type: null,
+    insertIndex: 0,
+    targetBlockId: undefined,
+    selectedValue: undefined,
+  });
+
   // Convert blocks to HTML whenever they change
   useEffect(() => {
     const html = blocks.map(block => {
@@ -58,6 +77,12 @@ export default function InlineBlockEditor({
         return `<div class="media-upload-placeholder">[Media Placeholder]</div>`;
       } else if (block.type === 'text') {
         return `<p>${block.content}</p>`;
+      } else if (block.type === 'quiz') {
+        return `<div class="quiz-block" data-id="${block.content}">[Quiz: ${block.content}]</div>`;
+      } else if (block.type === 'assignment') {
+        return `<div class="assignment-block" data-id="${block.content}">[Assignment: ${block.content}]</div>`;
+      } else if (block.type === 'programming') {
+        return `<div class="programming-block" data-id="${block.content}">[Programming Exercise: ${block.content}]</div>`;
       } else {
         return `<div class="custom-block">[${block.type} Block]</div>`;
       }
@@ -65,7 +90,55 @@ export default function InlineBlockEditor({
     onChange(html);
   }, [blocks]);
 
+  const handleModalSelectItem = (item: { value: string; label: string }) => {
+    if (modalState.targetBlockId) {
+      setBlocks(blocks.map(b => b.id === modalState.targetBlockId ? { ...b, content: item.value, label: item.label } : b));
+    } else if (modalState.type) {
+      const newBlock: Block = {
+        id: Math.random().toString(36).substring(7),
+        type: modalState.type,
+        content: item.value,
+        label: item.label,
+      };
+      const newBlocks = [...blocks];
+      newBlocks.splice(modalState.insertIndex + 1, 0, newBlock);
+      setBlocks(newBlocks);
+    }
+    setModalState(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const handleModalCreateNew = () => {
+    if (!modalState.type) return;
+    const currentUrl = typeof window !== 'undefined'
+      ? (window.location.pathname + window.location.search + window.location.hash)
+      : '';
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('lms_return_url', currentUrl);
+    }
+
+    let targetRoute = '/assignments/create';
+    if (modalState.type === 'quiz') {
+      targetRoute = '/quizzes/create';
+    } else if (modalState.type === 'programming') {
+      targetRoute = '/programming-exercises/create';
+    }
+
+    router.push(`${targetRoute}?returnUrl=${encodeURIComponent(currentUrl)}`);
+  };
+
   const addBlock = (index: number, type: BlockType) => {
+    if (type === 'quiz' || type === 'assignment' || type === 'programming') {
+      setActiveMenuId(null);
+      setModalState({
+        isOpen: true,
+        type: type as PredefinedItemType,
+        insertIndex: index,
+        targetBlockId: undefined,
+        selectedValue: undefined,
+      });
+      return;
+    }
+
     const newBlock: Block = {
       id: Math.random().toString(36).substring(7),
       type,
@@ -214,6 +287,83 @@ export default function InlineBlockEditor({
             <p className="text-xs text-slate-400 mt-1">Image, Video, Audio or PDF</p>
           </div>
         );
+      case 'quiz':
+      case 'assignment':
+      case 'programming': {
+        const configMap = {
+          quiz: {
+            title: 'Quiz',
+            icon: HelpCircle,
+            color: 'text-amber-500 bg-amber-50 border-amber-200',
+            badgeBg: 'bg-amber-100 text-amber-800 border-amber-200',
+          },
+          assignment: {
+            title: 'Assignment',
+            icon: FileText,
+            color: 'text-blue-500 bg-blue-50 border-blue-200',
+            badgeBg: 'bg-blue-100 text-blue-800 border-blue-200',
+          },
+          programming: {
+            title: 'Programming Exercise',
+            icon: Code,
+            color: 'text-emerald-500 bg-emerald-50 border-emerald-200',
+            badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+          },
+        };
+        const currentConfig = configMap[block.type as keyof typeof configMap];
+        const Icon = currentConfig.icon;
+
+        return (
+          <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-2xs hover:border-slate-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 my-1">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border ${currentConfig.color}`}>
+                <Icon className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${currentConfig.badgeBg}`}>
+                    {currentConfig.title}
+                  </span>
+                </div>
+                <div className="text-sm font-semibold text-slate-800 truncate">
+                  {block.label || (typeof block.content === 'string' ? block.content : '') || <span className="text-slate-400 italic font-normal">No {currentConfig.title} selected</span>}
+                </div>
+                {typeof block.content === 'string' && block.content && block.content !== block.label && (
+                  <div className="text-xs text-slate-400 font-mono truncate">
+                    ID: {block.content}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setModalState({
+                    isOpen: true,
+                    type: block.type as PredefinedItemType,
+                    insertIndex: 0,
+                    targetBlockId: block.id,
+                    selectedValue: typeof block.content === 'string' ? block.content : '',
+                  });
+                }}
+                className="px-2.5 py-1 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium transition-colors shadow-2xs"
+              >
+                Change
+              </button>
+              <button
+                type="button"
+                onClick={() => removeBlock(block.id)}
+                className="p-1 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                title="Remove block"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        );
+      }
       default:
         return (
           <div className="p-3 bg-white border border-slate-200 rounded-lg flex items-center text-slate-500 my-2 text-sm">
@@ -261,6 +411,16 @@ export default function InlineBlockEditor({
           </div>
         ))}
       </div>
+
+      {/* Predefined Item Picker & Creator Modal */}
+      <AddPredefinedItemModal
+        isOpen={modalState.isOpen}
+        type={modalState.type}
+        selectedValue={modalState.selectedValue}
+        onClose={() => setModalState(prev => ({ ...prev, isOpen: false }))}
+        onSelect={handleModalSelectItem}
+        onCreateNew={handleModalCreateNew}
+      />
     </div>
   );
 }

@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { createQuestion, CreateQuestionPayload } from "@/services/lms.services";
 import { isAuthorizedInstructor } from "@/services/auth.services";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { ShieldAlert, ArrowLeft } from "lucide-react";
 
-export default function CreateQuestionPage() {
+function CreateQuestionForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
   
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -116,10 +118,16 @@ export default function CreateQuestionPage() {
       setCorrectOption(0);
       setCorrectOptions([false, false, false, false]);
       
-      // Optionally redirect after a delay
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('lms_return_url');
+      }
       setTimeout(() => {
-        router.push("/quizzes");
-      }, 2000);
+        if (returnUrl) {
+          router.push(returnUrl);
+        } else {
+          router.push("/quizzes");
+        }
+      }, 1500);
       
     } catch (err: any) {
       setError(err.response?.data?.message?.message || err.message || "Failed to create question");
@@ -175,9 +183,9 @@ export default function CreateQuestionPage() {
       {/* Hero Area */}
       <div className="bg-slate-900 text-white pt-10 pb-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
-          <Link href="/quizzes" className="inline-flex items-center text-indigo-300 hover:text-white mb-6 transition-colors text-sm font-medium">
+          <Link href={returnUrl || "/quizzes"} className="inline-flex items-center text-indigo-300 hover:text-white mb-6 transition-colors text-sm font-medium">
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Assessments
+            {returnUrl ? "Back to Lesson Editor" : "Back to Assessments"}
           </Link>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">Create Question</h1>
           <p className="mt-2 text-indigo-200 max-w-2xl text-sm md:text-base">
@@ -350,5 +358,13 @@ export default function CreateQuestionPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CreateQuestionPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex justify-center items-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <CreateQuestionForm />
+    </Suspense>
   );
 }

@@ -70,10 +70,19 @@ function CreateAssignmentForm() {
       
       setSubmitSuccess(true);
       
-      // Navigate to assignments list after a short delay
+      const returnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('lms_return_url');
+      }
+
+      // Navigate back to lesson editor or assignments list after a short delay
       setTimeout(() => {
-        router.push('/assignments');
-      }, 1500);
+        if (returnUrl) {
+          router.push(returnUrl);
+        } else {
+          router.push('/assignments');
+        }
+      }, 1200);
       
     } catch (err: any) {
       setError(err.message || 'Failed to create assignment');
@@ -81,6 +90,8 @@ function CreateAssignmentForm() {
       setSubmitting(false);
     }
   };
+
+  const returnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
@@ -90,9 +101,9 @@ function CreateAssignmentForm() {
       <div className="bg-slate-900 text-white py-10 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none"></div>
         <div className="max-w-7xl mx-auto relative z-10">
-          <Link href="/assignments" className="inline-flex items-center text-indigo-300 hover:text-white mb-6 transition-colors text-sm font-medium">
+          <Link href={returnUrl || "/assignments"} className="inline-flex items-center text-indigo-300 hover:text-white mb-6 transition-colors text-sm font-medium">
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Assignments
+            {returnUrl ? "Back to Lesson Editor" : "Back to Assignments"}
           </Link>
           
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-2 leading-tight">

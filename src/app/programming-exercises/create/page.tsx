@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createProgrammingExercise, ProgrammingExerciseTestCase } from '@/services/lms.services';
 import {
   ArrowLeft,
@@ -67,8 +67,10 @@ const PREDEFINED_TEMPLATES = [
   },
 ];
 
-export default function CreateProgrammingExercisePage() {
+function CreateProgrammingExerciseForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
 
   const [isInstructor, setIsInstructor] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
@@ -198,7 +200,14 @@ export default function CreateProgrammingExercisePage() {
       };
 
       await createProgrammingExercise(payload);
-      router.push('/programming-exercises');
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('lms_return_url');
+      }
+      if (returnUrl) {
+        router.push(returnUrl);
+      } else {
+        router.push('/programming-exercises');
+      }
     } catch (err: any) {
       console.error('Failed to create programming exercise:', err);
       setError(err?.message || 'Failed to create programming exercise. Please check all fields.');
@@ -240,11 +249,11 @@ export default function CreateProgrammingExercisePage() {
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-72 h-72 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none" />
         <div className="max-w-5xl mx-auto relative z-10">
           <Link
-            href="/programming-exercises"
+            href={returnUrl || "/programming-exercises"}
             className="inline-flex items-center text-xs font-semibold text-indigo-300 hover:text-white mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4 mr-1.5" />
-            Back to Exercises
+            {returnUrl ? "Back to Lesson Editor" : "Back to Exercises"}
           </Link>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -539,7 +548,7 @@ export default function CreateProgrammingExercisePage() {
           {/* Form Actions Footer */}
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-4 sm:p-5 flex items-center justify-between">
             <Link
-              href="/programming-exercises"
+              href={returnUrl || "/programming-exercises"}
               className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors"
             >
               Cancel
@@ -557,5 +566,13 @@ export default function CreateProgrammingExercisePage() {
         </form>
       </main>
     </div>
+  );
+}
+
+export default function CreateProgrammingExercisePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex justify-center items-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <CreateProgrammingExerciseForm />
+    </Suspense>
   );
 }
