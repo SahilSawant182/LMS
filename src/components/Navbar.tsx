@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet, TrendingUp, Settings, ClipboardCheck, BookOpen, Users, Tag, X, Loader2, ArrowRight } from 'lucide-react';
+import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet, TrendingUp, Settings, ClipboardCheck, BookOpen, Users, Tag, X, Loader2, ArrowRight, GraduationCap } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/services/auth.services';
-import { getCourses, getBatches } from '@/services/lms.services';
+import { getCourses, getBatches, getProgramList } from '@/services/lms.services';
 import Sidebar from '@/components/Sidebar';
 import NotificationBell from '@/components/notifications/NotificationBell';
 
@@ -28,6 +28,7 @@ export default function Navbar() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [allCourses, setAllCourses] = useState<any[]>([]);
   const [allBatches, setAllBatches] = useState<any[]>([]);
+  const [allPrograms, setAllPrograms] = useState<any[]>([]);
   const [dataFetched, setDataFetched] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const mobileSearchContainerRef = useRef<HTMLDivElement>(null);
@@ -148,14 +149,15 @@ export default function Navbar() {
     window.location.href = "/login";
   };
 
-  // Load courses and batches for search
+  // Load courses, batches, and programs for search
   const loadSearchData = async () => {
     if (dataFetched || searchLoading) return;
     setSearchLoading(true);
     try {
-      const [coursesRes, batchesRes] = await Promise.allSettled([
-        getCourses(),
-        getBatches()
+      const [coursesRes, batchesRes, programsRes] = await Promise.allSettled([
+        getCourses({ all: true, user: "" }),
+        getBatches({ all: true, user: "" }),
+        getProgramList({ all: true, user: "" })
       ]);
 
       if (coursesRes.status === 'fulfilled') {
@@ -170,6 +172,12 @@ export default function Navbar() {
         setAllBatches(Array.isArray(bList) ? bList : []);
       }
 
+      if (programsRes.status === 'fulfilled') {
+        const pVal = programsRes.value;
+        const pList = Array.isArray(pVal) ? pVal : ((pVal as any)?.message?.data || (pVal as any)?.data?.message || (pVal as any)?.data || (pVal as any)?.message || []);
+        setAllPrograms(Array.isArray(pList) ? pList : []);
+      }
+
       setDataFetched(true);
     } catch (err) {
       console.warn("Failed to load search data:", err);
@@ -177,6 +185,11 @@ export default function Navbar() {
       setSearchLoading(false);
     }
   };
+
+  // Pre-load search data on mount
+  useEffect(() => {
+    loadSearchData();
+  }, []);
 
   // Close search on route change
   useEffect(() => {
@@ -200,11 +213,11 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Compute matched courses, batches, and skills
+  // Compute matched courses, batches, programs, and skills
   const searchResults = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) {
-      return { courses: [], batches: [], skills: [], total: 0 };
+      return { courses: [], batches: [], programs: [], skills: [], total: 0 };
     }
 
     // 1. Matching courses
@@ -226,7 +239,15 @@ export default function Navbar() {
       return title.includes(q) || name.includes(q) || cat.includes(q) || desc.includes(q);
     }).slice(0, 5);
 
-    // 3. Matching skills / tags
+    // 3. Matching programs
+    const matchingPrograms = allPrograms.filter((p: any) => {
+      const title = (p.title || p.name || "").toLowerCase();
+      const name = (p.name || "").toLowerCase();
+      const desc = (p.short_introduction || p.description || "").toLowerCase();
+      return title.includes(q) || name.includes(q) || desc.includes(q);
+    }).slice(0, 5);
+
+    // 4. Matching skills / tags
     const skillCountMap = new Map<string, number>();
     allCourses.forEach((c: any) => {
       if (c.tags && typeof c.tags === 'string') {
@@ -254,14 +275,15 @@ export default function Navbar() {
     matchingSkills.sort((a, b) => b.count - a.count);
     const topSkills = matchingSkills.slice(0, 5);
 
-    const total = matchingCourses.length + matchingBatches.length + topSkills.length;
+    const total = matchingCourses.length + matchingBatches.length + matchingPrograms.length + topSkills.length;
     return {
       courses: matchingCourses,
       batches: matchingBatches,
+      programs: matchingPrograms,
       skills: topSkills,
       total
     };
-  }, [searchQuery, allCourses, allBatches]);
+  }, [searchQuery, allCourses, allBatches, allPrograms]);
 
   return (
     <>
@@ -339,13 +361,16 @@ export default function Navbar() {
                       } else if (searchResults.batches.length > 0) {
                         router.push(`/batch/${searchResults.batches[0].name}`);
                         setIsSearchOpen(false);
+                      } else if (searchResults.programs.length > 0) {
+                        router.push(`/programs/${encodeURIComponent(searchResults.programs[0].title || searchResults.programs[0].name)}`);
+                        setIsSearchOpen(false);
                       } else {
                         router.push(`/courses`);
                         setIsSearchOpen(false);
                       }
                     }
                   }}
-                  placeholder="Search courses, skills, batches..."
+                  placeholder="Search courses, batches, programs, skills..."
                   className="w-full pl-10 pr-9 py-2 bg-gray-50/80 border border-gray-200/80 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-xs font-medium transition-all duration-300 shadow-2xs focus:bg-white"
                 />
                 {searchQuery && (
@@ -369,7 +394,7 @@ export default function Navbar() {
                   {searchLoading ? (
                     <div className="p-6 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                      Searching courses, skills, and batches...
+                      Searching courses, batches, programs, and skills...
                     </div>
                   ) : searchResults.total === 0 ? (
                     <div className="p-6 text-center">
@@ -378,7 +403,7 @@ export default function Navbar() {
                       </div>
                       <p className="text-xs font-semibold text-slate-700">No results found</p>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        No courses, skills, or batches match &ldquo;{searchQuery}&rdquo;
+                        No courses, batches, programs, or skills match &ldquo;{searchQuery}&rdquo;
                       </p>
                     </div>
                   ) : (
@@ -459,6 +484,47 @@ export default function Navbar() {
                                   </div>
                                 </div>
                                 <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover/item:text-emerald-500 group-hover/item:translate-x-0.5 transition-all flex-shrink-0" />
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Programs Section */}
+                      {searchResults.programs.length > 0 && (
+                        <div className="pt-1 border-t border-slate-100">
+                          <div className="px-4 py-1 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            <span className="flex items-center gap-1.5">
+                              <GraduationCap className="w-3.5 h-3.5 text-violet-500" /> Programs
+                            </span>
+                            <span className="text-[10px] font-semibold text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full">
+                              {searchResults.programs.length}
+                            </span>
+                          </div>
+                          <div className="mt-1 divide-y divide-slate-50">
+                            {searchResults.programs.map((prog: any) => (
+                              <Link
+                                key={prog.name || prog.title}
+                                href={`/programs/${encodeURIComponent(prog.title || prog.name)}`}
+                                onClick={() => setIsSearchOpen(false)}
+                                className="px-4 py-2 hover:bg-violet-50/50 flex items-center justify-between group/item transition-colors"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                  <div className="w-7 h-7 rounded-lg bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-600 flex-shrink-0">
+                                    <GraduationCap className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-slate-800 group-hover/item:text-violet-600 truncate transition-colors">
+                                      {prog.title || prog.name}
+                                    </p>
+                                    {prog.course_count !== undefined && (
+                                      <p className="text-[10px] text-slate-400 truncate">
+                                        {prog.course_count} {prog.course_count === 1 ? 'course' : 'courses'}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover/item:text-violet-500 group-hover/item:translate-x-0.5 transition-all flex-shrink-0" />
                               </Link>
                             ))}
                           </div>
@@ -724,7 +790,26 @@ export default function Navbar() {
                   setSearchQuery(e.target.value);
                   if (!dataFetched) loadSearchData();
                 }}
-                placeholder="Search courses, skills, batches..."
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setIsMobileSearchOpen(false);
+                  } else if (e.key === "Enter" && searchQuery.trim()) {
+                    if (searchResults.courses.length > 0) {
+                      router.push(`/course/${searchResults.courses[0].name}`);
+                      setIsMobileSearchOpen(false);
+                    } else if (searchResults.batches.length > 0) {
+                      router.push(`/batch/${searchResults.batches[0].name}`);
+                      setIsMobileSearchOpen(false);
+                    } else if (searchResults.programs.length > 0) {
+                      router.push(`/programs/${encodeURIComponent(searchResults.programs[0].title || searchResults.programs[0].name)}`);
+                      setIsMobileSearchOpen(false);
+                    } else {
+                      router.push(`/courses`);
+                      setIsMobileSearchOpen(false);
+                    }
+                  }
+                }}
+                placeholder="Search courses, batches, programs, skills..."
                 className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
               />
               {searchQuery && (
@@ -770,6 +855,16 @@ export default function Navbar() {
                         className="block px-2 py-1.5 text-xs font-semibold text-slate-800 hover:text-emerald-600 truncate"
                       >
                         👥 {batch.title || batch.batch_name || batch.name}
+                      </Link>
+                    ))}
+                    {searchResults.programs.map((prog: any) => (
+                      <Link
+                        key={prog.name || prog.title}
+                        href={`/programs/${encodeURIComponent(prog.title || prog.name)}`}
+                        onClick={() => setIsMobileSearchOpen(false)}
+                        className="block px-2 py-1.5 text-xs font-semibold text-slate-800 hover:text-violet-600 truncate"
+                      >
+                        📜 {prog.title || prog.name}
                       </Link>
                     ))}
                     {searchResults.skills.map((skill) => (

@@ -415,7 +415,7 @@ function EditorBlockRenderer({ block, isInstructor }: { block: EditorBlock; isIn
             </div>
           </div>
           <Link
-            href={`/assignments?id=${encodeURIComponent(assignmentId)}`}
+            href={`/assignments/${encodeURIComponent(assignmentId)}`}
             className="w-full sm:w-auto px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-violet-600/20 flex items-center justify-center gap-1.5 shrink-0"
           >
             <FileText className="w-4 h-4" />

@@ -363,17 +363,52 @@ export default function CourseDetailPage() {
 
         let subList: any[] = [];
         if (submissionsRes.status === 'fulfilled') {
-          const rawSub = submissionsRes.value?.data || submissionsRes.value;
-          const subData = rawSub?.message?.data || rawSub?.data || rawSub?.message || [];
-          subList = Array.isArray(subData) ? subData : [];
+          const rawSub: any = (submissionsRes.value as any)?.data || submissionsRes.value;
+          if (Array.isArray(rawSub)) {
+            subList = rawSub;
+          } else if (rawSub && typeof rawSub === 'object') {
+            if (Array.isArray(rawSub.submissions)) subList = rawSub.submissions;
+            else if (rawSub.data && Array.isArray(rawSub.data.submissions)) subList = rawSub.data.submissions;
+            else if (rawSub.message && Array.isArray(rawSub.message.data)) subList = rawSub.message.data;
+            else if (rawSub.message && Array.isArray(rawSub.message.submissions)) subList = rawSub.message.submissions;
+            else if (Array.isArray(rawSub.data)) subList = rawSub.data;
+            else if (Array.isArray(rawSub.message)) subList = rawSub.message;
+          }
         }
+
+        const userEmail = (typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "").trim().toLowerCase();
 
         const courseAssignments = finalAss
           .filter((a: any) => a.course === courseId)
-          .map((a: any) => ({
-            ...a,
-            _is_submitted: subList.some((s: any) => s.assignment === a.name || s.assignment_title === a.title)
-          }));
+          .map((a: any) => {
+            const aName = String(a.name || '').trim().toLowerCase();
+            const aTitle = String(a.title || a.assignment_title || '').trim().toLowerCase();
+
+            let hasLocalSub = false;
+            if (userEmail && typeof window !== "undefined") {
+              try {
+                const loc = localStorage.getItem(`lms_submission_${userEmail}_${a.name}`) ||
+                            localStorage.getItem(`lms_submission_${userEmail}_${a.title}`);
+                if (loc) hasLocalSub = true;
+              } catch (e) {}
+            }
+
+            const sub = subList.find((s: any) => {
+              const sAss = String(s.assignment || '').trim().toLowerCase();
+              const sTitle = String(s.assignment_title || '').trim().toLowerCase();
+              const matches = sAss === aName || (aTitle && sTitle === aTitle);
+              if (!matches) return false;
+              if (!userEmail) return true;
+              const sMember = String(s.member || s.owner || '').trim().toLowerCase();
+              return !sMember || sMember.includes(userEmail) || userEmail.includes(sMember);
+            });
+
+            return {
+              ...a,
+              status: sub?.status || (hasLocalSub ? 'Submitted' : a.status),
+              _is_submitted: Boolean(sub || hasLocalSub)
+            };
+          });
 
         setAssignments(courseAssignments);
       }

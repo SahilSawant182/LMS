@@ -1,4 +1,5 @@
 import { apiService, API_TOKEN } from "./api.services";
+import { isAuthorizedInstructor } from "./auth.services";
 import {
   ItemType,
   CheckoutAddress,
@@ -187,11 +188,17 @@ export const getBatchWithEnrollment = async (name: string, payload?: any): Promi
 };
 
 export const getCoursesWithEnrollment = async (payload?: any): Promise<CourseWithEnrollment[]> => {
+  const isInstructor = isAuthorizedInstructor();
   const currentUser = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
-  const params = {
-    ...(currentUser ? { user: currentUser } : {}),
-    ...(payload || {})
-  };
+  const params: Record<string, any> = { ...(payload || {}) };
+
+  if (params.all || params.user === "" || params.user === null) {
+    delete params.all;
+    delete params.user;
+  } else if (!params.user && isInstructor && currentUser) {
+    params.user = currentUser;
+  }
+
   const res = await apiService.get(`${METHOD_PREFIX}.get_courses_with_enrollment`, {
     params,
     headers: authHeaders(),
@@ -207,11 +214,17 @@ export const getCoursesWithEnrollment = async (payload?: any): Promise<CourseWit
 };
 
 export const getBatchesWithEnrollment = async (payload?: any): Promise<BatchWithEnrollment[]> => {
+  const isInstructor = isAuthorizedInstructor();
   const currentUser = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
-  const params = {
-    ...(currentUser ? { user: currentUser } : {}),
-    ...(payload || {})
-  };
+  const params: Record<string, any> = { ...(payload || {}) };
+
+  if (params.all || params.user === "" || params.user === null) {
+    delete params.all;
+    delete params.user;
+  } else if (!params.user && isInstructor && currentUser) {
+    params.user = currentUser;
+  }
+
   const res = await apiService.get(`${METHOD_PREFIX}.get_batches_with_enrollment`, {
     params,
     headers: authHeaders(),

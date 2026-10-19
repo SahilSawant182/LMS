@@ -1,4 +1,5 @@
-import { apiService, API_TOKEN, API_METHOD_PREFIX } from "./api.services";
+import { apiService, API_TOKEN, API_METHOD_PREFIX, uploadFile } from "./api.services";
+import { isAuthorizedInstructor } from "./auth.services";
 
 // Define interfaces if needed, or use any/generic for now
 export interface GetCourseDetailsPayload {
@@ -67,12 +68,28 @@ const getCurrentUserEmail = () => {
   return "";
 };
 
-export const getCourses = async (payload?: any): Promise<Course[]> => {
+const getInstructorFilterParams = (payload?: any) => {
+  const isInstructor = isAuthorizedInstructor();
   const currentUser = getCurrentUserEmail();
-  const params: Record<string, any> = {
-    ...(currentUser ? { user: currentUser } : {}),
-    ...(payload || {})
-  };
+  const params: Record<string, any> = { ...(payload || {}) };
+
+  // If caller specifically requested all items or bypassed instructor filter (e.g. global search)
+  if (params.all || params.user === "" || params.user === null) {
+    delete params.all;
+    delete params.user;
+    return params;
+  }
+
+  // Only filter by user/instructor if user is an authorized instructor AND caller hasn't passed a custom user
+  if (!params.user && isInstructor && currentUser) {
+    params.user = currentUser;
+  }
+
+  return params;
+};
+
+export const getCourses = async (payload?: any): Promise<Course[]> => {
+  const params = getInstructorFilterParams(payload);
   return apiService.get(`method/${API_METHOD_PREFIX}.get_courses`, {
     params,
     headers: {
@@ -133,13 +150,12 @@ export const getCourseCompletionData = async (payload?: any) => {
 };
 
 export const getCourse = async (name: string, payload?: any) => {
-  const currentUser = getCurrentUserEmail();
+  const params = getInstructorFilterParams({
+    name,
+    ...(payload || {})
+  });
   return apiService.get("method/lms.lms.stride_lms.get_course", {
-    params: {
-      name,
-      ...(currentUser ? { user: currentUser } : {}),
-      ...(payload || {})
-    }
+    params
   });
 };
 
@@ -204,13 +220,12 @@ export const getReviews = async (payload: GetReviewsPayload) => {
 
 export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
   const nameParam = payload.batch || payload.name;
-  const currentUser = getCurrentUserEmail();
+  const params = getInstructorFilterParams({
+    batch: nameParam,
+    ...payload
+  });
   return apiService.get(`method/lms.lms.stride_lms.get_batch_details`, {
-    params: {
-      batch: nameParam,
-      ...(currentUser ? { user: currentUser } : {}),
-      ...payload
-    },
+    params,
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }
@@ -218,12 +233,9 @@ export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
 };
 
 export const getBatchCourses = async (payload: GetBatchCoursesPayload) => {
-  const currentUser = getCurrentUserEmail();
+  const params = getInstructorFilterParams(payload);
   return apiService.get(`method/${API_METHOD_PREFIX}.get_batch_courses`, {
-    params: {
-      ...(currentUser ? { user: currentUser } : {}),
-      ...payload
-    },
+    params,
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }
@@ -231,11 +243,7 @@ export const getBatchCourses = async (payload: GetBatchCoursesPayload) => {
 };
 
 export const getBatches = async (payload?: any) => {
-  const currentUser = getCurrentUserEmail();
-  const params: Record<string, any> = {
-    ...(currentUser ? { user: currentUser } : {}),
-    ...(payload || {})
-  };
+  const params = getInstructorFilterParams(payload);
   return apiService.get(`method/${API_METHOD_PREFIX}.get_batches`, {
     params,
     headers: { 'Authorization': `token ${API_TOKEN}` }
@@ -740,78 +748,284 @@ export const getCourseProgress = async (course: string) => {
   }
 };
 
-export const getAssignments = async () => {
-  return apiService.get(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignments`, {
-    headers: {
-      'Authorization': `token ${API_TOKEN}`
+export const getAssignments = async (payload?: any) => {
+  const params = getInstructorFilterParams(payload);
+
+  try {
+    const res = await apiService.get(
+      `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignments`,
+      { params }
+    );
+    const data = res?.data || res?.message || res;
+    if (data && (Array.isArray(data) || (typeof data === 'object' && (data.assignments || data.data)))) {
+      return res;
     }
-  });
+  } catch (err) {
+    console.warn("get_assignments primary method failed, falling back to resource/LMS Assignment:", err);
+  }
+
+  try {
+    const resourceRes = await apiService.get("resource/LMS Assignment", {
+      params: {
+        fields: JSON.stringify(["name", "title", "course", "chapter", "lesson", "question", "type", "description", "status"]),
+        limit_page_length: 100,
+        order_by: "modified desc"
+      }
+    });
+    return resourceRes?.data ? { assignments: resourceRes.data } : resourceRes;
+  } catch (err) {
+    console.error("resource fallback for assignments failed:", err);
+    return { assignments: [] };
+  }
 };
 
-export const getAssignment = async (name: string) => {
-  return apiService.get(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignment`, {
-    params: { name },
-    headers: {
-      'Authorization': `token ${API_TOKEN}`
-    }
+export const getAssignment = async (name: string, payload?: any) => {
+  const params = getInstructorFilterParams({
+    name,
+    ...(payload || {})
   });
+
+  try {
+    const res = await apiService.get(
+      `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignment`,
+      { params }
+    );
+    if (res?.data || res?.message) return res;
+  } catch (err) {
+    console.warn("get_assignment primary method failed, falling back to resource/LMS Assignment:", err);
+  }
+
+  try {
+    const resourceRes = await apiService.get(`resource/LMS Assignment/${encodeURIComponent(name)}`);
+    return resourceRes?.data ? { assignment: resourceRes.data } : resourceRes;
+  } catch (err) {
+    console.error("resource fallback for getAssignment failed:", err);
+    throw err;
+  }
 };
 
 export const createAssignment = async (data: FormData | Record<string, any>) => {
   const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
   const params = isFormData ? data : new URLSearchParams(data as Record<string, string>);
-  const contentType = isFormData ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
+  const headers: Record<string, string> = {};
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  }
 
-  return apiService.post(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.create_assignment`, params, {
-    headers: {
-      'Content-Type': contentType,
-      'Authorization': `token ${API_TOKEN}`
-    }
-  });
+  return apiService.post(
+    `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.create_assignment`,
+    params,
+    { headers }
+  );
 };
 
 export const createAssignmentSubmission = async (data: FormData | Record<string, any>) => {
   const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
-  const params = isFormData ? data : new URLSearchParams(data as Record<string, string>);
-  const contentType = isFormData ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
+  const headers: Record<string, string> = {};
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
 
-  return apiService.post(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.create_assignment_submission`, params, {
-    headers: {
-      'Content-Type': contentType,
-      'Authorization': `token ${API_TOKEN}`
+  // 1. Primary method call
+  try {
+    const res = await apiService.post(
+      `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.create_assignment_submission`,
+      data,
+      { headers }
+    );
+    if (res && res.status !== 'failed' && res.message !== 'failed') {
+      return res;
     }
-  });
+  } catch (err) {
+    console.warn("create_assignment_submission method failed, trying resource fallback:", err);
+  }
+
+  // 2. Resource fallback to 'resource/LMS Assignment Submission'
+  try {
+    let payloadObj: Record<string, any> = {};
+    if (isFormData) {
+      const fd = data as FormData;
+      fd.forEach((value, key) => {
+        if (!(value instanceof File)) {
+          payloadObj[key] = value;
+        }
+      });
+      const fileVal = fd.get('attachment');
+      if (fileVal instanceof File && fileVal.name) {
+        try {
+          const upRes = await uploadFile(fileVal);
+          const fileUrl = upRes?.message?.file_url || upRes?.file_url || upRes?.data?.file_url;
+          if (fileUrl) {
+            payloadObj['attachment'] = fileUrl;
+          }
+        } catch (upErr) {
+          console.warn("File upload during assignment submission failed:", upErr);
+        }
+      }
+    } else {
+      payloadObj = { ...(data as Record<string, any>) };
+    }
+
+    if (!payloadObj.member) {
+      payloadObj.member = getCurrentUserEmail();
+    }
+    if (!payloadObj.status) {
+      payloadObj.status = 'Submitted';
+    }
+    if (payloadObj.answer && !payloadObj.content) {
+      payloadObj.content = payloadObj.answer;
+    }
+
+    const res = await apiService.post("resource/LMS Assignment Submission", payloadObj);
+    return res;
+  } catch (resourceErr) {
+    console.error("resource fallback for assignment submission failed:", resourceErr);
+    throw resourceErr;
+  }
+};
+
+export const updateAssignmentSubmission = async (data: FormData | Record<string, any>, submissionName?: string) => {
+  const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+  const headers: Record<string, string> = {};
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  let subName = submissionName;
+  if (!subName && isFormData) {
+    subName = (data as FormData).get('name') as string;
+  } else if (!subName && typeof data === 'object') {
+    subName = (data as Record<string, any>).name;
+  }
+
+  // 1. Primary method call
+  try {
+    const res = await apiService.post(
+      `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.update_assignment_submission`,
+      data,
+      { headers }
+    );
+    if (res) return res;
+  } catch (err) {
+    console.warn("update_assignment_submission method failed, trying resource PUT fallback:", err);
+  }
+
+  // 2. Resource PUT fallback
+  if (subName) {
+    let payloadObj: Record<string, any> = {};
+    if (isFormData) {
+      const fd = data as FormData;
+      fd.forEach((value, key) => {
+        if (!(value instanceof File)) {
+          payloadObj[key] = value;
+        }
+      });
+    } else {
+      payloadObj = { ...(data as Record<string, any>) };
+    }
+    if (payloadObj.answer && !payloadObj.content) {
+      payloadObj.content = payloadObj.answer;
+    }
+    return apiService.put(`resource/LMS Assignment Submission/${encodeURIComponent(subName)}`, payloadObj);
+  }
 };
 
 export const updateAssignment = async (data: FormData | Record<string, any>) => {
   const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
   const params = isFormData ? data : new URLSearchParams(data as Record<string, string>);
-  const contentType = isFormData ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
+  const headers: Record<string, string> = {};
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  }
 
-  return apiService.post(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.update_assignment`, params, {
-    headers: {
-      'Content-Type': contentType,
-      'Authorization': `token ${API_TOKEN}`
-    }
-  });
+  return apiService.post(
+    `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.update_assignment`,
+    params,
+    { headers }
+  );
 };
 
 export const deleteAssignment = async (name: string) => {
-  return apiService.post(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.delete_assignment`, null, {
-    params: { name },
-    headers: {
-      'Authorization': `token ${API_TOKEN}`
+  return apiService.post(
+    `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.delete_assignment`,
+    null,
+    {
+      params: { name }
     }
-  });
+  );
 };
 
-export const getAssignmentSubmissions = async () => {
-  return apiService.get(`method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignment_submissions`, {
-    headers: {
-      'Authorization': `token ${API_TOKEN}`
+export const getAssignmentSubmissions = async (filters?: { assignment?: string; member?: string; user?: string; [key: string]: any }) => {
+  const currentUser = getCurrentUserEmail();
+  const params: Record<string, any> = {
+    ...(filters || {})
+  };
+  if (currentUser && !params.member && !params.user) {
+    params.user = currentUser;
+  }
+
+  // 1. Primary method call
+  try {
+    const res = await apiService.get(
+      `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignment_submissions`,
+      { params }
+    );
+    let list: any[] | null = null;
+    if (Array.isArray(res)) {
+      list = res;
+    } else if (res && typeof res === 'object') {
+      if (Array.isArray(res.submissions)) list = res.submissions;
+      else if (res.data && Array.isArray(res.data.submissions)) list = res.data.submissions;
+      else if (res.message && Array.isArray(res.message.data)) list = res.message.data;
+      else if (res.message && Array.isArray(res.message.submissions)) list = res.message.submissions;
+      else if (Array.isArray(res.data)) list = res.data;
+      else if (Array.isArray(res.message)) list = res.message;
     }
-  });
+    if (list !== null && list.length > 0) {
+      return list;
+    }
+  } catch (err) {
+    console.warn("get_assignment_submissions primary call failed:", err);
+  }
+
+  // 2. Resource fallback to 'resource/LMS Assignment Submission'
+  try {
+    const resourceParams: Record<string, any> = {
+      fields: JSON.stringify([
+        "name", "assignment", "assignment_title", "member", "member_name",
+        "content", "answer", "submission_url", "attachment", "status",
+        "creation", "modified", "owner"
+      ]),
+      limit_page_length: 100,
+      order_by: "modified desc"
+    };
+
+    const filtersArray: any[] = [];
+    if (filters?.assignment) {
+      filtersArray.push(["LMS Assignment Submission", "assignment", "=", filters.assignment]);
+    }
+    if (filters?.member || currentUser) {
+      const emailFilter = filters?.member || currentUser;
+      filtersArray.push(["LMS Assignment Submission", "member", "=", emailFilter]);
+    }
+    if (filtersArray.length > 0) {
+      resourceParams.filters = JSON.stringify(filtersArray);
+    }
+
+    const resourceRes = await apiService.get("resource/LMS Assignment Submission", {
+      params: resourceParams
+    });
+    const items = resourceRes?.data || resourceRes?.message?.data || resourceRes?.message || resourceRes;
+    if (Array.isArray(items)) {
+      return items;
+    }
+  } catch (resourceErr) {
+    console.warn("Resource fallback for LMS Assignment Submission failed:", resourceErr);
+  }
+
+  return [];
 };
+
 
 
 export const getBatchFeedback = async (batch: string) => {
@@ -862,11 +1076,7 @@ export interface Program {
 }
 
 export const getProgramList = async (payload?: any): Promise<Program[]> => {
-  const currentUser = getCurrentUserEmail();
-  const params: Record<string, any> = {
-    ...(currentUser ? { user: currentUser } : {}),
-    ...(payload || {})
-  };
+  const params = getInstructorFilterParams(payload);
   return apiService.get(`method/lms.lms.doctype.lms_program.lms_program.get_program_list`, {
     params,
     headers: { 'Authorization': `token ${API_TOKEN}` }
@@ -874,13 +1084,12 @@ export const getProgramList = async (payload?: any): Promise<Program[]> => {
 };
 
 export const getProgramDetail = async (program_title: string, payload?: any): Promise<Program> => {
-  const currentUser = getCurrentUserEmail();
+  const params = getInstructorFilterParams({
+    program_title,
+    ...(payload || {})
+  });
   return apiService.get(`method/lms.lms.doctype.lms_program.lms_program.get_program_detail`, {
-    params: {
-      program_title,
-      ...(currentUser ? { user: currentUser } : {}),
-      ...(payload || {})
-    },
+    params,
     headers: { 'Authorization': `token ${API_TOKEN}` }
   });
 };

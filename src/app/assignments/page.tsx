@@ -5,22 +5,34 @@ import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { getAssignments, deleteAssignment, getAssignmentSubmissions } from '@/services/lms.services';
 import { BookOpen, FileText, ChevronRight, Clock, CheckCircle, Edit, Trash2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
-export default function AssignmentsPage() {
+function AssignmentsContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingName, setDeletingName] = useState<string | null>(null);
   const [isInstructor, setIsInstructor] = useState(false);
 
+  // If redirected with ?id=..., immediately open that assignment
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) {
+      router.push(`/assignments/${encodeURIComponent(id)}`);
+    }
+  }, [searchParams, router]);
+
   const fetchAssignments = async () => {
     setLoading(true);
     try {
+      const userEmail = (typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "").trim().toLowerCase();
+
       const [response, submissionsRes] = await Promise.all([
         getAssignments(),
-        getAssignmentSubmissions().catch(() => null)
+        getAssignmentSubmissions({ member: userEmail, user: userEmail }).catch(() => null)
       ]);
       
       const rawData = response?.data || response;
@@ -29,15 +41,50 @@ export default function AssignmentsPage() {
       
       let submissionsList: any[] = [];
       if (submissionsRes) {
-        const subRaw = submissionsRes?.data || submissionsRes;
-        const subData = subRaw?.message?.data || subRaw?.data || subRaw?.message || [];
-        submissionsList = Array.isArray(subData) ? subData : [];
+        const subRaw: any = (submissionsRes as any)?.data || submissionsRes;
+        if (Array.isArray(subRaw)) {
+          submissionsList = subRaw;
+        } else if (subRaw && typeof subRaw === 'object') {
+          if (Array.isArray(subRaw.submissions)) submissionsList = subRaw.submissions;
+          else if (subRaw.data && Array.isArray(subRaw.data.submissions)) submissionsList = subRaw.data.submissions;
+          else if (subRaw.message && Array.isArray(subRaw.message.data)) submissionsList = subRaw.message.data;
+          else if (subRaw.message && Array.isArray(subRaw.message.submissions)) submissionsList = subRaw.message.submissions;
+          else if (Array.isArray(subRaw.data)) submissionsList = subRaw.data;
+          else if (Array.isArray(subRaw.message)) submissionsList = subRaw.message;
+        }
       }
       
       const mergedData = finalData.map(a => {
-        const isSub = submissionsList.some((s: any) => s.assignment === a.name || s.assignment_title === a.title);
-        if (isSub) {
-          return { ...a, _is_submitted: true };
+        const aName = String(a.name || '').trim().toLowerCase();
+        const aTitle = String(a.title || a.assignment_title || '').trim().toLowerCase();
+
+        // Check local storage submission
+        let hasLocalSub = false;
+        if (userEmail && typeof window !== "undefined") {
+          try {
+            const loc = localStorage.getItem(`lms_submission_${userEmail}_${a.name}`) ||
+                        localStorage.getItem(`lms_submission_${userEmail}_${a.title}`);
+            if (loc) hasLocalSub = true;
+          } catch (e) {}
+        }
+
+        const sub = submissionsList.find((s: any) => {
+          const sAss = String(s.assignment || '').trim().toLowerCase();
+          const sTitle = String(s.assignment_title || '').trim().toLowerCase();
+          const matches = sAss === aName || (aTitle && sTitle === aTitle);
+          if (!matches) return false;
+          if (!userEmail) return true;
+          const sMember = String(s.member || s.owner || '').trim().toLowerCase();
+          return !sMember || sMember.includes(userEmail) || userEmail.includes(sMember);
+        });
+
+        if (sub || hasLocalSub) {
+          return {
+            ...a,
+            status: sub?.status || 'Submitted',
+            _is_submitted: true,
+            submission_name: sub?.name
+          };
         }
         return a;
       });
@@ -49,6 +96,7 @@ export default function AssignmentsPage() {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -175,5 +223,17 @@ export default function AssignmentsPage() {
         </section>
       </main>
     </div>
+  );
+}
+
+export default function AssignmentsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    }>
+      <AssignmentsContent />
+    </Suspense>
   );
 }
