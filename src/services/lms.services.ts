@@ -60,8 +60,21 @@ export interface Course {
   instructors: Instructor[];
 }
 
-export const getCourses = async (): Promise<Course[]> => {
+const getCurrentUserEmail = () => {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("userEmail") || localStorage.getItem("user") || "";
+  }
+  return "";
+};
+
+export const getCourses = async (payload?: any): Promise<Course[]> => {
+  const currentUser = getCurrentUserEmail();
+  const params: Record<string, any> = {
+    ...(currentUser ? { user: currentUser } : {}),
+    ...(payload || {})
+  };
   return apiService.get(`method/${API_METHOD_PREFIX}.get_courses`, {
+    params,
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }
@@ -119,15 +132,20 @@ export const getCourseCompletionData = async (payload?: any) => {
   });
 };
 
-export const getCourse = async (name: string) => {
+export const getCourse = async (name: string, payload?: any) => {
+  const currentUser = getCurrentUserEmail();
   return apiService.get("method/lms.lms.stride_lms.get_course", {
-    params: { name }
+    params: {
+      name,
+      ...(currentUser ? { user: currentUser } : {}),
+      ...(payload || {})
+    }
   });
 };
 
-export const getCourseDetails = async (payload: GetCourseDetailsPayload | { name?: string; course?: string }) => {
+export const getCourseDetails = async (payload: GetCourseDetailsPayload | { name?: string; course?: string; user?: string }) => {
   const courseName = (payload as any).name || (payload as any).course;
-  return getCourse(courseName);
+  return getCourse(courseName, payload);
 };
 
 export const getCourseOutline = async (payload?: any) => {
@@ -186,8 +204,13 @@ export const getReviews = async (payload: GetReviewsPayload) => {
 
 export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
   const nameParam = payload.batch || payload.name;
+  const currentUser = getCurrentUserEmail();
   return apiService.get(`method/lms.lms.stride_lms.get_batch_details`, {
-    params: { batch: nameParam },
+    params: {
+      batch: nameParam,
+      ...(currentUser ? { user: currentUser } : {}),
+      ...payload
+    },
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }
@@ -195,16 +218,26 @@ export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
 };
 
 export const getBatchCourses = async (payload: GetBatchCoursesPayload) => {
+  const currentUser = getCurrentUserEmail();
   return apiService.get(`method/${API_METHOD_PREFIX}.get_batch_courses`, {
-    params: payload,
+    params: {
+      ...(currentUser ? { user: currentUser } : {}),
+      ...payload
+    },
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }
   });
 };
 
-export const getBatches = async () => {
+export const getBatches = async (payload?: any) => {
+  const currentUser = getCurrentUserEmail();
+  const params: Record<string, any> = {
+    ...(currentUser ? { user: currentUser } : {}),
+    ...(payload || {})
+  };
   return apiService.get(`method/${API_METHOD_PREFIX}.get_batches`, {
+    params,
     headers: { 'Authorization': `token ${API_TOKEN}` }
   });
 };
@@ -828,15 +861,26 @@ export interface Program {
   program_members?: ProgramMember[];
 }
 
-export const getProgramList = async (): Promise<Program[]> => {
+export const getProgramList = async (payload?: any): Promise<Program[]> => {
+  const currentUser = getCurrentUserEmail();
+  const params: Record<string, any> = {
+    ...(currentUser ? { user: currentUser } : {}),
+    ...(payload || {})
+  };
   return apiService.get(`method/lms.lms.doctype.lms_program.lms_program.get_program_list`, {
+    params,
     headers: { 'Authorization': `token ${API_TOKEN}` }
   });
 };
 
-export const getProgramDetail = async (program_title: string): Promise<Program> => {
+export const getProgramDetail = async (program_title: string, payload?: any): Promise<Program> => {
+  const currentUser = getCurrentUserEmail();
   return apiService.get(`method/lms.lms.doctype.lms_program.lms_program.get_program_detail`, {
-    params: { program_title },
+    params: {
+      program_title,
+      ...(currentUser ? { user: currentUser } : {}),
+      ...(payload || {})
+    },
     headers: { 'Authorization': `token ${API_TOKEN}` }
   });
 };

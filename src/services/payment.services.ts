@@ -160,24 +160,40 @@ export const enrollInBatch = async (payload: { batch: string }): Promise<{ batch
 /**
  * 8) Course & Batch Detail with Enrollment State
  */
-export const getCourseWithEnrollment = async (name: string): Promise<CourseWithEnrollment> => {
+export const getCourseWithEnrollment = async (name: string, payload?: any): Promise<CourseWithEnrollment> => {
+  const currentUser = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
   const res = await apiService.get(`${METHOD_PREFIX}.get_course_with_enrollment`, {
-    params: { name },
+    params: {
+      name,
+      ...(currentUser ? { user: currentUser } : {}),
+      ...(payload || {})
+    },
     headers: authHeaders(),
   });
   return extractData<CourseWithEnrollment>(res);
 };
 
-export const getBatchWithEnrollment = async (name: string): Promise<BatchWithEnrollment> => {
+export const getBatchWithEnrollment = async (name: string, payload?: any): Promise<BatchWithEnrollment> => {
+  const currentUser = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
   const res = await apiService.get(`${METHOD_PREFIX}.get_batch_with_enrollment`, {
-    params: { name },
+    params: {
+      name,
+      ...(currentUser ? { user: currentUser } : {}),
+      ...(payload || {})
+    },
     headers: authHeaders(),
   });
   return extractData<BatchWithEnrollment>(res);
 };
 
-export const getCoursesWithEnrollment = async (): Promise<CourseWithEnrollment[]> => {
+export const getCoursesWithEnrollment = async (payload?: any): Promise<CourseWithEnrollment[]> => {
+  const currentUser = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
+  const params = {
+    ...(currentUser ? { user: currentUser } : {}),
+    ...(payload || {})
+  };
   const res = await apiService.get(`${METHOD_PREFIX}.get_courses_with_enrollment`, {
+    params,
     headers: authHeaders(),
   });
   const data = extractData<any>(res);
@@ -190,8 +206,14 @@ export const getCoursesWithEnrollment = async (): Promise<CourseWithEnrollment[]
   return [];
 };
 
-export const getBatchesWithEnrollment = async (): Promise<BatchWithEnrollment[]> => {
+export const getBatchesWithEnrollment = async (payload?: any): Promise<BatchWithEnrollment[]> => {
+  const currentUser = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
+  const params = {
+    ...(currentUser ? { user: currentUser } : {}),
+    ...(payload || {})
+  };
   const res = await apiService.get(`${METHOD_PREFIX}.get_batches_with_enrollment`, {
+    params,
     headers: authHeaders(),
   });
   const data = extractData<any>(res);

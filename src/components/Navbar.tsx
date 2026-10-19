@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet, TrendingUp, Settings, ClipboardCheck } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet, TrendingUp, Settings, ClipboardCheck, BookOpen, Users, Tag, X, Loader2, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/services/auth.services';
+import { getCourses, getBatches } from '@/services/lms.services';
 import Sidebar from '@/components/Sidebar';
 import NotificationBell from '@/components/notifications/NotificationBell';
 
@@ -19,6 +20,17 @@ export default function Navbar() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [allCourses, setAllCourses] = useState<any[]>([]);
+  const [allBatches, setAllBatches] = useState<any[]>([]);
+  const [dataFetched, setDataFetched] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const mobileSearchContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -136,6 +148,121 @@ export default function Navbar() {
     window.location.href = "/login";
   };
 
+  // Load courses and batches for search
+  const loadSearchData = async () => {
+    if (dataFetched || searchLoading) return;
+    setSearchLoading(true);
+    try {
+      const [coursesRes, batchesRes] = await Promise.allSettled([
+        getCourses(),
+        getBatches()
+      ]);
+
+      if (coursesRes.status === 'fulfilled') {
+        const cVal = coursesRes.value;
+        const cList = Array.isArray(cVal) ? cVal : ((cVal as any)?.message || (cVal as any)?.data || []);
+        setAllCourses(Array.isArray(cList) ? cList : []);
+      }
+
+      if (batchesRes.status === 'fulfilled') {
+        const bVal = batchesRes.value;
+        const bList = Array.isArray(bVal) ? bVal : ((bVal as any)?.message?.data || (bVal as any)?.data?.message || (bVal as any)?.data || (bVal as any)?.message || []);
+        setAllBatches(Array.isArray(bList) ? bList : []);
+      }
+
+      setDataFetched(true);
+    } catch (err) {
+      console.warn("Failed to load search data:", err);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // Close search on route change
+  useEffect(() => {
+    setIsSearchOpen(false);
+    setIsMobileSearchOpen(false);
+  }, [pathname]);
+
+  // Close search dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(target) &&
+        (!mobileSearchContainerRef.current || !mobileSearchContainerRef.current.contains(target))
+      ) {
+        setIsSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Compute matched courses, batches, and skills
+  const searchResults = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) {
+      return { courses: [], batches: [], skills: [], total: 0 };
+    }
+
+    // 1. Matching courses
+    const matchingCourses = allCourses.filter((c: any) => {
+      const title = (c.title || c.course_name || "").toLowerCase();
+      const name = (c.name || "").toLowerCase();
+      const tags = (c.tags || "").toLowerCase();
+      const cat = (c.category || "").toLowerCase();
+      const desc = (c.short_introduction || c.description || "").toLowerCase();
+      return title.includes(q) || name.includes(q) || tags.includes(q) || cat.includes(q) || desc.includes(q);
+    }).slice(0, 5);
+
+    // 2. Matching batches
+    const matchingBatches = allBatches.filter((b: any) => {
+      const title = (b.title || b.batch_name || "").toLowerCase();
+      const name = (b.name || "").toLowerCase();
+      const cat = (b.category || "").toLowerCase();
+      const desc = (b.description || "").toLowerCase();
+      return title.includes(q) || name.includes(q) || cat.includes(q) || desc.includes(q);
+    }).slice(0, 5);
+
+    // 3. Matching skills / tags
+    const skillCountMap = new Map<string, number>();
+    allCourses.forEach((c: any) => {
+      if (c.tags && typeof c.tags === 'string') {
+        c.tags.split(',').forEach((t: string) => {
+          const tag = t.trim();
+          if (tag) {
+            skillCountMap.set(tag, (skillCountMap.get(tag) || 0) + 1);
+          }
+        });
+      }
+      if (c.category && typeof c.category === 'string') {
+        const cat = c.category.trim();
+        if (cat) {
+          skillCountMap.set(cat, (skillCountMap.get(cat) || 0) + 1);
+        }
+      }
+    });
+
+    const matchingSkills: { name: string; count: number }[] = [];
+    skillCountMap.forEach((count, name) => {
+      if (name.toLowerCase().includes(q)) {
+        matchingSkills.push({ name, count });
+      }
+    });
+    matchingSkills.sort((a, b) => b.count - a.count);
+    const topSkills = matchingSkills.slice(0, 5);
+
+    const total = matchingCourses.length + matchingBatches.length + topSkills.length;
+    return {
+      courses: matchingCourses,
+      batches: matchingBatches,
+      skills: topSkills,
+      total
+    };
+  }, [searchQuery, allCourses, allBatches]);
+
   return (
     <>
       {/* Sidebar Component */}
@@ -180,16 +307,198 @@ export default function Navbar() {
               </Link>
             </div>
 
-            {/* Middle: Search Bar */}
-            <div className="hidden md:flex flex-1 max-w-md mx-6 relative group">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                <Search className="w-4 h-4 text-gray-400 group-focus-within:text-indigo-600 transition-colors" />
+            {/* Middle: Search Bar with Dropdown Results */}
+            <div className="hidden md:flex flex-1 max-w-md mx-6 relative" ref={searchContainerRef}>
+              <div className="w-full relative group">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  {searchLoading ? (
+                    <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
+                  ) : (
+                    <Search className="w-4 h-4 text-gray-400 group-focus-within:text-indigo-600 transition-colors" />
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onFocus={() => {
+                    loadSearchData();
+                    if (searchQuery.trim()) setIsSearchOpen(true);
+                  }}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (!isSearchOpen) setIsSearchOpen(true);
+                    if (!dataFetched) loadSearchData();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setIsSearchOpen(false);
+                    } else if (e.key === "Enter" && searchQuery.trim()) {
+                      if (searchResults.courses.length > 0) {
+                        router.push(`/course/${searchResults.courses[0].name}`);
+                        setIsSearchOpen(false);
+                      } else if (searchResults.batches.length > 0) {
+                        router.push(`/batch/${searchResults.batches[0].name}`);
+                        setIsSearchOpen(false);
+                      } else {
+                        router.push(`/courses`);
+                        setIsSearchOpen(false);
+                      }
+                    }
+                  }}
+                  placeholder="Search courses, skills, batches..."
+                  className="w-full pl-10 pr-9 py-2 bg-gray-50/80 border border-gray-200/80 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-xs font-medium transition-all duration-300 shadow-2xs focus:bg-white"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setIsSearchOpen(false);
+                    }}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                    title="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
-              <input
-                type="text"
-                placeholder="Search courses, skills, batches..."
-                className="w-full pl-10 pr-4 py-2 bg-gray-50/80 border border-gray-200/80 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-xs font-medium transition-all duration-300 shadow-2xs focus:bg-white"
-              />
+
+              {/* Floating Search Results Dropdown */}
+              {isSearchOpen && searchQuery.trim() && (
+                <div className="absolute left-0 top-full mt-2 w-full bg-white rounded-2xl shadow-xl border border-slate-100 py-3 z-50 max-h-[75vh] overflow-y-auto animate-in fade-in-0 zoom-in-95 duration-150">
+                  {searchLoading ? (
+                    <div className="p-6 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                      Searching courses, skills, and batches...
+                    </div>
+                  ) : searchResults.total === 0 ? (
+                    <div className="p-6 text-center">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
+                        <Search className="w-5 h-5" />
+                      </div>
+                      <p className="text-xs font-semibold text-slate-700">No results found</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        No courses, skills, or batches match &ldquo;{searchQuery}&rdquo;
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Courses Section */}
+                      {searchResults.courses.length > 0 && (
+                        <div>
+                          <div className="px-4 py-1 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            <span className="flex items-center gap-1.5">
+                              <BookOpen className="w-3.5 h-3.5 text-indigo-500" /> Courses
+                            </span>
+                            <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full">
+                              {searchResults.courses.length}
+                            </span>
+                          </div>
+                          <div className="mt-1 divide-y divide-slate-50">
+                            {searchResults.courses.map((course: any) => (
+                              <Link
+                                key={course.name}
+                                href={`/course/${course.name}`}
+                                onClick={() => setIsSearchOpen(false)}
+                                className="px-4 py-2 hover:bg-indigo-50/50 flex items-center justify-between group/item transition-colors"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                  <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
+                                    <BookOpen className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-slate-800 group-hover/item:text-indigo-600 truncate transition-colors">
+                                      {course.title || course.name}
+                                    </p>
+                                    {course.tags && (
+                                      <p className="text-[10px] text-slate-400 truncate">
+                                        Skills: {course.tags}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover/item:text-indigo-500 group-hover/item:translate-x-0.5 transition-all flex-shrink-0" />
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Batches Section */}
+                      {searchResults.batches.length > 0 && (
+                        <div className="pt-1 border-t border-slate-100">
+                          <div className="px-4 py-1 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            <span className="flex items-center gap-1.5">
+                              <Users className="w-3.5 h-3.5 text-emerald-500" /> Batches
+                            </span>
+                            <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
+                              {searchResults.batches.length}
+                            </span>
+                          </div>
+                          <div className="mt-1 divide-y divide-slate-50">
+                            {searchResults.batches.map((batch: any) => (
+                              <Link
+                                key={batch.name}
+                                href={`/batch/${batch.name}`}
+                                onClick={() => setIsSearchOpen(false)}
+                                className="px-4 py-2 hover:bg-emerald-50/50 flex items-center justify-between group/item transition-colors"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                  <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
+                                    <Users className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-slate-800 group-hover/item:text-emerald-600 truncate transition-colors">
+                                      {batch.title || batch.batch_name || batch.name}
+                                    </p>
+                                    {batch.category && (
+                                      <p className="text-[10px] text-slate-400 truncate">
+                                        {batch.category}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover/item:text-emerald-500 group-hover/item:translate-x-0.5 transition-all flex-shrink-0" />
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Skills Section */}
+                      {searchResults.skills.length > 0 && (
+                        <div className="pt-1 border-t border-slate-100">
+                          <div className="px-4 py-1 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            <span className="flex items-center gap-1.5">
+                              <Tag className="w-3.5 h-3.5 text-amber-500" /> Skills & Tags
+                            </span>
+                            <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
+                              {searchResults.skills.length}
+                            </span>
+                          </div>
+                          <div className="mt-1 px-4 py-1.5 flex flex-wrap gap-1.5">
+                            {searchResults.skills.map((skill) => (
+                              <button
+                                key={skill.name}
+                                type="button"
+                                onClick={() => {
+                                  setSearchQuery(skill.name);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-xs font-medium border border-amber-200/60 transition-colors"
+                              >
+                                <span>{skill.name}</span>
+                                <span className="text-[9px] bg-white/80 px-1 rounded text-amber-700 font-bold">
+                                  {skill.count}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Right side: Streamlined Clean Actions & Auth */}
@@ -370,6 +679,20 @@ export default function Navbar() {
                 </div>
               )}
 
+              {/* Mobile search toggle */}
+              <button
+                onClick={() => {
+                  setIsMobileSearchOpen(!isMobileSearchOpen);
+                  if (!isMobileSearchOpen) {
+                    loadSearchData();
+                  }
+                }}
+                className="p-2 text-gray-600 hover:text-indigo-600 bg-gray-50 rounded-xl focus:outline-none md:hidden"
+                aria-label="Toggle Search"
+              >
+                <Search className="w-5 h-5" />
+              </button>
+
               {/* Mobile sidebar opener */}
               <button
                 onClick={() => setIsMobileSidebarOpen(true)}
@@ -381,6 +704,92 @@ export default function Navbar() {
             </div>
           </div>
         </div>
+
+        {/* Mobile Search Bar Expandable Drawer */}
+        {isMobileSearchOpen && (
+          <div className="md:hidden border-t border-gray-100 bg-white px-4 py-3 relative" ref={mobileSearchContainerRef}>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                {searchLoading ? (
+                  <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
+                ) : (
+                  <Search className="w-4 h-4 text-gray-400" />
+                )}
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                autoFocus
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (!dataFetched) loadSearchData();
+                }}
+                placeholder="Search courses, skills, batches..."
+                className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Mobile Results */}
+            {searchQuery.trim() && (
+              <div className="mt-2 max-h-60 overflow-y-auto divide-y divide-slate-50 border border-slate-100 rounded-xl bg-white shadow-lg p-2">
+                {searchLoading ? (
+                  <div className="p-4 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                    Searching...
+                  </div>
+                ) : searchResults.total === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-500">
+                    No results for &ldquo;{searchQuery}&rdquo;
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {searchResults.courses.map((course: any) => (
+                      <Link
+                        key={course.name}
+                        href={`/course/${course.name}`}
+                        onClick={() => setIsMobileSearchOpen(false)}
+                        className="block px-2 py-1.5 text-xs font-semibold text-slate-800 hover:text-indigo-600 truncate"
+                      >
+                        🎓 {course.title || course.name}
+                      </Link>
+                    ))}
+                    {searchResults.batches.map((batch: any) => (
+                      <Link
+                        key={batch.name}
+                        href={`/batch/${batch.name}`}
+                        onClick={() => setIsMobileSearchOpen(false)}
+                        className="block px-2 py-1.5 text-xs font-semibold text-slate-800 hover:text-emerald-600 truncate"
+                      >
+                        👥 {batch.title || batch.batch_name || batch.name}
+                      </Link>
+                    ))}
+                    {searchResults.skills.map((skill) => (
+                      <button
+                        key={skill.name}
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery(skill.name);
+                        }}
+                        className="inline-block m-1 px-2 py-0.5 bg-amber-50 text-amber-800 rounded text-[11px] font-medium"
+                      >
+                        🏷️ {skill.name} ({skill.count})
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </nav>
     </>
   );
