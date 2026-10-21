@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { getQuiz, getQuestions, getQuizSubmissions, getQuizResult } from "@/services/lms.services";
+import {
+  getQuiz,
+  getQuestions,
+  getQuizSubmissions,
+  getQuizResult,
+  createQuizSubmission,
+  getQuizSubmissionDetails,
+  QuizSubmissionAnswer,
+  CreateQuizSubmissionPayload
+} from "@/services/lms.services";
 import { isAuthorizedInstructor } from "@/services/auth.services";
 import { formatDate } from "@/utils/formatters";
 import { navigateBack } from "@/utils/navigation";
@@ -49,6 +58,7 @@ interface QuizAuthor {
 }
 
 interface QuizOption {
+  key?: string;
   option: string;
   is_correct?: number | boolean;
   explanation?: string;
@@ -57,6 +67,7 @@ interface QuizOption {
 interface QuizQuestion {
   name: string;
   question: string;
+  question_id?: string;
   question_detail?: string;
   marks?: number;
   type?: string;
@@ -119,7 +130,11 @@ export default function QuizDetailsPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [started, setStarted] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [lastSubmissionId, setLastSubmissionId] = useState<string | null>(null);
+  const [lastSubmissionResult, setLastSubmissionResult] = useState<any | null>(null);
 
   useEffect(() => {
     const isInst = isAuthorizedInstructor();
@@ -153,11 +168,16 @@ export default function QuizDetailsPage() {
     setLoadingResult(true);
     setResultModalOpen(true);
     try {
-      const res = await getQuizResult(submissionId);
+      const res = await getQuizSubmissionDetails(submissionId);
       setSelectedResult(res || { submission: submissionId });
     } catch (e) {
-      console.warn("Failed to fetch quiz result:", e);
-      setSelectedResult({ submission: submissionId });
+      console.warn("Failed to fetch quiz submission details:", e);
+      try {
+        const fallbackRes = await getQuizResult(submissionId);
+        setSelectedResult(fallbackRes || { submission: submissionId });
+      } catch (err) {
+        setSelectedResult({ submission: submissionId });
+      }
     } finally {
       setLoadingResult(false);
     }
@@ -196,16 +216,57 @@ export default function QuizDetailsPage() {
                 data.questions = rawQuestions.map((q: any) => {
                   const rawRef = q.question || q.name || '';
                   const match = bankMap.get(String(rawRef).toLowerCase()) || bankMap.get(String(q.name || '').toLowerCase());
+                  
+                  // Extract options from either array or flat columns
+                  let opts: any[] = [];
+                  if (Array.isArray(q.options) && q.options.length > 0) {
+                    opts = q.options;
+                  } else if (match && Array.isArray(match.options) && match.options.length > 0) {
+                    opts = match.options;
+                  } else if (match) {
+                    opts = [1, 2, 3, 4].map((num) => {
+                      const val = match[`option_${num}`];
+                      if (!val) return null;
+                      return {
+                        key: `option_${num}`,
+                        option: val,
+                        is_correct: match[`is_correct_${num}`] === 1 || match[`is_correct_${num}`] === true,
+                        explanation: match[`explanation_${num}`] || ''
+                      };
+                    }).filter(Boolean);
+                  }
+
+                  const normalizedOptions = opts.map((opt: any, optIdx: number) => {
+                    const optKey = opt.key || `option_${optIdx + 1}`;
+                    const optText = typeof opt === 'string' ? opt : (opt.option || opt.title || opt.name || opt.value || '');
+                    return {
+                      ...opt,
+                      key: optKey,
+                      option: optText
+                    };
+                  });
+
+                  const questionId = match?.name || (q.question && q.question.startsWith('QTS-') ? q.question : (q.question || q.name));
+
                   return {
                     ...q,
+                    question_id: questionId,
                     question_detail: q.question_detail || match?.question_detail || match?.question_title || q.question || rawRef,
                     marks: Number(q.marks) || Number(match?.marks) || 1,
                     type: q.type || match?.type || 'Choices',
-                    options: q.options || match?.options || [],
+                    options: normalizedOptions,
                   };
                 });
               } else {
-                data.questions = rawQuestions;
+                data.questions = rawQuestions.map((q: any) => ({
+                  ...q,
+                  question_id: q.question || q.name,
+                  options: Array.isArray(q.options) ? q.options.map((opt: any, optIdx: number) => ({
+                    ...opt,
+                    key: opt.key || `option_${optIdx + 1}`,
+                    option: typeof opt === 'string' ? opt : (opt.option || opt.title || opt.name || opt.value || '')
+                  })) : []
+                }));
               }
             } catch (enrichErr) {
               console.warn("Could not enrich quiz questions:", enrichErr);
@@ -288,12 +349,20 @@ export default function QuizDetailsPage() {
   const startQuiz = () => {
     if (!quiz.questions || quiz.questions.length === 0) return;
     setStarted(true);
+    setSubmitted(false);
+    setSubmissionError(null);
+    setLastSubmissionId(null);
+    setLastSubmissionResult(null);
+    setCurrentQuestionIndex(0);
   };
 
-  const handleAnswer = (questionName: string, answer: string) => {
+  const handleAnswer = (question: QuizQuestion, answerValue: string) => {
+    const qKey = question.question_id || question.question || question.name;
     setAnswers(prev => ({
       ...prev,
-      [questionName]: answer
+      [qKey]: answerValue,
+      [question.name]: answerValue,
+      ...(question.question ? { [question.question]: answerValue } : {})
     }));
   };
 
@@ -309,8 +378,69 @@ export default function QuizDetailsPage() {
     }
   };
 
-  const handleSubmit = () => {
-    setSubmitted(true);
+  const handleSubmit = async () => {
+    if (!quiz) return;
+    setSubmitting(true);
+    setSubmissionError(null);
+
+    try {
+      // Build answers payload: [ { question: "QTS-2026-00008", answer: "option_1" } ]
+      const answersPayload: QuizSubmissionAnswer[] = (quiz.questions || [])
+        .map((q: any) => {
+          const qId = q.question_id || (q.question && q.question.startsWith("QTS-") ? q.question : (q.question || q.name));
+          const userAns = answers[qId] ?? answers[q.name] ?? answers[q.question || ''] ?? "";
+
+          let finalAnswer = String(userAns || "").trim();
+          if (q.options && q.options.length > 0) {
+            const matchedIdx = q.options.findIndex((opt: any, oIdx: number) => {
+              const key = opt.key || `option_${oIdx + 1}`;
+              const label = opt.option || opt.value || opt;
+              return userAns === key || userAns === label;
+            });
+            if (matchedIdx !== -1) {
+              finalAnswer = `option_${matchedIdx + 1}`;
+            }
+          }
+
+          return {
+            question: qId,
+            answer: finalAnswer
+          };
+        })
+        .filter((item) => Boolean(item.answer));
+
+      const payload: CreateQuizSubmissionPayload = {
+        quiz: quiz.name || name,
+        answers: answersPayload
+      };
+
+      const res = await createQuizSubmission(payload);
+      
+      const subId =
+        typeof res === "string"
+          ? res
+          : (res?.name || res?.submission || res?.submission_name || res?.data?.name || res?.message?.name || res?.id || "");
+
+      if (subId) {
+        setLastSubmissionId(subId);
+        try {
+          const details = await getQuizSubmissionDetails(subId);
+          if (details) {
+            setLastSubmissionResult(details);
+          }
+        } catch (detailErr) {
+          console.warn("Could not fetch submission details immediately:", detailErr);
+        }
+      }
+
+      await fetchSubmissions();
+      setSubmitted(true);
+    } catch (err: any) {
+      console.error("Failed to submit quiz:", err);
+      setSubmissionError(err?.message || "Failed to submit assessment. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const currentQuestion = quiz.questions?.[currentQuestionIndex];
@@ -333,6 +463,47 @@ export default function QuizDetailsPage() {
               You have completed <span className="font-semibold text-gray-900">{quiz.title || quiz.name}</span>.
             </p>
             
+            {/* Live Evaluation Highlight from get_quiz_submission_details */}
+            {lastSubmissionResult && (
+              <div className="mb-6 p-5 rounded-xl bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/50 border border-indigo-100 text-left">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                      Evaluation Result
+                    </span>
+                    <h4 className="text-2xl font-extrabold text-gray-900 mt-1">
+                      {lastSubmissionResult.score !== undefined ? lastSubmissionResult.score : (lastSubmissionResult.marks ?? "-")}{" "}
+                      <span className="text-xs font-semibold text-gray-400">/ {totalCalculatedMarks} Marks</span>
+                    </h4>
+                    {lastSubmissionResult.percentage !== undefined && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Achieved <span className="font-bold text-gray-800">{lastSubmissionResult.percentage}%</span>
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold ${
+                      lastSubmissionResult.status === "Passed" || (lastSubmissionResult.percentage !== undefined && Number(lastSubmissionResult.percentage) >= Number(quiz.passing_percentage))
+                        ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                        : "bg-rose-100 text-rose-800 border border-rose-200"
+                    }`}>
+                      {lastSubmissionResult.status === "Passed" || (lastSubmissionResult.percentage !== undefined && Number(lastSubmissionResult.percentage) >= Number(quiz.passing_percentage)) ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          Passed
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="w-4 h-4 text-rose-600" />
+                          {lastSubmissionResult.status || "Completed"}
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="bg-gray-50 rounded-xl p-6 mb-8 text-left border border-gray-100">
               <h3 className="font-semibold text-gray-900 mb-4 text-xs uppercase tracking-wider">
                 Submission Summary
@@ -360,15 +531,36 @@ export default function QuizDetailsPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
+              {(lastSubmissionId || lastSubmissionResult) && (
+                <button
+                  type="button"
+                  onClick={() => handleViewResult(lastSubmissionId || lastSubmissionResult?.name)}
+                  className="inline-flex justify-center items-center px-6 py-2.5 font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors flex-1 text-sm cursor-pointer"
+                >
+                  <Eye className="w-4 h-4 mr-1.5" />
+                  View Evaluation
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setAnswers({});
+                  startQuiz();
+                }}
+                className="inline-flex justify-center items-center px-6 py-2.5 font-medium rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors flex-1 text-sm shadow-sm cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4 mr-1.5" />
+                Retake Assessment
+              </button>
               <Link
                 href="/quizzes"
                 onClick={(e) => {
                   e.preventDefault();
                   navigateBack(router, "/quizzes");
                 }}
-                className="inline-flex justify-center items-center px-6 py-2.5 font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors flex-1 text-sm cursor-pointer"
+                className="inline-flex justify-center items-center px-6 py-2.5 font-medium rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors flex-1 text-sm shadow-sm cursor-pointer"
               >
-                Back to Previous Screen
+                Back to Quizzes
               </Link>
               {isInstructor && (
                 <Link
@@ -452,19 +644,27 @@ export default function QuizDetailsPage() {
                         Select your answer:
                       </label>
                       {currentQuestion.options.map((opt, oIdx) => {
-                        const isSelected = answers[currentQuestion.name] === opt.option;
+                        const optKey = opt.key || `option_${oIdx + 1}`;
+                        const optLabel = opt.option || (opt as any).value || opt;
+                        const qId = currentQuestion.question_id || currentQuestion.question || currentQuestion.name;
+                        const isSelected =
+                          answers[qId] === optKey ||
+                          answers[currentQuestion.name] === optKey ||
+                          answers[qId] === optLabel ||
+                          answers[currentQuestion.name] === optLabel;
+
                         return (
                           <button
                             key={oIdx}
                             type="button"
-                            onClick={() => handleAnswer(currentQuestion.name, opt.option)}
+                            onClick={() => handleAnswer(currentQuestion, optKey)}
                             className={`w-full text-left p-4 rounded-xl border transition-all flex items-center justify-between text-sm ${
                               isSelected
                                 ? 'border-indigo-600 bg-indigo-50/50 text-indigo-950 ring-2 ring-indigo-500/20 font-medium'
                                 : 'border-gray-200 hover:border-gray-300 bg-white text-gray-800'
                             }`}
                           >
-                            <span>{opt.option}</span>
+                            <span>{optLabel}</span>
                             <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ml-3 ${
                               isSelected ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-300'
                             }`}>
@@ -483,13 +683,24 @@ export default function QuizDetailsPage() {
                         id="answer"
                         className="w-full p-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow outline-none text-gray-900 min-h-[140px] text-sm resize-y placeholder:text-gray-400"
                         placeholder="Type your response here..."
-                        value={answers[currentQuestion.name] || ""}
-                        onChange={(e) => handleAnswer(currentQuestion.name, e.target.value)}
+                        value={
+                          answers[currentQuestion.question_id || currentQuestion.question || currentQuestion.name] ||
+                          answers[currentQuestion.name] ||
+                          ""
+                        }
+                        onChange={(e) => handleAnswer(currentQuestion, e.target.value)}
                       ></textarea>
                     </div>
                   )}
                 </div>
               </div>
+
+              {submissionError && (
+                <div className="mx-6 md:mx-8 mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{submissionError}</span>
+                </div>
+              )}
 
               <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between items-center">
                 <button
@@ -508,15 +719,25 @@ export default function QuizDetailsPage() {
                 {isLastQuestion ? (
                   <button
                     onClick={handleSubmit}
-                    className="px-6 py-2 rounded-lg font-medium text-sm bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors flex items-center gap-1.5"
+                    disabled={submitting}
+                    className="px-6 py-2 rounded-lg font-medium text-sm bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
                   >
-                    <span>Submit</span>
-                    <CheckCircle2 className="w-4 h-4" />
+                    {submitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Submitting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Submit</span>
+                        <CheckCircle2 className="w-4 h-4" />
+                      </>
+                    )}
                   </button>
                 ) : (
                   <button
                     onClick={handleNext}
-                    className="px-6 py-2 rounded-lg font-medium text-sm bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors flex items-center gap-1.5"
+                    className="px-6 py-2 rounded-lg font-medium text-sm bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <span>Next</span>
                     <ArrowRight className="w-4 h-4" />
@@ -1126,23 +1347,33 @@ export default function QuizDetailsPage() {
                       )}
                     </div>
                     <div>
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold ${
-                        selectedResult.status === "Passed" || (selectedResult.percentage !== undefined && Number(selectedResult.percentage) >= Number(quiz.passing_percentage))
-                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                          : "bg-rose-100 text-rose-800 border border-rose-200"
-                      }`}>
-                        {selectedResult.status === "Passed" || (selectedResult.percentage !== undefined && Number(selectedResult.percentage) >= Number(quiz.passing_percentage)) ? (
-                          <>
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                            Passed
-                          </>
-                        ) : (
-                          <>
-                            <AlertCircle className="w-4 h-4 text-rose-600" />
-                            {selectedResult.status || "Failed"}
-                          </>
-                        )}
-                      </span>
+                      {(() => {
+                        const isPassed =
+                          selectedResult.status === "Passed" ||
+                          selectedResult.status === "Pass" ||
+                          selectedResult.result === "Passed" ||
+                          selectedResult.result === "Pass" ||
+                          (selectedResult.percentage !== undefined && Number(selectedResult.percentage) >= Number(quiz.passing_percentage));
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold ${
+                            isPassed
+                              ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                              : "bg-rose-100 text-rose-800 border border-rose-200"
+                          }`}>
+                            {isPassed ? (
+                              <>
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                Passed
+                              </>
+                            ) : (
+                              <>
+                                <AlertCircle className="w-4 h-4 text-rose-600" />
+                                {selectedResult.status || selectedResult.result || "Failed"}
+                              </>
+                            )}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
 

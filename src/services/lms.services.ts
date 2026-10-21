@@ -662,9 +662,88 @@ export const getQuizSubmissions = async (filters?: {
   return [];
 };
 
+export interface QuizSubmissionAnswer {
+  question: string;
+  answer: string;
+}
+
+export interface CreateQuizSubmissionPayload {
+  quiz: string;
+  answers: QuizSubmissionAnswer[];
+  [key: string]: any;
+}
+
+export const createQuizSubmission = async (payload: CreateQuizSubmissionPayload) => {
+  // 1. Primary method requested: lms.lms.doctype.lms_quiz_submission.lms_quiz_submission.create_quiz_submission
+  try {
+    const res = await apiService.post(
+      "method/lms.lms.doctype.lms_quiz_submission.lms_quiz_submission.create_quiz_submission",
+      payload
+    );
+    if (res) return res;
+  } catch (err) {
+    console.warn("create_quiz_submission primary call failed, trying with stringified answers:", err);
+    try {
+      const res = await apiService.post(
+        "method/lms.lms.doctype.lms_quiz_submission.lms_quiz_submission.create_quiz_submission",
+        {
+          quiz: payload.quiz,
+          answers: typeof payload.answers === 'string' ? payload.answers : JSON.stringify(payload.answers)
+        }
+      );
+      if (res) return res;
+    } catch (e2) {
+      console.warn("create_quiz_submission with stringified answers failed:", e2);
+      throw err;
+    }
+  }
+};
+
+export const getQuizSubmissionDetails = async (submission: string | { submission: string }) => {
+  const submissionId = typeof submission === 'string' ? submission : (submission as any)?.submission;
+  if (!submissionId) return null;
+
+  // 1. Primary method requested: lms.lms.doctype.lms_quiz_submission.lms_quiz_submission.get_quiz_submission_details
+  // First try POST with { submission: submissionId } body as per API definition
+  try {
+    const res = await apiService.post(
+      "method/lms.lms.doctype.lms_quiz_submission.lms_quiz_submission.get_quiz_submission_details",
+      { submission: submissionId }
+    );
+    const data = res?.message?.data || res?.data || res?.message || res;
+    if (data) return data;
+  } catch (err) {
+    // Fallback to GET with params: { submission: submissionId }
+    try {
+      const res = await apiService.get(
+        "method/lms.lms.doctype.lms_quiz_submission.lms_quiz_submission.get_quiz_submission_details",
+        { params: { submission: submissionId } }
+      );
+      const data = res?.message?.data || res?.data || res?.message || res;
+      if (data) return data;
+    } catch (e) {
+      console.warn("get_quiz_submission_details GET fallback failed:", e);
+    }
+  }
+
+  // 2. Fallback to getQuizResult
+  return getQuizResult(submissionId);
+};
+
 export const getQuizResult = async (submission: string) => {
   if (!submission) return null;
-  // 1. Primary method: lms.lms.doctype.lms_course.lms_course.get_quiz_result
+
+  // 1. Try get_quiz_submission_details
+  try {
+    const res = await apiService.get(
+      "method/lms.lms.doctype.lms_quiz_submission.lms_quiz_submission.get_quiz_submission_details",
+      { params: { submission } }
+    );
+    const data = res?.message?.data || res?.data || res?.message || res;
+    if (data) return data;
+  } catch (e) {}
+
+  // 2. Primary method: lms.lms.doctype.lms_course.lms_course.get_quiz_result
   try {
     const res = await apiService.get(
       "method/lms.lms.doctype.lms_course.lms_course.get_quiz_result",
@@ -686,7 +765,7 @@ export const getQuizResult = async (submission: string) => {
     }
   }
 
-  // 2. Resource fallback
+  // 3. Resource fallback
   try {
     const res = await apiService.get(`resource/LMS Quiz Submission/${encodeURIComponent(submission)}`);
     return res?.data || res?.message || res;
