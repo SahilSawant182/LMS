@@ -4,10 +4,11 @@ import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
-import { getAssignment, createAssignmentSubmission, updateAssignmentSubmission, updateAssignment, deleteAssignment, getAssignmentSubmissions } from '@/services/lms.services';
-import { getImageUrl } from '@/services/api.services';
+import { getAssignment, createAssignmentSubmission, updateAssignmentSubmission, updateAssignment, deleteAssignment, getAssignmentSubmissions, getAssignmentResult } from '@/services/lms.services';
+import { getImageUrl, getCurrentUserEmail } from '@/services/api.services';
 import { navigateBack } from '@/utils/navigation';
-import { ArrowLeft, BookOpen, Send, Upload, CheckCircle, Trash2, Edit, Users, ExternalLink, Clock } from 'lucide-react';
+import { formatDate } from '@/utils/formatters';
+import { ArrowLeft, BookOpen, Send, Upload, CheckCircle, Trash2, Edit, Users, ExternalLink, Clock, Eye, X, Award, FileCheck2 } from 'lucide-react';
 
 export default function AssignmentDetailPage() {
   const router = useRouter();
@@ -26,6 +27,11 @@ export default function AssignmentDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [isInstructor, setIsInstructor] = useState(false);
+
+  // Result Modal State (calls get_assignment_result)
+  const [selectedResult, setSelectedResult] = useState<any | null>(null);
+  const [loadingResult, setLoadingResult] = useState(false);
+  const [resultModalOpen, setResultModalOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -61,20 +67,54 @@ export default function AssignmentDetailPage() {
         assignmentsData = assignmentsData.assignment;
       }
       
-      const currentUserEmail = (typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "").trim().toLowerCase();
+      const currentUserEmail = getCurrentUserEmail().trim().toLowerCase();
       const targetName = String(assignmentName || '').trim().toLowerCase();
       const targetDataName = String(assignmentsData?.name || '').trim().toLowerCase();
       const targetTitle = String(assignmentsData?.title || assignmentsData?.assignment_title || '').trim().toLowerCase();
+      const decodedName = decodeURIComponent(targetName);
 
-      // Check local storage backup first
+      // Check local storage backup first (checking all key permutations)
       let localSub: any = null;
-      if (typeof window !== "undefined" && currentUserEmail) {
+      let localAnswer = '';
+      if (typeof window !== "undefined") {
         try {
-          const stored = localStorage.getItem(`lms_submission_${currentUserEmail}_${assignmentName}`) ||
-                         localStorage.getItem(`lms_submission_${currentUserEmail}_${assignmentsData?.name}`) ||
-                         localStorage.getItem(`lms_submission_${currentUserEmail}_${assignmentsData?.title}`);
-          if (stored) {
-            localSub = JSON.parse(stored);
+          const keysToTry = [
+            currentUserEmail ? `lms_submission_${currentUserEmail}_${assignmentName}` : '',
+            currentUserEmail ? `lms_submission_${currentUserEmail}_${decodedName}` : '',
+            currentUserEmail && assignmentsData?.name ? `lms_submission_${currentUserEmail}_${assignmentsData.name}` : '',
+            currentUserEmail && assignmentsData?.title ? `lms_submission_${currentUserEmail}_${assignmentsData.title}` : '',
+            `lms_submission_${assignmentName}`,
+            `lms_submission_${decodedName}`,
+            assignmentsData?.name ? `lms_submission_${assignmentsData.name}` : '',
+            assignmentsData?.title ? `lms_submission_${assignmentsData.title}` : '',
+          ].filter(Boolean);
+
+          for (const key of keysToTry) {
+            const stored = localStorage.getItem(key);
+            if (stored) {
+              try {
+                localSub = JSON.parse(stored);
+                if (localSub) break;
+              } catch (e) {}
+            }
+          }
+
+          // Also check explicit answer keys
+          const answerKeys = [
+            `lms_assignment_answer_${assignmentName}`,
+            `lms_assignment_answer_${decodedName}`,
+            assignmentsData?.name ? `lms_assignment_answer_${assignmentsData.name}` : '',
+            assignmentsData?.title ? `lms_assignment_answer_${assignmentsData.title}` : '',
+            currentUserEmail ? `lms_assignment_answer_${currentUserEmail}_${assignmentName}` : '',
+            currentUserEmail && assignmentsData?.name ? `lms_assignment_answer_${currentUserEmail}_${assignmentsData.name}` : '',
+          ].filter(Boolean);
+
+          for (const aKey of answerKeys) {
+            const aVal = localStorage.getItem(aKey);
+            if (aVal && aVal.trim()) {
+              localAnswer = aVal;
+              break;
+            }
           }
         } catch (e) {}
       }
@@ -102,11 +142,22 @@ export default function AssignmentDetailPage() {
         console.warn("Failed to fetch assignment submissions:", subErr);
       }
 
+      // Also incorporate submissions embedded directly in assignment data
+      if (assignmentsData?.my_submission && typeof assignmentsData.my_submission === 'object') {
+        submissionsList.unshift(assignmentsData.my_submission);
+      }
+      if (assignmentsData?.submission && typeof assignmentsData.submission === 'object') {
+        submissionsList.unshift(assignmentsData.submission);
+      }
+      if (Array.isArray(assignmentsData?.submissions)) {
+        submissionsList.push(...assignmentsData.submissions);
+      }
+
       // Find the user's submission
-      const mySub = submissionsList.find((s: any) => {
+      let mySub = submissionsList.find((s: any) => {
         const sAssignment = String(s.assignment || '').trim().toLowerCase();
         const sTitle = String(s.assignment_title || '').trim().toLowerCase();
-        const matchesAssignment = sAssignment === targetName || sAssignment === targetDataName || (targetTitle && sTitle === targetTitle);
+        const matchesAssignment = sAssignment === targetName || sAssignment === targetDataName || sAssignment === decodedName || (targetTitle && sTitle === targetTitle);
         if (!matchesAssignment) return false;
 
         if (!currentUserEmail) return true;
@@ -114,33 +165,60 @@ export default function AssignmentDetailPage() {
         return !sMember || sMember.includes(currentUserEmail) || currentUserEmail.includes(sMember);
       }) || localSub;
 
-      let resolvedStatus = assignmentsData?.status || 'Pending';
-      let resolvedAnswer = '';
-      let resolvedUrl = '';
-      let isSub = false;
-
-      if (mySub) {
-        isSub = true;
-        resolvedStatus = mySub.status || 'Submitted';
-        resolvedAnswer = mySub.content || mySub.answer || mySub.text || '';
-        resolvedUrl = mySub.submission_url || mySub.url || '';
-        
-        if (resolvedAnswer) setSubmissionAnswer(resolvedAnswer);
-        if (resolvedUrl) setSubmissionUrl(resolvedUrl);
-      } else {
-        if (assignmentsData?.submission_url) setSubmissionUrl(assignmentsData.submission_url);
-        if (assignmentsData?.content) setSubmissionAnswer(assignmentsData.content);
+      // If submission ID exists, fetch full result to ensure student answer and latest status are loaded
+      if (mySub?.name && (!mySub.content && !mySub.answer)) {
+        try {
+          const fullRes = await getAssignmentResult(mySub.name);
+          if (fullRes) {
+            mySub = {
+              ...mySub,
+              ...fullRes,
+              content: fullRes.content || fullRes.answer || mySub.content,
+              answer: fullRes.answer || fullRes.content || mySub.answer,
+              submission_url: fullRes.submission_url || mySub.submission_url,
+              status: fullRes.status || mySub.status
+            };
+          }
+        } catch (resErr) {
+          console.warn("Failed to fetch detailed assignment result:", resErr);
+        }
       }
+
+      const hasSubmissionRecord = Boolean(mySub || localSub);
+      const isSub = Boolean(
+        hasSubmissionRecord ||
+        localAnswer ||
+        (assignmentsData?.status && assignmentsData.status !== 'Pending') ||
+        (assignmentsData?.submission_count && assignmentsData.submission_count > 0)
+      );
+
+      let resolvedStatus = 'Pending';
+      if (isSub) {
+        const backendStatus = mySub?.status || localSub?.status;
+        if (backendStatus && backendStatus !== 'Pending') {
+          resolvedStatus = backendStatus;
+        } else {
+          resolvedStatus = 'Submitted';
+        }
+      } else {
+        resolvedStatus = assignmentsData?.status || 'Pending';
+      }
+
+      const resolvedAnswer = mySub?.content || mySub?.answer || mySub?.text || localSub?.content || localSub?.answer || localAnswer || assignmentsData?.content || '';
+      const resolvedUrl = mySub?.submission_url || mySub?.url || localSub?.submission_url || assignmentsData?.submission_url || '';
+
+      if (resolvedAnswer) setSubmissionAnswer(resolvedAnswer);
+      if (resolvedUrl) setSubmissionUrl(resolvedUrl);
 
       setAssignment({
         ...assignmentsData,
-        status: isSub ? (resolvedStatus !== 'Pending' ? resolvedStatus : 'Submitted') : (assignmentsData?.status || 'Pending'),
+        status: resolvedStatus,
         _is_submitted: isSub,
-        submission_name: mySub?.name,
+        submission_name: mySub?.name || localSub?.submission_name,
         submission_status: resolvedStatus,
         answer: resolvedAnswer,
-        submission_url: resolvedUrl || assignmentsData?.submission_url,
-        submission_attachment: mySub?.attachment || mySub?.submission_attachment
+        submission_url: resolvedUrl,
+        submission_attachment: mySub?.attachment || mySub?.submission_attachment || localSub?.attachment
       });
 
       // Filter submissions for instructors
@@ -149,7 +227,7 @@ export default function AssignmentDetailPage() {
         const filtered = submissionsList.filter((s: any) => {
           const sName = String(s.assignment || '').trim().toLowerCase();
           const sTitle = String(s.assignment_title || '').trim().toLowerCase();
-          return sName === targetName || sName === targetDataName || (targetTitle && sTitle === targetTitle);
+          return sName === targetName || sName === targetDataName || sName === decodedName || (targetTitle && sTitle === targetTitle);
         });
         setSubmissions(filtered);
       }
@@ -167,6 +245,21 @@ export default function AssignmentDetailPage() {
     }
   };
 
+  const handleViewAssignmentResult = async (submissionId: string) => {
+    if (!submissionId) return;
+    setLoadingResult(true);
+    setResultModalOpen(true);
+    try {
+      const res = await getAssignmentResult(submissionId);
+      setSelectedResult(res || { submission: submissionId, name: submissionId });
+    } catch (e) {
+      console.warn("Failed to fetch assignment result:", e);
+      setSelectedResult({ submission: submissionId, name: submissionId });
+    } finally {
+      setLoadingResult(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -174,15 +267,16 @@ export default function AssignmentDetailPage() {
     setSubmitSuccess(false);
 
     try {
-      const memberEmail = (typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || '') : '').trim();
+      const memberEmail = getCurrentUserEmail().trim();
       const assignmentId = assignment?.name || name || '';
+      const assignmentTitle = assignment?.title || assignment?.assignment_title || assignmentId;
 
-      // Instant local persistence to ensure student's answer and status are never lost
-      if (memberEmail && typeof window !== "undefined") {
+      // Instant local persistence to ensure student's answer and status are never lost across reload or reopen
+      if (typeof window !== "undefined") {
         try {
           const payloadCache = {
             assignment: assignmentId,
-            assignment_title: assignment?.title || assignmentId,
+            assignment_title: assignmentTitle,
             member: memberEmail,
             content: submissionAnswer,
             answer: submissionAnswer,
@@ -190,10 +284,34 @@ export default function AssignmentDetailPage() {
             status: 'Submitted',
             submitted_at: new Date().toISOString()
           };
-          localStorage.setItem(`lms_submission_${memberEmail.toLowerCase()}_${assignmentId}`, JSON.stringify(payloadCache));
-          if (name && name !== assignmentId) {
-            localStorage.setItem(`lms_submission_${memberEmail.toLowerCase()}_${name}`, JSON.stringify(payloadCache));
-          }
+
+          const keysToStore = [
+            memberEmail ? `lms_submission_${memberEmail.toLowerCase()}_${assignmentId}` : '',
+            memberEmail && name ? `lms_submission_${memberEmail.toLowerCase()}_${name}` : '',
+            memberEmail && assignment?.name ? `lms_submission_${memberEmail.toLowerCase()}_${assignment.name}` : '',
+            memberEmail && assignmentTitle ? `lms_submission_${memberEmail.toLowerCase()}_${assignmentTitle}` : '',
+            `lms_submission_${assignmentId}`,
+            name ? `lms_submission_${name}` : '',
+            assignment?.name ? `lms_submission_${assignment.name}` : '',
+            assignmentTitle ? `lms_submission_${assignmentTitle}` : '',
+          ].filter(Boolean);
+
+          keysToStore.forEach(k => {
+            localStorage.setItem(k, JSON.stringify(payloadCache));
+          });
+
+          // Also save raw answer
+          const answerKeys = [
+            `lms_assignment_answer_${assignmentId}`,
+            name ? `lms_assignment_answer_${name}` : '',
+            assignment?.name ? `lms_assignment_answer_${assignment.name}` : '',
+            assignmentTitle ? `lms_assignment_answer_${assignmentTitle}` : '',
+            memberEmail ? `lms_assignment_answer_${memberEmail.toLowerCase()}_${assignmentId}` : '',
+          ].filter(Boolean);
+
+          answerKeys.forEach(k => {
+            localStorage.setItem(k, submissionAnswer);
+          });
         } catch (e) {}
       }
 
@@ -216,15 +334,14 @@ export default function AssignmentDetailPage() {
       }
       
       const resData = response?.data?.message?.data || response?.data?.data || response?.message?.data || response?.data || response;
-      const newStatus = resData?.status || 'Submitted';
       const subName = resData?.name || assignment?.submission_name;
 
       setAssignment((prev: any) => ({
         ...prev,
-        status: newStatus,
+        status: 'Submitted',
         _is_submitted: true,
         submission_name: subName,
-        submission_status: newStatus,
+        submission_status: 'Submitted',
         answer: submissionAnswer,
         submission_url: submissionUrl
       }));
@@ -366,16 +483,26 @@ export default function AssignmentDetailPage() {
                           {isSubmitted && (
                             <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg flex items-center gap-1">
                               <CheckCircle className="w-3.5 h-3.5" />
-                              {assignment.status || 'Submitted'}
+                              {assignment.status && assignment.status !== 'Pending' ? assignment.status : 'Submitted'}
                             </span>
                           )}
                         </div>
                         
                         {isSubmitted && (
                           <div className="mb-5 p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 text-emerald-800 text-xs sm:text-sm">
-                            <div className="flex items-center gap-2 font-bold mb-1 text-emerald-900">
-                              <CheckCircle className="w-4 h-4 text-emerald-600" />
-                              Your assignment is submitted!
+                            <div className="flex items-center justify-between gap-2 font-bold mb-1 text-emerald-900">
+                              <span className="flex items-center gap-2">
+                                <CheckCircle className="w-4 h-4 text-emerald-600" />
+                                Your assignment is submitted!
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleViewAssignmentResult(assignment.submission_name || assignment.name || name || "submission")}
+                                className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                View Result
+                              </button>
                             </div>
                             <p className="text-emerald-700">
                               Your answer is saved and visible below. You can make adjustments and update your submission at any time.
@@ -518,9 +645,19 @@ export default function AssignmentDetailPage() {
                               <h3 className="font-bold text-slate-900">{sub.member_name || sub.member || sub.owner}</h3>
                               <p className="text-xs text-slate-500 mt-0.5">{sub.owner}</p>
                             </div>
-                            <span className={`px-2.5 py-1 text-xs font-bold rounded-lg ${sub.status === 'Graded' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                              {sub.status || 'Submitted'}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2.5 py-1 text-xs font-bold rounded-lg ${sub.status === 'Graded' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                {sub.status || 'Submitted'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleViewAssignmentResult(sub.name || sub.submission)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition-colors cursor-pointer border border-indigo-200"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                View Result
+                              </button>
+                            </div>
                           </div>
                           
                           {/* Answer rendering based on type */}
@@ -556,6 +693,131 @@ export default function AssignmentDetailPage() {
           </div>
         )}
       </main>
+
+      {/* ASSIGNMENT RESULT MODAL (Calls get_assignment_result with submission param) */}
+      {resultModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[85vh]">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-600">
+                  <FileCheck2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Assignment Evaluation Result</h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    ID: {selectedResult?.name || selectedResult?.submission || "ASG-SUB"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setResultModalOpen(false);
+                  setSelectedResult(null);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-5">
+              {loadingResult ? (
+                <div className="py-12 text-center">
+                  <div className="w-8 h-8 border-3 border-violet-200 border-t-violet-600 rounded-full animate-spin mx-auto mb-3"></div>
+                  <p className="text-xs text-slate-500 font-medium">Fetching evaluation result from server...</p>
+                </div>
+              ) : selectedResult ? (
+                <>
+                  {/* Evaluation Highlight Card */}
+                  <div className="p-5 rounded-2xl bg-gradient-to-br from-violet-50/80 via-white to-indigo-50/50 border border-violet-100 flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-violet-600">
+                        Grading & Review
+                      </span>
+                      <h4 className="text-3xl font-extrabold text-slate-900 mt-1">
+                        {selectedResult.marks !== undefined ? selectedResult.marks : (selectedResult.score !== undefined ? selectedResult.score : "-")}{" "}
+                        <span className="text-sm font-semibold text-slate-400">
+                          {selectedResult.total_marks ? `/ ${selectedResult.total_marks} Marks` : "Marks"}
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Status: <span className="font-bold text-slate-800">{selectedResult.status || "Submitted"}</span>
+                      </p>
+                    </div>
+                    <div>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold ${
+                        selectedResult.status === "Graded" || selectedResult.status === "Approved" || selectedResult.status === "Passed"
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                          : "bg-indigo-100 text-indigo-800 border border-indigo-200"
+                      }`}>
+                        <Award className="w-4 h-4 text-violet-600" />
+                        {selectedResult.status || "Submitted"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Submission Details Meta */}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Candidate</span>
+                      <span className="font-semibold text-slate-800 truncate block mt-0.5">
+                        {selectedResult.member_name || selectedResult.member || selectedResult.owner || "Student"}
+                      </span>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Submitted Date</span>
+                      <span className="font-semibold text-slate-800 block mt-0.5">
+                        {selectedResult.creation ? formatDate(selectedResult.creation) : "Recorded"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Instructor Feedback / Remarks */}
+                  {(selectedResult.feedback || selectedResult.comments || selectedResult.remarks || selectedResult.evaluation) && (
+                    <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-900 text-xs">
+                      <h5 className="font-bold uppercase tracking-wider text-[10px] text-amber-800 mb-1">
+                        Instructor Feedback & Comments
+                      </h5>
+                      <p className="leading-relaxed">
+                        {selectedResult.feedback || selectedResult.comments || selectedResult.remarks || selectedResult.evaluation}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Submitted Content Preview */}
+                  {selectedResult.content && (
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                        Submitted Answer Content
+                      </h5>
+                      <div className="bg-slate-900 text-slate-200 p-4 rounded-xl font-mono text-xs max-h-48 overflow-y-auto whitespace-pre-wrap">
+                        {selectedResult.content}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="py-8 text-center text-xs text-slate-500">
+                  No evaluation details returned for this submission.
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => {
+                  setResultModalOpen(false);
+                  setSelectedResult(null);
+                }}
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

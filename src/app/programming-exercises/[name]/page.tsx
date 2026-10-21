@@ -9,6 +9,7 @@ import {
   createProgrammingExerciseSubmission,
   getProgrammingExerciseSubmissionList,
   getProgrammingExerciseSubmission,
+  getProgrammingExerciseResult,
   deleteProgrammingExercise,
   LMSProgrammingExercise,
   LMSProgrammingExerciseSubmission,
@@ -71,6 +72,11 @@ export default function SolveProgrammingExercisePage() {
   // Inspect past submission code modal
   const [selectedSubmission, setSelectedSubmission] = useState<LMSProgrammingExerciseSubmission | null>(null);
   const [copiedModalCode, setCopiedModalCode] = useState(false);
+
+  // Test execution result modal state (calls get_programming_exercise_result)
+  const [selectedResult, setSelectedResult] = useState<any | null>(null);
+  const [loadingResult, setLoadingResult] = useState(false);
+  const [resultModalOpen, setResultModalOpen] = useState(false);
 
   // Delete exercise state (Instructors only)
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -211,6 +217,22 @@ export default function SolveProgrammingExercisePage() {
       navigator.clipboard.writeText(codeText);
       setCopiedModalCode(true);
       setTimeout(() => setCopiedModalCode(false), 2000);
+    }
+  };
+
+  // Inspect execution & test results (calls get_programming_exercise_result)
+  const handleViewExerciseResult = async (submissionId: string) => {
+    if (!submissionId) return;
+    setLoadingResult(true);
+    setResultModalOpen(true);
+    try {
+      const res = await getProgrammingExerciseResult(submissionId);
+      setSelectedResult(res || { submission: submissionId, name: submissionId });
+    } catch (e) {
+      console.warn('Failed to fetch exercise result:', e);
+      setSelectedResult({ submission: submissionId, name: submissionId });
+    } finally {
+      setLoadingResult(false);
     }
   };
 
@@ -644,10 +666,19 @@ export default function SolveProgrammingExercisePage() {
                                     console.warn('Could not load detail', e);
                                   }
                                 }}
-                                className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 text-[11px] font-semibold border border-indigo-500/30 transition-colors flex items-center gap-1"
+                                className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 text-[11px] font-semibold border border-indigo-500/30 transition-colors flex items-center gap-1 cursor-pointer"
                               >
                                 <Eye className="w-3 h-3" />
                                 View
+                              </button>
+
+                              {/* View Test Case Results (calls get_programming_exercise_result) */}
+                              <button
+                                onClick={() => handleViewExerciseResult(sub.name)}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-[11px] font-semibold border border-emerald-500/30 transition-colors flex items-center gap-1 cursor-pointer"
+                              >
+                                <Terminal className="w-3 h-3 text-emerald-400" />
+                                Results
                               </button>
                             </div>
                           </td>
@@ -683,10 +714,23 @@ export default function SolveProgrammingExercisePage() {
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={() => setSubmissionFeedback(null)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition-colors"
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition-colors cursor-pointer"
               >
                 Keep Editing
               </button>
+              {submissionFeedback.submissionName && (
+                <button
+                  onClick={() => {
+                    const sName = submissionFeedback.submissionName;
+                    setSubmissionFeedback(null);
+                    if (sName) handleViewExerciseResult(sName);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md shadow-emerald-600/30 transition-all text-center cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Terminal className="w-3.5 h-3.5" />
+                  View Results
+                </button>
+              )}
               <Link
                 href="/programming-exercises"
                 className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-md shadow-indigo-600/30 transition-all text-center"
@@ -780,6 +824,153 @@ export default function SolveProgrammingExercisePage() {
                 className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-xs shadow-md shadow-red-600/30 disabled:opacity-50"
               >
                 {deleting ? 'Deleting...' : 'Delete Exercise'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROGRAMMING EXERCISE RESULT MODAL (Calls get_programming_exercise_result with submission param) */}
+      {resultModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-xl w-full text-white shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                  <Terminal className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-white">Execution & Test Results</h3>
+                  <p className="text-xs text-slate-400 font-mono">
+                    ID: {selectedResult?.name || selectedResult?.submission || "Execution"}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setResultModalOpen(false);
+                  setSelectedResult(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 font-sans text-xs">
+              {loadingResult ? (
+                <div className="py-12 text-center">
+                  <div className="w-8 h-8 border-3 border-emerald-500/30 border-t-emerald-400 rounded-full animate-spin mx-auto mb-3"></div>
+                  <p className="text-xs text-slate-400 font-medium">Evaluating test results from execution engine...</p>
+                </div>
+              ) : selectedResult ? (
+                <>
+                  {/* Status & Score Banner */}
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Execution Status
+                      </span>
+                      <h4 className="text-xl font-bold text-white mt-0.5">
+                        {selectedResult.status || (selectedResult.passed ? "Passed" : "Submitted")}
+                      </h4>
+                      {selectedResult.score !== undefined && (
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Score: <span className="font-bold text-emerald-400">{selectedResult.score}</span> / {selectedResult.total_marks || "100"}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold ${
+                        selectedResult.status === "Passed" || selectedResult.passed
+                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                          : "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                      }`}>
+                        {selectedResult.status === "Passed" || selectedResult.passed ? (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            Tests Passed
+                          </>
+                        ) : (
+                          <>
+                            <Clock className="w-4 h-4 text-indigo-400" />
+                            {selectedResult.status || "Submitted"}
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Candidate Info */}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800">
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Candidate</span>
+                      <span className="font-semibold text-slate-200 truncate block mt-0.5">
+                        {selectedResult.member_name || selectedResult.member || selectedResult.owner || currentUserEmail || "Student"}
+                      </span>
+                    </div>
+                    <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800">
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Submission Time</span>
+                      <span className="font-semibold text-slate-200 block mt-0.5">
+                        {selectedResult.creation ? new Date(selectedResult.creation).toLocaleString() : "Recent"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Test Cases Output / Feedback */}
+                  {Array.isArray(selectedResult.test_results || selectedResult.test_cases || selectedResult.tests) && (selectedResult.test_results || selectedResult.test_cases || selectedResult.tests).length > 0 ? (
+                    <div className="space-y-2">
+                      <h5 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        Test Cases Evaluation
+                      </h5>
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
+                        {(selectedResult.test_results || selectedResult.test_cases || selectedResult.tests).map((t: any, idx: number) => (
+                          <div key={idx} className="p-3 rounded-lg border border-slate-800 bg-slate-950/50 flex items-center justify-between text-xs">
+                            <span className="font-mono text-slate-300">
+                              Test Case #{idx + 1}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              t.passed || t.status === "Passed"
+                                ? "bg-emerald-500/20 text-emerald-300"
+                                : "bg-red-500/20 text-red-300"
+                            }`}>
+                              {t.passed || t.status === "Passed" ? "PASSED" : "FAILED"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Output or Error Logs */}
+                  {(selectedResult.output || selectedResult.logs || selectedResult.error) && (
+                    <div className="space-y-1.5">
+                      <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        Compiler / Execution Logs
+                      </h5>
+                      <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 font-mono text-[11px] text-slate-300 whitespace-pre-wrap max-h-40 overflow-y-auto">
+                        {selectedResult.output || selectedResult.logs || selectedResult.error}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="py-8 text-center text-xs text-slate-400">
+                  No execution result details found for this submission.
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-950/80 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => {
+                  setResultModalOpen(false);
+                  setSelectedResult(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>

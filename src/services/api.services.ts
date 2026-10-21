@@ -53,6 +53,11 @@ export const getCurrentUserEmail = (): string => {
 
 // Global interceptor to automatically attach user query param on all GET requests
 api.interceptors.request.use((reqConfig) => {
+  if (typeof FormData !== "undefined" && reqConfig.data instanceof FormData) {
+    if (reqConfig.headers) {
+      delete reqConfig.headers["Content-Type"];
+    }
+  }
   const method = (reqConfig.method || "GET").toUpperCase();
   if (method === "GET") {
     const userEmail = getCurrentUserEmail();
@@ -82,6 +87,13 @@ const apiRequest = async (config: AxiosRequestConfig) => {
   const apiSecret = typeof window !== "undefined" ? localStorage.getItem("apiSecret") : null;
 
   const headers: Record<string, any> = { ...config.headers };
+
+  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+    delete headers["Content-Type"];
+    if (config.headers) {
+      delete config.headers["Content-Type"];
+    }
+  }
 
   if (headers.Authorization === 'token ' || headers.Authorization === 'token :') {
     delete headers.Authorization;

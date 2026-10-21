@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { getQuiz, getQuestions } from "@/services/lms.services";
+import { getQuiz, getQuestions, getQuizSubmissions, getQuizResult } from "@/services/lms.services";
 import { isAuthorizedInstructor } from "@/services/auth.services";
 import { formatDate } from "@/utils/formatters";
 import { navigateBack } from "@/utils/navigation";
@@ -29,7 +29,11 @@ import {
   PlusCircle,
   CheckSquare,
   Sparkles,
-  BookOpen
+  BookOpen,
+  Users,
+  X,
+  FileCheck2,
+  ChevronRight
 } from "lucide-react";
 
 interface QuizAuthor {
@@ -101,6 +105,15 @@ export default function QuizDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInstructor, setIsInstructor] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState("");
+
+  // Submissions & Results state (for both Student and Instructor roles)
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+  const [activeTab, setActiveTab] = useState<"overview" | "submissions">("overview");
+  const [selectedResult, setSelectedResult] = useState<any | null>(null);
+  const [loadingResult, setLoadingResult] = useState(false);
+  const [resultModalOpen, setResultModalOpen] = useState(false);
 
   // Quiz taking state
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -109,8 +122,46 @@ export default function QuizDetailsPage() {
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
-    setIsInstructor(isAuthorizedInstructor());
+    const isInst = isAuthorizedInstructor();
+    setIsInstructor(isInst);
+    const email = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
+    setCurrentUserEmail(email);
   }, []);
+
+  const fetchSubmissions = async () => {
+    if (!name) return;
+    setLoadingSubmissions(true);
+    try {
+      const email = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
+      const isInst = isAuthorizedInstructor();
+      const filters: any = { quiz: name };
+      // For student role, filter by member/user; for instructor, list all student submissions
+      if (!isInst && email) {
+        filters.member = email;
+      }
+      const res = await getQuizSubmissions(filters);
+      setSubmissions(Array.isArray(res) ? res : []);
+    } catch (e) {
+      console.warn("Failed to fetch quiz submissions:", e);
+    } finally {
+      setLoadingSubmissions(false);
+    }
+  };
+
+  const handleViewResult = async (submissionId: string) => {
+    if (!submissionId) return;
+    setLoadingResult(true);
+    setResultModalOpen(true);
+    try {
+      const res = await getQuizResult(submissionId);
+      setSelectedResult(res || { submission: submissionId });
+    } catch (e) {
+      console.warn("Failed to fetch quiz result:", e);
+      setSelectedResult({ submission: submissionId });
+    } finally {
+      setLoadingResult(false);
+    }
+  };
 
   useEffect(() => {
     if (!name) return;
@@ -176,6 +227,7 @@ export default function QuizDetailsPage() {
     };
 
     fetchQuiz();
+    fetchSubmissions();
   }, [name]);
 
   const primaryAuthor = useMemo(() => {
@@ -554,267 +606,615 @@ export default function QuizDetailsPage() {
         </div>
       </div>
 
+      {/* Tab Navigation for Instructors */}
+      {isInstructor && (
+        <div className="bg-white border-b border-gray-200">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-6">
+            <button
+              onClick={() => setActiveTab("overview")}
+              className={`py-3.5 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition-all ${
+                activeTab === "overview"
+                  ? "border-indigo-600 text-indigo-600 font-bold"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <FileQuestion className="w-4 h-4" />
+              <span>Assessment Details</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("submissions")}
+              className={`py-3.5 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition-all ${
+                activeTab === "submissions"
+                  ? "border-indigo-600 text-indigo-600 font-bold"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>Student Submissions</span>
+              <span className="px-2 py-0.5 rounded-full text-xs bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100">
+                {submissions.length}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Details Body */}
       <div className="flex-1 py-10 px-4 flex justify-center">
-        <div className="max-w-3xl w-full">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="p-6 md:p-8">
-              <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
-                <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-                    <FileQuestion className="w-4 h-4 text-indigo-600" />
-                  </div>
-                  Assessment Details
-                </h3>
-                {isInstructor && (
-                  <span className="text-xs text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md font-semibold border border-indigo-100">
-                    Instructor View
-                  </span>
-                )}
-              </div>
-
-              {/* Assessment Metrics Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                {/* Total Questions */}
-                <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-100 flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-blue-100">
-                    <HelpCircle className="w-5 h-5 text-blue-600" />
-                  </div>
+        <div className="max-w-4xl w-full">
+          {/* TAB: INSTRUCTOR SUBMISSIONS */}
+          {isInstructor && activeTab === "submissions" ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="p-6 md:p-8">
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Questions</p>
-                    <p className="text-xl font-bold text-gray-900 mt-0.5">
-                      {quiz.questions?.length || 0}
-                    </p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
-                      {quiz.limit_questions_to
-                        ? `Limited to ${quiz.limit_questions_to} questions`
-                        : "Questions in test"}
+                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                      <Users className="w-5 h-5 text-indigo-600" />
+                      Student Assessment Submissions
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Showing all student attempts for <span className="font-semibold text-gray-700">{quiz.title || quiz.name}</span>. Click on any row to view full result breakdown.
                     </p>
                   </div>
-                </div>
-
-                {/* Duration */}
-                <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-100 flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-amber-100">
-                    <Clock className="w-5 h-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Time Duration</p>
-                    <p className="text-xl font-bold text-gray-900 mt-0.5">
-                      {quiz.duration ? `${quiz.duration} Mins` : "Untimed"}
-                    </p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
-                      {quiz.duration ? "Allocated assessment time" : "No time limit"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Passing Score */}
-                <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-100 flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-emerald-100">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Passing Score</p>
-                    <p className="text-xl font-bold text-gray-900 mt-0.5">
-                      {quiz.passing_percentage}%
-                    </p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">Minimum required to pass</p>
-                  </div>
-                </div>
-
-                {/* Max Attempts */}
-                <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100 flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-purple-100">
-                    <RotateCcw className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Max Attempts</p>
-                    <p className="text-xl font-bold text-gray-900 mt-0.5">
-                      {quiz.max_attempts}
-                    </p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">Submissions permitted</p>
-                  </div>
-                </div>
-
-                {/* Total Marks */}
-                <div className="p-4 rounded-xl bg-indigo-50/60 border border-indigo-100 flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-indigo-100">
-                    <Award className="w-5 h-5 text-indigo-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Marks</p>
-                    <p className="text-xl font-bold text-gray-900 mt-0.5">
-                      {totalCalculatedMarks}
-                    </p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">Maximum achievable score</p>
-                  </div>
-                </div>
-
-                {/* Negative Marking */}
-                <div className={`p-4 rounded-xl border flex items-start gap-3.5 ${
-                  quiz.enable_negative_marking
-                    ? "bg-rose-50/60 border-rose-100"
-                    : "bg-slate-50 border-slate-200/80"
-                }`}>
-                  <div className={`w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border ${
-                    quiz.enable_negative_marking ? "border-rose-100" : "border-slate-200"
-                  }`}>
-                    <AlertCircle className={`w-5 h-5 ${
-                      quiz.enable_negative_marking ? "text-rose-600" : "text-slate-500"
-                    }`} />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Negative Marking</p>
-                    <p className={`text-xl font-bold mt-0.5 ${
-                      quiz.enable_negative_marking ? "text-rose-600" : "text-gray-900"
-                    }`}>
-                      {quiz.enable_negative_marking ? `-${quiz.marks_to_cut || 1} Mark` : "Disabled"}
-                    </p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
-                      {quiz.enable_negative_marking
-                        ? "Deducted per incorrect answer"
-                        : "No penalty for wrong answers"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Assessment Policy & Configuration */}
-              <div className="bg-gray-50/80 rounded-xl p-5 border border-gray-200 mb-6">
-                <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-4 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                  Assessment Policy & Settings
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
-                  <div className="flex items-start gap-2.5">
-                    <ShieldCheck className={`w-4 h-4 mt-0.5 shrink-0 ${quiz.enable_proctoring ? 'text-amber-600' : 'text-gray-400'}`} />
-                    <div>
-                      <p className="font-semibold text-gray-900">Proctoring</p>
-                      <p className="text-gray-500">
-                        {quiz.enable_proctoring
-                          ? `Enabled (${quiz.max_violations || 3} max violations)`
-                          : "Disabled (Unmonitored)"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <Eye className={`w-4 h-4 mt-0.5 shrink-0 ${quiz.show_answers ? 'text-emerald-600' : 'text-gray-400'}`} />
-                    <div>
-                      <p className="font-semibold text-gray-900">Review Answers</p>
-                      <p className="text-gray-500">
-                        {quiz.show_answers ? "Visible after submission" : "Hidden after submission"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <History className={`w-4 h-4 mt-0.5 shrink-0 ${quiz.show_submission_history ? 'text-indigo-600' : 'text-gray-400'}`} />
-                    <div>
-                      <p className="font-semibold text-gray-900">Submission History</p>
-                      <p className="text-gray-500">
-                        {quiz.show_submission_history ? "Recorded and visible" : "Private to instructor"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <Shuffle className={`w-4 h-4 mt-0.5 shrink-0 ${quiz.shuffle_questions ? 'text-purple-600' : 'text-gray-400'}`} />
-                    <div>
-                      <p className="font-semibold text-gray-900">Question Sequence</p>
-                      <p className="text-gray-500">
-                        {quiz.shuffle_questions ? "Shuffled randomly" : "Standard order"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <Calendar className={`w-4 h-4 mt-0.5 shrink-0 ${quiz.enable_scheduling ? 'text-blue-600' : 'text-gray-400'}`} />
-                    <div>
-                      <p className="font-semibold text-gray-900">Scheduling</p>
-                      <p className="text-gray-500">
-                        {quiz.enable_scheduling && (quiz.schedule_start || quiz.schedule_end)
-                          ? `${formatDate(quiz.schedule_start) || 'Start'} to ${formatDate(quiz.schedule_end) || 'End'}`
-                          : "Open anytime"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <User className="w-4 h-4 mt-0.5 shrink-0 text-slate-500" />
-                    <div>
-                      <p className="font-semibold text-gray-900">Created By</p>
-                      <p className="text-gray-500 truncate max-w-[170px]" title={primaryAuthor}>
-                        {primaryAuthor}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Empty Questions Notice */}
-              {(!quiz.questions || quiz.questions.length === 0) && (
-                <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <h4 className="text-sm font-semibold text-amber-900">
-                        No Questions Added Yet
-                      </h4>
-                      <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-                        This assessment currently contains 0 questions. You can edit this quiz to add questions directly from the Question Bank or create new assessment questions.
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2.5">
-                        <Link
-                          href={`/quizzes/create?quiz=${encodeURIComponent(quiz.name)}`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                          Edit Quiz & Add Questions
-                        </Link>
-                        <Link
-                          href="/quizzes?tab=questions"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 text-xs font-semibold rounded-lg shadow-sm transition-colors"
-                        >
-                          <PlusCircle className="w-3.5 h-3.5 text-amber-700" />
-                          Browse Question Bank
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="flex flex-col items-center justify-center border-t border-gray-100 pt-6">
-                {quiz.questions && quiz.questions.length > 0 ? (
                   <button
-                    onClick={startQuiz}
-                    className="w-full md:w-1/2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 active:scale-[0.99]"
+                    onClick={fetchSubmissions}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-semibold flex items-center gap-1.5 transition-colors"
                   >
-                    <span>Begin Assessment Now</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Refresh
                   </button>
+                </div>
+
+                {loadingSubmissions ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-gray-400">
+                    <div className="w-8 h-8 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-3"></div>
+                    <p className="text-xs font-medium">Loading student submissions...</p>
+                  </div>
+                ) : submissions.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-200 bg-gray-50/70 text-gray-500 font-semibold uppercase tracking-wider text-[11px]">
+                          <th className="py-3 px-4">Student</th>
+                          <th className="py-3 px-4">Submission ID</th>
+                          <th className="py-3 px-4">Score</th>
+                          <th className="py-3 px-4">Result</th>
+                          <th className="py-3 px-4">Date</th>
+                          <th className="py-3 px-4 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {submissions.map((sub: any, idx: number) => {
+                          const subId = sub.name || sub.submission || `SUB-${idx}`;
+                          const student = sub.member_name || sub.member || sub.owner || "Student";
+                          const scoreVal = sub.score !== undefined ? sub.score : (sub.marks !== undefined ? sub.marks : "-");
+                          const pctVal = sub.percentage !== undefined ? Number(sub.percentage) : null;
+                          const isPassed = sub.status === "Passed" || (pctVal !== null && pctVal >= Number(quiz.passing_percentage));
+
+                          return (
+                            <tr key={subId} className="hover:bg-indigo-50/30 transition-colors">
+                              <td className="py-3.5 px-4">
+                                <p className="font-semibold text-gray-900">{student}</p>
+                                <p className="text-[11px] text-gray-400">{sub.owner || sub.member}</p>
+                              </td>
+                              <td className="py-3.5 px-4 font-mono text-gray-600">
+                                {subId}
+                              </td>
+                              <td className="py-3.5 px-4 font-semibold text-gray-900">
+                                {scoreVal}
+                                {pctVal !== null && (
+                                  <span className="text-gray-400 font-normal ml-1">({pctVal}%)</span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  isPassed
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : "bg-rose-50 text-rose-700 border border-rose-200"
+                                }`}>
+                                  {isPassed ? "Passed" : (sub.status || "Completed")}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-gray-500 text-[11px]">
+                                {sub.creation ? formatDate(sub.creation) : "Recent"}
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                <button
+                                  onClick={() => handleViewResult(subId)}
+                                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition-colors cursor-pointer border border-indigo-200/60"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>View Result</span>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
-                  <div className="text-center w-full">
-                    <button
-                      disabled
-                      className="w-full md:w-1/2 px-6 py-3 bg-gray-100 text-gray-400 text-sm font-semibold rounded-xl border border-gray-200 cursor-not-allowed flex items-center justify-center gap-2 mx-auto"
-                    >
-                      <span>Begin Assessment Now</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                    <p className="text-xs text-gray-400 mt-2">
-                      Cannot begin assessment because it currently contains 0 questions.
-                    </p>
+                  <div className="text-center py-12 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+                    <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-600 font-semibold">No student submissions recorded yet.</p>
+                    <p className="text-xs text-gray-400 mt-1">Student attempts and results will automatically appear here.</p>
                   </div>
                 )}
               </div>
             </div>
-          </div>
+          ) : (
+            /* TAB: OVERVIEW (METRICS & STUDENT PREVIOUS ATTEMPTS) */
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="p-6 md:p-8">
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                  <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                      <FileQuestion className="w-4 h-4 text-indigo-600" />
+                    </div>
+                    Assessment Details
+                  </h3>
+                  {isInstructor && (
+                    <span className="text-xs text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md font-semibold border border-indigo-100">
+                      Instructor View
+                    </span>
+                  )}
+                </div>
+
+                {/* Assessment Metrics Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                  {/* Total Questions */}
+                  <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-100 flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-blue-100">
+                      <HelpCircle className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Questions</p>
+                      <p className="text-xl font-bold text-gray-900 mt-0.5">
+                        {quiz.questions?.length || 0}
+                      </p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        {quiz.limit_questions_to
+                          ? `Limited to ${quiz.limit_questions_to} questions`
+                          : "Questions in test"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Duration */}
+                  <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-100 flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-amber-100">
+                      <Clock className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Time Duration</p>
+                      <p className="text-xl font-bold text-gray-900 mt-0.5">
+                        {quiz.duration ? `${quiz.duration} Mins` : "Untimed"}
+                      </p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        {quiz.duration ? "Allocated assessment time" : "No time limit"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Passing Score */}
+                  <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-100 flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-emerald-100">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Passing Score</p>
+                      <p className="text-xl font-bold text-gray-900 mt-0.5">
+                        {quiz.passing_percentage}%
+                      </p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">Minimum required to pass</p>
+                    </div>
+                  </div>
+
+                  {/* Max Attempts */}
+                  <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100 flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-purple-100">
+                      <RotateCcw className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Max Attempts</p>
+                      <p className="text-xl font-bold text-gray-900 mt-0.5">
+                        {quiz.max_attempts}
+                      </p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">Submissions permitted</p>
+                    </div>
+                  </div>
+
+                  {/* Total Marks */}
+                  <div className="p-4 rounded-xl bg-indigo-50/60 border border-indigo-100 flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-indigo-100">
+                      <Award className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Marks</p>
+                      <p className="text-xl font-bold text-gray-900 mt-0.5">
+                        {totalCalculatedMarks}
+                      </p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">Maximum achievable score</p>
+                    </div>
+                  </div>
+
+                  {/* Negative Marking */}
+                  <div className={`p-4 rounded-xl border flex items-start gap-3.5 ${
+                    quiz.enable_negative_marking
+                      ? "bg-rose-50/60 border-rose-100"
+                      : "bg-slate-50 border-slate-200/80"
+                  }`}>
+                    <div className={`w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border ${
+                      quiz.enable_negative_marking ? "border-rose-100" : "border-slate-200"
+                    }`}>
+                      <AlertCircle className={`w-5 h-5 ${
+                        quiz.enable_negative_marking ? "text-rose-600" : "text-slate-500"
+                      }`} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Negative Marking</p>
+                      <p className={`text-xl font-bold mt-0.5 ${
+                        quiz.enable_negative_marking ? "text-rose-600" : "text-gray-900"
+                      }`}>
+                        {quiz.enable_negative_marking ? `-${quiz.marks_to_cut || 1} Mark` : "Disabled"}
+                      </p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        {quiz.enable_negative_marking
+                          ? "Deducted per incorrect answer"
+                          : "No penalty for wrong answers"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* STUDENT ROLE: PREVIOUS ATTEMPTS & RESULTS */}
+                {!isInstructor && (
+                  <div className="mb-6 p-5 rounded-xl bg-slate-50 border border-slate-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                        <History className="w-4 h-4 text-indigo-600" />
+                        Your Assessment History & Results
+                      </h4>
+                      <span className="text-[11px] text-slate-500">
+                        {submissions.length} / {quiz.max_attempts} attempts used
+                      </span>
+                    </div>
+
+                    {loadingSubmissions ? (
+                      <div className="py-4 text-center text-xs text-gray-400">Loading your past attempts...</div>
+                    ) : submissions.length > 0 ? (
+                      <div className="space-y-2 mt-3">
+                        {submissions.map((sub: any, idx: number) => {
+                          const subId = sub.name || sub.submission || `SUB-${idx}`;
+                          const isPassed = sub.status === "Passed" || (sub.percentage !== undefined && Number(sub.percentage) >= Number(quiz.passing_percentage));
+                          return (
+                            <div
+                              key={subId}
+                              className="p-3 bg-white rounded-lg border border-slate-200 flex items-center justify-between gap-3 text-xs"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px] ${
+                                  isPassed ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                                }`}>
+                                  #{idx + 1}
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-slate-900 font-mono">{subId}</p>
+                                  <p className="text-[11px] text-slate-400">
+                                    {sub.creation ? formatDate(sub.creation) : "Completed"}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="text-right">
+                                  <p className="font-bold text-slate-900">
+                                    {sub.score !== undefined ? sub.score : "-"}{" "}
+                                    {sub.percentage !== undefined && <span className="text-slate-400 font-normal">({sub.percentage}%)</span>}
+                                  </p>
+                                  <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    isPassed ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+                                  }`}>
+                                    {isPassed ? "Passed" : (sub.status || "Completed")}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => handleViewResult(subId)}
+                                  className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>View Result</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-500 mt-1">
+                        You have not attempted this assessment yet. Click the button below to start your test.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Assessment Policy & Configuration */}
+                <div className="bg-gray-50/80 rounded-xl p-5 border border-gray-200 mb-6">
+                  <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-4 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                    Assessment Policy & Settings
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                    <div className="flex items-start gap-2.5">
+                      <ShieldCheck className={`w-4 h-4 mt-0.5 shrink-0 ${quiz.enable_proctoring ? 'text-amber-600' : 'text-gray-400'}`} />
+                      <div>
+                        <p className="font-semibold text-gray-900">Proctoring</p>
+                        <p className="text-gray-500">
+                          {quiz.enable_proctoring
+                            ? `Enabled (${quiz.max_violations || 3} max violations)`
+                            : "Disabled (Unmonitored)"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5">
+                      <Eye className={`w-4 h-4 mt-0.5 shrink-0 ${quiz.show_answers ? 'text-emerald-600' : 'text-gray-400'}`} />
+                      <div>
+                        <p className="font-semibold text-gray-900">Review Answers</p>
+                        <p className="text-gray-500">
+                          {quiz.show_answers ? "Visible after submission" : "Hidden after submission"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5">
+                      <History className={`w-4 h-4 mt-0.5 shrink-0 ${quiz.show_submission_history ? 'text-indigo-600' : 'text-gray-400'}`} />
+                      <div>
+                        <p className="font-semibold text-gray-900">Submission History</p>
+                        <p className="text-gray-500">
+                          {quiz.show_submission_history ? "Recorded and visible" : "Private to instructor"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5">
+                      <Shuffle className={`w-4 h-4 mt-0.5 shrink-0 ${quiz.shuffle_questions ? 'text-purple-600' : 'text-gray-400'}`} />
+                      <div>
+                        <p className="font-semibold text-gray-900">Question Sequence</p>
+                        <p className="text-gray-500">
+                          {quiz.shuffle_questions ? "Shuffled randomly" : "Standard order"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5">
+                      <Calendar className={`w-4 h-4 mt-0.5 shrink-0 ${quiz.enable_scheduling ? 'text-blue-600' : 'text-gray-400'}`} />
+                      <div>
+                        <p className="font-semibold text-gray-900">Scheduling</p>
+                        <p className="text-gray-500">
+                          {quiz.enable_scheduling && (quiz.schedule_start || quiz.schedule_end)
+                            ? `${formatDate(quiz.schedule_start) || 'Start'} to ${formatDate(quiz.schedule_end) || 'End'}`
+                            : "Open anytime"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5">
+                      <User className="w-4 h-4 mt-0.5 shrink-0 text-slate-500" />
+                      <div>
+                        <p className="font-semibold text-gray-900">Created By</p>
+                        <p className="text-gray-500 truncate max-w-[170px]" title={primaryAuthor}>
+                          {primaryAuthor}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Empty Questions Notice */}
+                {(!quiz.questions || quiz.questions.length === 0) && (
+                  <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="text-sm font-semibold text-amber-900">
+                          No Questions Added Yet
+                        </h4>
+                        <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                          This assessment currently contains 0 questions. You can edit this quiz to add questions directly from the Question Bank or create new assessment questions.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2.5">
+                          <Link
+                            href={`/quizzes/create?quiz=${encodeURIComponent(quiz.name)}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            Edit Quiz & Add Questions
+                          </Link>
+                          <Link
+                            href="/quizzes?tab=questions"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 text-xs font-semibold rounded-lg shadow-sm transition-colors"
+                          >
+                            <PlusCircle className="w-3.5 h-3.5 text-amber-700" />
+                            Browse Question Bank
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex flex-col items-center justify-center border-t border-gray-100 pt-6">
+                  {quiz.questions && quiz.questions.length > 0 ? (
+                    <button
+                      onClick={startQuiz}
+                      className="w-full md:w-1/2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 active:scale-[0.99] cursor-pointer"
+                    >
+                      <span>Begin Assessment Now</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <div className="text-center w-full">
+                      <button
+                        disabled
+                        className="w-full md:w-1/2 px-6 py-3 bg-gray-100 text-gray-400 text-sm font-semibold rounded-xl border border-gray-200 cursor-not-allowed flex items-center justify-center gap-2 mx-auto"
+                      >
+                        <span>Begin Assessment Now</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                      <p className="text-xs text-gray-400 mt-2">
+                        Cannot begin assessment because it currently contains 0 questions.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* QUIZ RESULT MODAL (Calls get_quiz_result with submission param) */}
+      {resultModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden border border-gray-200 flex flex-col max-h-[85vh]">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                  <FileCheck2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Quiz Assessment Result</h3>
+                  <p className="text-xs text-gray-500 font-mono">
+                    ID: {selectedResult?.name || selectedResult?.submission || "Evaluation"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setResultModalOpen(false);
+                  setSelectedResult(null);
+                }}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-5">
+              {loadingResult ? (
+                <div className="py-12 text-center">
+                  <div className="w-8 h-8 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-3"></div>
+                  <p className="text-xs text-gray-500 font-medium">Fetching evaluation result from server...</p>
+                </div>
+              ) : selectedResult ? (
+                <>
+                  {/* Score Highlight Box */}
+                  <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/50 border border-indigo-100 flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                        Assessment Performance
+                      </span>
+                      <h4 className="text-3xl font-extrabold text-gray-900 mt-1">
+                        {selectedResult.score !== undefined ? selectedResult.score : (selectedResult.marks || "-")}{" "}
+                        <span className="text-sm font-semibold text-gray-400">/ {totalCalculatedMarks} Marks</span>
+                      </h4>
+                      {selectedResult.percentage !== undefined && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Achieved <span className="font-bold text-gray-800">{selectedResult.percentage}%</span> (Passing requirement: {quiz.passing_percentage}%)
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold ${
+                        selectedResult.status === "Passed" || (selectedResult.percentage !== undefined && Number(selectedResult.percentage) >= Number(quiz.passing_percentage))
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                          : "bg-rose-100 text-rose-800 border border-rose-200"
+                      }`}>
+                        {selectedResult.status === "Passed" || (selectedResult.percentage !== undefined && Number(selectedResult.percentage) >= Number(quiz.passing_percentage)) ? (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            Passed
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle className="w-4 h-4 text-rose-600" />
+                            {selectedResult.status || "Failed"}
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Submission Details Meta */}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                      <span className="text-gray-400 block text-[10px] uppercase font-bold">Candidate</span>
+                      <span className="font-semibold text-gray-800 truncate block mt-0.5">
+                        {selectedResult.member_name || selectedResult.member || selectedResult.owner || currentUserEmail || "Student"}
+                      </span>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                      <span className="text-gray-400 block text-[10px] uppercase font-bold">Submission Date</span>
+                      <span className="font-semibold text-gray-800 block mt-0.5">
+                        {selectedResult.creation ? formatDate(selectedResult.creation) : "Recorded"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Questions Breakdown / Review if available */}
+                  {Array.isArray(selectedResult.questions || selectedResult.results) && (selectedResult.questions || selectedResult.results).length > 0 && (
+                    <div className="space-y-3">
+                      <h5 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Question Breakdown & Answers
+                      </h5>
+                      <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                        {(selectedResult.questions || selectedResult.results).map((item: any, qIdx: number) => (
+                          <div key={qIdx} className="p-3 rounded-lg border border-gray-100 bg-gray-50/50 text-xs flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-medium text-gray-800">
+                                {qIdx + 1}. {item.question || item.title || `Question ${qIdx + 1}`}
+                              </p>
+                              {item.selected_option && (
+                                <p className="text-[11px] text-gray-500 mt-1">
+                                  Your answer: <span className="font-semibold text-gray-700">{item.selected_option}</span>
+                                </p>
+                              )}
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                              item.is_correct || item.score > 0
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-rose-50 text-rose-700"
+                            }`}>
+                              {item.is_correct || item.score > 0 ? "Correct" : "Incorrect"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="py-8 text-center text-xs text-gray-500">
+                  No evaluation details returned for this submission ID.
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => {
+                  setResultModalOpen(false);
+                  setSelectedResult(null);
+                }}
+                className="px-5 py-2 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

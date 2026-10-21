@@ -9,7 +9,7 @@ import {
   getCourseReviewList, createCourseReview, deleteCourseReview, LMSCourseReview
 } from '@/services/lms.services';
 import { getCourseWithEnrollment } from '@/services/payment.services';
-import { getImageUrl } from '@/services/api.services';
+import { getImageUrl, getCurrentUserEmail } from '@/services/api.services';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { navigateBack } from '@/utils/navigation';
@@ -391,7 +391,7 @@ export default function CourseDetailPage() {
           }
         }
 
-        const userEmail = (typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "").trim().toLowerCase();
+        const userEmail = getCurrentUserEmail().trim().toLowerCase();
 
         const courseAssignments = finalAss
           .filter((a: any) => a.course === courseId)
@@ -400,11 +400,25 @@ export default function CourseDetailPage() {
             const aTitle = String(a.title || a.assignment_title || '').trim().toLowerCase();
 
             let hasLocalSub = false;
-            if (userEmail && typeof window !== "undefined") {
+            if (typeof window !== "undefined") {
               try {
-                const loc = localStorage.getItem(`lms_submission_${userEmail}_${a.name}`) ||
-                            localStorage.getItem(`lms_submission_${userEmail}_${a.title}`);
-                if (loc) hasLocalSub = true;
+                const keysToCheck = [
+                  userEmail ? `lms_submission_${userEmail}_${a.name}` : '',
+                  userEmail ? `lms_submission_${userEmail}_${a.title}` : '',
+                  userEmail ? `lms_submission_${userEmail}_${aName}` : '',
+                  userEmail ? `lms_submission_${userEmail}_${aTitle}` : '',
+                  `lms_submission_${a.name}`,
+                  `lms_submission_${a.title}`,
+                  `lms_submission_${aName}`,
+                  `lms_submission_${aTitle}`,
+                  `lms_assignment_answer_${a.name}`,
+                  `lms_assignment_answer_${a.title}`,
+                  `lms_assignment_answer_${aName}`,
+                  `lms_assignment_answer_${aTitle}`,
+                  userEmail ? `lms_assignment_answer_${userEmail}_${a.name}` : '',
+                ].filter(Boolean);
+
+                hasLocalSub = keysToCheck.some(k => Boolean(localStorage.getItem(k)));
               } catch (e) {}
             }
 
@@ -418,10 +432,13 @@ export default function CourseDetailPage() {
               return !sMember || sMember.includes(userEmail) || userEmail.includes(sMember);
             });
 
+            const isSub = Boolean(sub || hasLocalSub || (a.status && a.status !== 'Pending') || a.submission_count > 0);
+            const resolvedStatus = isSub ? ((sub?.status && sub.status !== 'Pending') ? sub.status : 'Submitted') : (a.status || 'Pending');
+
             return {
               ...a,
-              status: sub?.status || (hasLocalSub ? 'Submitted' : a.status),
-              _is_submitted: Boolean(sub || hasLocalSub)
+              status: resolvedStatus,
+              _is_submitted: isSub
             };
           });
 
@@ -1405,7 +1422,7 @@ export default function CourseDetailPage() {
                             ) : (
                               <span className={`text-sm font-medium flex items-center gap-1 mt-1 ${isSubmitted ? 'text-emerald-600' : 'text-amber-600'}`}>
                                 {isSubmitted ? <CheckCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                                {isSubmitted ? 'Submitted' : 'Pending'}
+                                {isSubmitted ? (assignment.status && assignment.status !== 'Pending' ? assignment.status : 'Submitted') : 'Pending'}
                               </span>
                             )}
                           </div>
