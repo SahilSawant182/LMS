@@ -485,22 +485,95 @@ export const deleteBatch = async (name: string) => {
   });
 };
 
-export const createChapter = async (data: FormData) => {
-  return apiService.post(`method/${API_METHOD_PREFIX}.create_chapter`, data, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-      'Authorization': `token ${API_TOKEN}`
+export const createChapter = async (data: FormData | { course: string; title: string; [key: string]: any }) => {
+  const token = typeof window !== "undefined" && localStorage.getItem("apiKey") && localStorage.getItem("apiSecret")
+    ? `token ${localStorage.getItem("apiKey")}:${localStorage.getItem("apiSecret")}`
+    : (API_TOKEN ? `token ${API_TOKEN}` : undefined);
+
+  const payload: Record<string, any> = {};
+
+  if (typeof window !== "undefined" && data instanceof FormData) {
+    data.forEach((val, key) => {
+      payload[key] = val;
+    });
+  } else if (data && typeof data === "object") {
+    Object.assign(payload, data);
+  }
+
+  const jsonHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (token) jsonHeaders.Authorization = token;
+
+  try {
+    return await apiService.post(`method/${API_METHOD_PREFIX}.create_chapter`, payload, {
+      headers: jsonHeaders
+    });
+  } catch (err: any) {
+    console.warn("create_chapter JSON failed, trying FormData fallback:", err);
+
+    try {
+      const authHeaders: Record<string, string> = {};
+      if (token) authHeaders.Authorization = token;
+
+      const fd = new FormData();
+      Object.keys(payload).forEach((k) => {
+        fd.append(k, payload[k]);
+      });
+
+      return await apiService.post(`method/${API_METHOD_PREFIX}.create_chapter`, fd, {
+        headers: authHeaders
+      });
+    } catch (fdErr) {
+      console.warn("create_chapter FormData failed, trying resource fallback:", fdErr);
     }
-  });
+
+    try {
+      return await apiService.post("resource/Course Chapter", payload, {
+        headers: jsonHeaders
+      });
+    } catch (resErr) {
+      throw err;
+    }
+  }
 };
 
 export const createLesson = async (data: any) => {
-  return apiService.post(`method/${API_METHOD_PREFIX}.create_lesson`, data, {
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `token ${API_TOKEN}`
+  const token = typeof window !== "undefined" && localStorage.getItem("apiKey") && localStorage.getItem("apiSecret")
+    ? `token ${localStorage.getItem("apiKey")}:${localStorage.getItem("apiSecret")}`
+    : (API_TOKEN ? `token ${API_TOKEN}` : undefined);
+
+  let payload: any = data;
+  if (typeof window !== "undefined" && data instanceof FormData) {
+    const obj: any = {};
+    data.forEach((val, key) => {
+      obj[key] = val;
+    });
+    payload = obj;
+  }
+
+  const jsonHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (token) jsonHeaders.Authorization = token;
+
+  try {
+    return await apiService.post(`method/${API_METHOD_PREFIX}.create_lesson`, payload, {
+      headers: jsonHeaders
+    });
+  } catch (err: any) {
+    console.warn("create_lesson JSON failed, trying FormData fallback:", err);
+    if (typeof window !== "undefined" && data instanceof FormData) {
+      try {
+        const authHeaders: Record<string, string> = {};
+        if (token) authHeaders.Authorization = token;
+        return await apiService.post(`method/${API_METHOD_PREFIX}.create_lesson`, data, {
+          headers: authHeaders
+        });
+      } catch (fdErr) {}
     }
-  });
+    throw err;
+  }
 };
 
 export const getQuizzes = async () => {
@@ -526,19 +599,88 @@ export interface CreateQuizPayload {
   passing_percentage?: number;
   duration?: number;
   description?: string;
+  show_answers?: number;
+  show_submission_history?: number;
+  shuffle_questions?: number;
+  enable_negative_marking?: number;
+  questions?: Array<{
+    question: string;
+    marks?: number;
+    [key: string]: any;
+  }>;
   [key: string]: any;
 }
 
 export const createQuiz = async (payload: CreateQuizPayload) => {
-  const headers = getQuestionAuthHeaders();
+  const headers = getQuestionAuthHeaders("application/json");
+
+  // Ensure questions in child table are strictly unique by question reference (case-insensitive & trimmed)
+  const cleanedPayload = { ...payload };
+  if (Array.isArray(cleanedPayload.questions)) {
+    const seen = new Set<string>();
+    cleanedPayload.questions = cleanedPayload.questions
+      .map((q) => ({
+        ...q,
+        question: String(q?.question || '').trim(),
+        marks: Number(q?.marks) > 0 ? Number(q?.marks) : 1,
+      }))
+      .filter((q) => {
+        const qRef = q.question.toLowerCase();
+        if (!qRef || seen.has(qRef)) return false;
+        seen.add(qRef);
+        return true;
+      });
+  }
+
   try {
-    return await apiService.post('resource/LMS Quiz', payload, { headers });
+    return await apiService.post('resource/LMS Quiz', cleanedPayload, { headers });
   } catch (err) {
     try {
-      return await apiService.post(`method/${API_METHOD_PREFIX}.create_quiz`, payload, { headers });
+      return await apiService.post(`method/${API_METHOD_PREFIX}.create_quiz`, cleanedPayload, { headers });
     } catch {
       throw err;
     }
+  }
+};
+
+export const updateQuiz = async (name: string, payload: Partial<CreateQuizPayload>) => {
+  const headers = getQuestionAuthHeaders("application/json");
+
+  // Ensure questions in child table are strictly unique by question reference (case-insensitive & trimmed)
+  const cleanedPayload = { ...payload };
+  if (Array.isArray(cleanedPayload.questions)) {
+    const seen = new Set<string>();
+    cleanedPayload.questions = cleanedPayload.questions
+      .map((q) => ({
+        ...q,
+        question: String(q?.question || '').trim(),
+        marks: Number(q?.marks) > 0 ? Number(q?.marks) : 1,
+      }))
+      .filter((q) => {
+        const qRef = q.question.toLowerCase();
+        if (!qRef || seen.has(qRef)) return false;
+        seen.add(qRef);
+        return true;
+      });
+  }
+
+  try {
+    return await apiService.put(`resource/LMS Quiz/${encodeURIComponent(name)}`, cleanedPayload, { headers });
+  } catch (err) {
+    try {
+      return await apiService.post(`method/${API_METHOD_PREFIX}.update_quiz`, { name, ...cleanedPayload }, { headers });
+    } catch {
+      throw err;
+    }
+  }
+};
+
+export const deleteQuiz = async (name: string) => {
+  const headers = getQuestionAuthHeaders("application/json");
+  try {
+    return await apiService.delete(`resource/LMS Quiz/${encodeURIComponent(name)}`, { headers });
+  } catch (err) {
+    return await apiService.post(`method/${API_METHOD_PREFIX}.delete_quiz`, { name }, { headers });
   }
 };
 
@@ -563,6 +705,8 @@ export interface CreateQuestionPayload {
   explanation_3?: string;
   explanation_4?: string;
   multiple?: number;
+  marks?: number;
+  [key: string]: any;
 }
 
 const getQuestionAuthHeaders = (contentType = "application/json") => {
@@ -582,39 +726,103 @@ const getQuestionAuthHeaders = (contentType = "application/json") => {
   return headers;
 };
 
-export const getQuestions = async () => {
+export const getQuestions = async (payload?: any): Promise<any> => {
   const headers = getQuestionAuthHeaders();
+  const collectedQuestions: any[] = [];
+  const seenQuestionIds = new Set<string>();
 
-  // 1. Try custom method
-  try {
-    const res = await apiService.get(`method/${API_METHOD_PREFIX}.get_questions`, { headers });
-    const data = res?.data || res?.message || res;
-    if (Array.isArray(data) && data.length > 0) return data;
-    if (Array.isArray(data?.questions) && data.questions.length > 0) return data.questions;
-    if (Array.isArray(res?.questions) && res.questions.length > 0) return res.questions;
-    if (data && typeof data === 'object' && Object.keys(data).length > 0) return data;
-  } catch (methodErr) {
-    console.warn("get_questions method failed, falling back to resource/LMS Question:", methodErr);
+  // Helper to add unique question
+  const addQuestionIfNew = (q: any) => {
+    if (!q || typeof q !== 'object') return;
+    const qKey = String(q.question || q.name || '').trim().toLowerCase();
+    const qText = String(q.question_detail || q.question_title || q.question_text || q.title || (typeof q.question === 'string' && !q.question.startsWith('QTS-') ? q.question : '') || '').trim().toLowerCase();
+    
+    // Check if ID or distinct text already added
+    if (qKey && seenQuestionIds.has(qKey)) return;
+    if (qKey) seenQuestionIds.add(qKey);
+    collectedQuestions.push(q);
+  };
+
+  // 0. Include any recently created questions from sessionStorage (immediate optimistic UI)
+  if (typeof window !== "undefined") {
+    try {
+      const recent = JSON.parse(sessionStorage.getItem("lms_recent_questions") || "[]");
+      if (Array.isArray(recent)) {
+        for (const q of recent) {
+          addQuestionIfNew(q);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load recent session questions:", e);
+    }
   }
 
-  // 2. Fallback to standard DocType resource
+  // 1. Fetch from custom method: lms.lms.stride_lms.get_questions
   try {
-    const resourceRes = await apiService.get("resource/LMS Question", {
-      params: {
-        fields: JSON.stringify(["*"]),
-        limit_page_length: 100,
-        order_by: "creation desc"
-      },
+    const res = await apiService.get(`method/${API_METHOD_PREFIX}.get_questions`, {
+      params: payload,
       headers
     });
-    const items = resourceRes?.data || resourceRes?.message || resourceRes;
-    if (Array.isArray(items)) return items;
-    if (Array.isArray(items?.data)) return items.data;
-  } catch (resourceErr) {
-    console.error("Resource fallback for LMS Question failed:", resourceErr);
+
+    let rawQuestions: any[] = [];
+    if (Array.isArray(res)) {
+      rawQuestions = res;
+    } else if (res && typeof res === 'object') {
+      if (Array.isArray(res?.data?.questions)) {
+        rawQuestions = res.data.questions;
+      } else if (Array.isArray(res?.message?.data?.questions)) {
+        rawQuestions = res.message.data.questions;
+      } else if (Array.isArray(res?.questions)) {
+        rawQuestions = res.questions;
+      } else if (Array.isArray(res?.message?.questions)) {
+        rawQuestions = res.message.questions;
+      } else if (Array.isArray(res?.data)) {
+        rawQuestions = res.data;
+      } else if (Array.isArray(res?.message)) {
+        rawQuestions = res.message;
+      }
+    }
+
+    for (const q of rawQuestions) {
+      addQuestionIfNew(q);
+    }
+  } catch (methodErr) {
+    console.warn("get_questions method failed, continuing:", methodErr);
   }
 
-  return [];
+  const normalizedList = collectedQuestions.map((q: any) => {
+    const qId = q.question || q.name;
+    const qText = q.question_detail || q.question_title || q.question_text || q.title || (typeof q.question === 'string' && !q.question.startsWith('QTS-') ? q.question : '') || q.question || q.name;
+    return {
+      ...q,
+      name: q.name || qId,
+      question_id: qId,
+      question: q.question || qId,
+      question_detail: q.question_detail || qText,
+      question_title: qText,
+      question_text: qText,
+      type: q.type || 'Choices',
+      multiple: q.multiple !== undefined ? Number(q.multiple) : 0,
+      marks: q.marks !== undefined ? Number(q.marks) : 1,
+    };
+  });
+
+  const paginationData = {
+    page: 1,
+    page_size: normalizedList.length,
+    total: normalizedList.length,
+    total_pages: 1
+  };
+
+  const result: any = normalizedList;
+  result.data = {
+    questions: normalizedList,
+    pagination: paginationData
+  };
+  result.pagination = paginationData;
+  result.status = 200;
+  result.message = "Questions fetched successfully";
+  return result;
 };
 
 export const getQuestion = async (name: string) => {
@@ -631,7 +839,16 @@ export const getQuestion = async (name: string) => {
       item = item.data;
     }
     if (item && typeof item === 'object' && (item.name || item.question || item.question_detail)) {
-      return item;
+      const qId = item.question || item.name;
+      const qText = item.question_detail || item.question_title || item.question_text || item.title || (typeof item.question === 'string' && !item.question.startsWith('QTS-') ? item.question : '') || item.question || item.name;
+      return {
+        ...item,
+        question_id: qId,
+        question_detail: item.question_detail || qText,
+        question_title: qText,
+        question_text: qText,
+        marks: item.marks !== undefined ? Number(item.marks) : 1,
+      };
     }
     return null;
   };
@@ -683,7 +900,7 @@ export const getQuestion = async (name: string) => {
     });
     const list = res4?.data || res4?.message || res4;
     if (Array.isArray(list) && list.length > 0) {
-      return list[0];
+      return extractQuestion(list[0]);
     }
   } catch (err4) {
     // Continue to next fallback
@@ -694,10 +911,10 @@ export const getQuestion = async (name: string) => {
     const allQuestions = await getQuestions();
     const list = Array.isArray(allQuestions)
       ? allQuestions
-      : (allQuestions?.data || allQuestions?.message || []);
+      : (allQuestions?.data?.questions || allQuestions?.data || allQuestions?.message || []);
     if (Array.isArray(list)) {
-      const match = list.find((q: any) => q.name === decodedName || q.name === name || q.question === decodedName);
-      if (match) return match;
+      const match = list.find((q: any) => q.name === decodedName || q.name === name || q.question === decodedName || q.question_id === decodedName);
+      if (match) return extractQuestion(match);
     }
   } catch (err5) {
     console.warn("Fallback allQuestions search in getQuestion failed:", err5);
@@ -707,23 +924,73 @@ export const getQuestion = async (name: string) => {
 };
 
 export const createQuestion = async (data: CreateQuestionPayload) => {
-  const headers = getQuestionAuthHeaders("application/x-www-form-urlencoded");
-  const params = new URLSearchParams();
-  Object.entries(data).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      params.append(key, value.toString());
-    }
-  });
+  const jsonHeaders = getQuestionAuthHeaders("application/json");
+  const methodName = "method/lms.lms.stride_lms.create_question";
 
+  console.log("createQuestion calling:", methodName, data);
+
+  const saveToSessionCache = (createdRes: any) => {
+    if (typeof window === "undefined") return;
+    try {
+      const recent = JSON.parse(sessionStorage.getItem("lms_recent_questions") || "[]");
+      const createdId = createdRes?.data?.name || createdRes?.name || createdRes?.message?.name || createdRes?.data?.question || createdRes?.question || (typeof createdRes === 'string' && !createdRes.includes(' ') ? createdRes : `QTS-${Date.now()}`);
+      
+      const newQuestionObj = {
+        ...data,
+        name: createdId,
+        question: createdId,
+        question_id: createdId,
+        question_detail: data.question,
+        question_title: data.question,
+        question_text: data.question,
+        type: data.type || "Choices",
+        multiple: data.multiple !== undefined ? Number(data.multiple) : 0,
+        marks: data.marks !== undefined ? Number(data.marks) : 1,
+        creation: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      };
+
+      // Prepend and persist up to 50 recent items
+      const updated = [newQuestionObj, ...recent.filter((item: any) => item.name !== createdId && item.question_detail !== data.question)].slice(0, 50);
+      sessionStorage.setItem("lms_recent_questions", JSON.stringify(updated));
+    } catch (cacheErr) {
+      console.warn("Failed to update lms_recent_questions cache:", cacheErr);
+    }
+  };
+
+  // 1. Whitelisted RPC method call with JSON payload
   try {
-    return await apiService.post(`method/${API_METHOD_PREFIX}.create_question`, params, {
-      headers
+    const res = await apiService.post(methodName, data, {
+      headers: jsonHeaders
     });
-  } catch (err) {
-    console.warn("create_question method failed, falling back to resource/LMS Question:", err);
-    return await apiService.post("resource/LMS Question", data, {
-      headers: getQuestionAuthHeaders("application/json")
-    });
+    if (res) {
+      saveToSessionCache(res);
+      return res;
+    }
+  } catch (err: any) {
+    console.warn("create_question JSON method failed, trying URLSearchParams:", err);
+    try {
+      const urlHeaders = getQuestionAuthHeaders("application/x-www-form-urlencoded");
+      const params = new URLSearchParams();
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, value.toString());
+        }
+      });
+      const formRes = await apiService.post(methodName, params, {
+        headers: urlHeaders
+      });
+      if (formRes) {
+        saveToSessionCache(formRes);
+        return formRes;
+      }
+    } catch (err2) {
+      console.warn("create_question URLSearchParams failed, trying resource fallback:", err2);
+      const resRes = await apiService.post("resource/LMS Question", data, {
+        headers: jsonHeaders
+      });
+      saveToSessionCache(resRes);
+      return resRes;
+    }
   }
 };
 

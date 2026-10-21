@@ -1386,14 +1386,20 @@ export default function LessonPage() {
                   {isInstructor ? (
                     <>
                       <Link
-                        href={`/quizzes/create-question?course=${encodeURIComponent(courseId)}&chapter=${encodeURIComponent(chapterId)}&lesson=${encodeURIComponent(lessonId)}`}
+                        href={`/quizzes/create?course=${encodeURIComponent(courseId)}&chapter=${encodeURIComponent(chapterId)}&lesson=${encodeURIComponent(lessonId)}&returnUrl=${encodeURIComponent(`/course/${courseId}/${chapterId}/${lessonId}`)}`}
                         className="flex-1 md:flex-initial px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
                       >
                         <Plus className="w-3.5 h-3.5" /> Create Lesson Quiz
                       </Link>
                       <Link
+                        href={`/quizzes/create-question?course=${encodeURIComponent(courseId)}&chapter=${encodeURIComponent(chapterId)}&lesson=${encodeURIComponent(lessonId)}&returnUrl=${encodeURIComponent(`/course/${courseId}/${chapterId}/${lessonId}`)}`}
+                        className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1"
+                      >
+                        <Plus className="w-3 h-3 text-indigo-600" /> Add Question
+                      </Link>
+                      <Link
                         href="/quizzes"
-                        className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center"
+                        className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center"
                       >
                         Manage Quizzes
                       </Link>

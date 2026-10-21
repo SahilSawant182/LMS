@@ -4,7 +4,7 @@ const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 export const BASE_URL = rawBaseUrl ? (rawBaseUrl.endsWith('/') ? rawBaseUrl : rawBaseUrl + '/') : '/';
 export const BASE_DOMAIN = BASE_URL.replace(/\/api\/?$/, "") || "";
 export const API_TOKEN = process.env.NEXT_PUBLIC_API_TOKEN || "";
-export const API_METHOD_PREFIX = process.env.NEXT_PUBLIC_API_METHOD_PREFIX || "stridenex_app.api_stridenex_app.lms";
+export const API_METHOD_PREFIX = process.env.NEXT_PUBLIC_API_METHOD_PREFIX || "lms.lms.stride_lms";
 
 export const api = axios.create({
   baseURL: BASE_URL,
@@ -108,7 +108,7 @@ const apiRequest = async (config: AxiosRequestConfig) => {
       errMessage = "The requested server operation failed. The required method is not configured on the backend.";
     }
 
-    console.error(`API Error (${config.method} ${config.url}):`, errMessage, data);
+    console.warn(`API Error (${config.method} ${config.url}):`, errMessage, data);
     
     if (error.response?.status === 401 && !isAuthRoute) {
       if (typeof window !== "undefined") {

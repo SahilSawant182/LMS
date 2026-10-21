@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, BookOpen, Plus, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { getCourses, createChapter } from "@/services/lms.services";
+import { showToast } from "@/components/ui/Toast";
 
 interface CreateChapterModalProps {
   isOpen: boolean;
@@ -87,6 +88,7 @@ export default function CreateChapterModal({
       await createChapter(fd);
 
       setSuccess(true);
+      showToast.success("Chapter created successfully!");
       window.dispatchEvent(
         new CustomEvent("chapter-created", {
           detail: { course: selectedCourse, title: chapterTitle.trim() },
@@ -100,6 +102,7 @@ export default function CreateChapterModal({
       setTimeout(() => {
         onClose();
         router.push(`/course/${encodeURIComponent(selectedCourse)}`);
+        router.refresh();
       }, 900);
     } catch (err: any) {
       console.error("Failed to create chapter:", err);

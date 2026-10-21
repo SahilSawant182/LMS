@@ -26,6 +26,7 @@ function CreateQuestionForm() {
   const [explanations, setExplanations] = useState(["", "", "", ""]);
   const [correctOption, setCorrectOption] = useState<number>(0); // for Single Choice
   const [correctOptions, setCorrectOptions] = useState<boolean[]>([false, false, false, false]); // for Multiple Choice
+  const [marks, setMarks] = useState<number>(10); // for Open Ended
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -69,44 +70,47 @@ function CreateQuestionForm() {
     setSuccess(false);
 
     try {
-      let finalType = type;
-      const payload: CreateQuestionPayload = {
-        question,
-        type: finalType,
-      };
+      let payload: CreateQuestionPayload;
 
       if (type === "Single Choice" || type === "Multiple Choice") {
-        finalType = "Choices";
-        payload.type = finalType;
-        payload.multiple = type === "Multiple Choice" ? 1 : 0;
+        const isMultiple = type === "Multiple Choice";
+        payload = {
+          question: question.trim(),
+          type: "Choices",
+          multiple: isMultiple ? 1 : 0,
+        };
         
-        payload.option_1 = possibilities[0];
-        payload.option_2 = possibilities[1];
-        payload.option_3 = possibilities[2];
-        payload.option_4 = possibilities[3];
-
-        payload.explanation_1 = explanations[0];
-        payload.explanation_2 = explanations[1];
-        payload.explanation_3 = explanations[2];
-        payload.explanation_4 = explanations[3];
-        
-        if (type === "Single Choice") {
-          payload.is_correct_1 = correctOption === 0 ? 1 : 0;
-          payload.is_correct_2 = correctOption === 1 ? 1 : 0;
-          payload.is_correct_3 = correctOption === 2 ? 1 : 0;
-          payload.is_correct_4 = correctOption === 3 ? 1 : 0;
-        } else {
-          payload.is_correct_1 = correctOptions[0] ? 1 : 0;
-          payload.is_correct_2 = correctOptions[1] ? 1 : 0;
-          payload.is_correct_3 = correctOptions[2] ? 1 : 0;
-          payload.is_correct_4 = correctOptions[3] ? 1 : 0;
-        }
+        possibilities.forEach((pos, idx) => {
+          const num = idx + 1;
+          payload[`option_${num}`] = pos;
+          if (isMultiple) {
+            payload[`is_correct_${num}`] = correctOptions[idx] ? 1 : 0;
+          } else {
+            payload[`is_correct_${num}`] = correctOption === idx ? 1 : 0;
+          }
+          if (explanations[idx]?.trim()) {
+            payload[`explanation_${num}`] = explanations[idx].trim();
+          }
+        });
+      } else if (type === "User Input") {
+        payload = {
+          question: question.trim(),
+          type: "User Input",
+          multiple: 0,
+        };
+        possibilities.forEach((pos, idx) => {
+          if (pos.trim()) {
+            payload[`possibility_${idx + 1}`] = pos.trim();
+          }
+        });
       } else {
-        // User Input
-        payload.possibility_1 = possibilities[0];
-        payload.possibility_2 = possibilities[1];
-        payload.possibility_3 = possibilities[2];
-        payload.possibility_4 = possibilities[3];
+        // Open Ended
+        payload = {
+          question: question.trim(),
+          type: "Open Ended",
+          multiple: 0,
+          marks: Number(marks) || 10,
+        };
       }
 
       await createQuestion(payload);
@@ -125,9 +129,9 @@ function CreateQuestionForm() {
         if (returnUrl) {
           router.push(returnUrl);
         } else {
-          router.push("/quizzes");
+          router.push("/quizzes?tab=questions");
         }
-      }, 1500);
+      }, 1200);
       
     } catch (err: any) {
       setError(err.response?.data?.message?.message || err.message || "Failed to create question");
@@ -202,9 +206,19 @@ function CreateQuestionForm() {
             {success && (
               <div className="mb-8 bg-green-50 border border-green-200 rounded-xl p-4 flex items-start animate-fade-in-down">
                 <svg className="w-6 h-6 text-green-500 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <div>
-                  <h3 className="text-green-800 font-semibold">Question created successfully!</h3>
-                  <p className="text-green-600 text-sm mt-1">Redirecting to assessments...</p>
+                <div className="flex-1">
+                  <h3 className="text-green-800 font-bold">Question created successfully!</h3>
+                  <p className="text-green-600 text-sm mt-0.5">
+                    {returnUrl ? "Redirecting back to your editor..." : "Redirecting to the Question Bank..."}
+                  </p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <Link
+                      href={returnUrl || "/quizzes?tab=questions"}
+                      className="text-xs font-bold text-indigo-700 hover:text-indigo-900 underline"
+                    >
+                      View in {returnUrl ? "Editor" : "Question Bank"} now &rarr;
+                    </Link>
+                  </div>
                 </div>
               </div>
             )}
@@ -252,11 +266,29 @@ function CreateQuestionForm() {
                     <option value="Single Choice">Single Choice</option>
                     <option value="Multiple Choice">Multiple Choice</option>
                     <option value="User Input">User Input</option>
+                    <option value="Open Ended">Open Ended</option>
                   </select>
                 </div>
+                {type === "Open Ended" && (
+                  <div>
+                    <label htmlFor="marks" className="block text-sm font-semibold text-gray-900 mb-2">
+                      Marks <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="marks"
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={marks}
+                      onChange={(e) => setMarks(Number(e.target.value) || 1)}
+                      className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-gray-50 px-4 py-3 outline-none border transition-all text-gray-900"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Options */}
+              {type !== "Open Ended" && (
               <div className="pt-6 border-t border-gray-100">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
                   {type === "User Input" ? "Accepted Answers" : "Options"}
@@ -320,6 +352,7 @@ function CreateQuestionForm() {
                   })}
                 </div>
               </div>
+              )}
 
               {/* Submit Button */}
               <div className="pt-6 flex items-center justify-end border-t border-gray-100">

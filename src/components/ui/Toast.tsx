@@ -94,28 +94,30 @@ export function ToastContainer() {
 
 function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: () => void }) {
   const [isPaused, setIsPaused] = useState(false);
-  const [progress, setProgress] = useState(100);
   const duration = toast.duration || 5000;
+  const [remaining, setRemaining] = useState(duration);
 
   useEffect(() => {
     if (isPaused) return;
 
     const interval = 50;
-    const step = (interval / duration) * 100;
-
     const timer = setInterval(() => {
-      setProgress((prev) => {
-        if (prev <= step) {
+      setRemaining((prev) => {
+        if (prev <= interval) {
           clearInterval(timer);
-          onDismiss();
+          setTimeout(() => {
+            onDismiss();
+          }, 0);
           return 0;
         }
-        return prev - step;
+        return prev - interval;
       });
     }, interval);
 
     return () => clearInterval(timer);
   }, [isPaused, duration, onDismiss]);
+
+  const progress = Math.max(0, Math.min(100, (remaining / duration) * 100));
 
   const config = {
     success: {

@@ -294,6 +294,8 @@ export default function CourseDetailPage() {
         }));
 
         setOutline(mergedOutline);
+      } else {
+        setOutline([]);
       }
 
       // Process course reviews:
@@ -646,7 +648,7 @@ export default function CourseDetailPage() {
   // Normalized progress calculations from backend sources
   const normalizedProgress = progress?.message?.data || progress?.data || progress?.message || progress || {};
   const parsedPB = progressBarData !== null && progressBarData !== undefined ? parseProgressBarValue(progressBarData) : null;
-  const allOutlineLessons = outline.flatMap((c: any) => c.lessons || []);
+  const allOutlineLessons = Array.isArray(outline) ? outline.flatMap((c: any) => Array.isArray(c?.lessons) ? c.lessons : []) : [];
   const progressRecords = normalizedProgress.records || normalizedProgress.data?.records || [];
 
   const checkOutlineLessonComplete = (l: any) => {
@@ -983,7 +985,7 @@ export default function CourseDetailPage() {
                           <div className="flex items-center gap-1.5 shrink-0">
                             {isInstructor ? (
                               <Link
-                                href={`/quizzes/create-question?course=${encodeURIComponent(courseId)}&chapter=${encodeURIComponent(chapter.name)}`}
+                                href={`/quizzes/create-question?course=${encodeURIComponent(courseId)}&chapter=${encodeURIComponent(chapter.name)}&returnUrl=${encodeURIComponent(`/course/${courseId}`)}`}
                                 className="px-2.5 py-1 text-[11px] font-bold text-indigo-700 hover:text-white bg-white hover:bg-indigo-600 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
                               >
                                 <Plus className="w-3 h-3" /> Assessment
