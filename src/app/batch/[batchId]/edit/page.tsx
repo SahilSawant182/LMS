@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import BatchForm from '@/components/admin/BatchForm';
 import { useRouter, useParams } from 'next/navigation';
+import { navigateBack } from '@/utils/navigation';
 import { getBatchDetails } from '@/services/lms.services';
 
 export default function EditBatchPage() {
@@ -79,8 +80,8 @@ export default function EditBatchPage() {
         <div className="flex-grow flex flex-col justify-center items-center p-8">
           <h2 className="text-2xl font-bold text-red-600 mb-4">Error</h2>
           <p className="text-slate-600">{error}</p>
-          <button onClick={() => router.push('/batches')} className="mt-6 px-6 py-2 bg-indigo-600 text-white rounded-full">
-            Back to Batches
+          <button onClick={() => navigateBack(router, `/batch/${batchId}`)} className="mt-6 px-6 py-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-colors cursor-pointer">
+            Back
           </button>
         </div>
       </div>

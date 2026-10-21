@@ -27,6 +27,7 @@ import {
   Users
 } from 'lucide-react';
 import { createLMSCoupon, getCourses, Course, CreateLMSCouponPayload } from '@/services/lms.services';
+import { navigateBack } from '@/utils/navigation';
 
 export default function CreateCouponPage() {
   const router = useRouter();
@@ -219,7 +220,11 @@ export default function CreateCouponPage() {
           <div className="flex justify-center gap-3">
             <Link
               href="/coupons"
-              className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors"
+              onClick={(e) => {
+                e.preventDefault();
+                navigateBack(router, "/coupons");
+              }}
+              className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
             >
               Back to Coupons
             </Link>
@@ -245,7 +250,11 @@ export default function CreateCouponPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 relative z-10">
           <Link
             href="/coupons"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition-colors mb-4"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, "/coupons");
+            }}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition-colors mb-4 cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" /> Back to Coupons List
           </Link>

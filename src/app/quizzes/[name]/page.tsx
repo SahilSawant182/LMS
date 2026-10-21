@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { getQuiz, getQuestions } from "@/services/lms.services";
 import { isAuthorizedInstructor } from "@/services/auth.services";
 import { formatDate } from "@/utils/formatters";
+import { navigateBack } from "@/utils/navigation";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
@@ -92,6 +93,7 @@ interface QuizDetails {
 
 export default function QuizDetailsPage() {
   const params = useParams();
+  const router = useRouter();
   const rawName = (params?.name as string) || "";
   const name = decodeURIComponent(rawName);
 
@@ -217,9 +219,13 @@ export default function QuizDetailsPage() {
             <p className="text-gray-500 mb-6 text-sm">{error || "The requested assessment could not be loaded."}</p>
             <Link
               href="/quizzes"
-              className="inline-flex justify-center items-center px-4 py-2.5 font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 transition-colors w-full text-sm shadow-sm"
+              onClick={(e) => {
+                e.preventDefault();
+                navigateBack(router, "/quizzes");
+              }}
+              className="inline-flex justify-center items-center px-4 py-2.5 font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 transition-colors w-full text-sm shadow-sm cursor-pointer"
             >
-              Return to Quizzes
+              Back to Previous Screen
             </Link>
           </div>
         </div>
@@ -304,9 +310,13 @@ export default function QuizDetailsPage() {
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
                 href="/quizzes"
-                className="inline-flex justify-center items-center px-6 py-2.5 font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors flex-1 text-sm"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigateBack(router, "/quizzes");
+                }}
+                className="inline-flex justify-center items-center px-6 py-2.5 font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors flex-1 text-sm cursor-pointer"
               >
-                Return to Assessment List
+                Back to Previous Screen
               </Link>
               {isInstructor && (
                 <Link
@@ -484,10 +494,14 @@ export default function QuizDetailsPage() {
           <div className="mb-4 flex items-center justify-between text-xs">
             <Link
               href="/quizzes"
-              className="inline-flex items-center gap-1.5 font-medium text-indigo-200 hover:text-white transition-colors"
+              onClick={(e) => {
+                e.preventDefault();
+                navigateBack(router, "/quizzes");
+              }}
+              className="inline-flex items-center gap-1.5 font-medium text-indigo-200 hover:text-white transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              Back to Quizzes
+              Back
             </Link>
             {isInstructor && (
               <Link

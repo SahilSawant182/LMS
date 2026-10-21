@@ -12,6 +12,7 @@ import { getCourseWithEnrollment } from '@/services/payment.services';
 import { getImageUrl } from '@/services/api.services';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
+import { navigateBack } from '@/utils/navigation';
 import {
   PlayCircle, Clock, BookOpen, Users, Award,
   Globe, Tags, ChevronRight, Star, CheckCircle2,
@@ -625,8 +626,8 @@ export default function CourseDetailPage() {
           <div className="bg-white p-10 rounded-3xl shadow-xl max-w-md w-full">
             <h2 className="text-3xl font-extrabold text-gray-900 mb-4">Oops!</h2>
             <p className="text-gray-500 mb-8">{error || 'Course not found'}</p>
-            <button onClick={() => router.push('/courses')} className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white font-bold rounded-xl shadow-lg shadow-indigo-200">
-              Back to Courses
+            <button onClick={() => navigateBack(router, '/courses')} className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white font-bold rounded-xl shadow-lg shadow-indigo-200 cursor-pointer">
+              Back to Previous Screen
             </button>
           </div>
         </div>
@@ -735,10 +736,14 @@ export default function CourseDetailPage() {
           <div className="mb-3 flex items-center justify-between">
             <Link
               href="/courses"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-200 hover:text-white transition-colors"
+              onClick={(e) => {
+                e.preventDefault();
+                navigateBack(router, "/courses");
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-200 hover:text-white transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              Back to Courses
+              Back
             </Link>
 
             {isInstructor && (

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { getProgramDetail, deleteProgram, Program, ProgramCourse } from '@/services/lms.services';
 import { getImageUrl } from '@/services/api.services';
+import { navigateBack } from '@/utils/navigation';
 
 export default function ProgramDetailPage() {
   const params = useParams();
@@ -109,7 +110,14 @@ export default function ProgramDetailPage() {
           <AlertCircle className="w-12 h-12 text-red-400" />
           <h2 className="text-xl font-bold text-slate-700">Program Not Found</h2>
           <p className="text-slate-500 max-w-md">{error || 'This program does not exist or has been removed.'}</p>
-          <Link href="/programs" className="mt-2 inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-semibold">
+          <Link
+            href="/programs"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, "/programs");
+            }}
+            className="mt-2 inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-semibold cursor-pointer"
+          >
             <ArrowLeft className="w-4 h-4" /> Back to Programs
           </Link>
         </div>
@@ -154,7 +162,11 @@ export default function ProgramDetailPage() {
             <nav className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <Link
                 href="/programs"
-                className="inline-flex items-center gap-1.5 text-indigo-300 hover:text-white transition-colors text-xs font-medium"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigateBack(router, "/programs");
+                }}
+                className="inline-flex items-center gap-1.5 text-indigo-300 hover:text-white transition-colors text-xs font-medium cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 All Learning Paths

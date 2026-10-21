@@ -6,6 +6,8 @@ import { Award, Calendar, User, Clock, CheckCircle2, Download, Share2, ArrowLeft
 import { getCertificate } from '@/services/lms.services';
 import { formatDate } from '@/utils/formatters';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { navigateBack } from '@/utils/navigation';
 
 interface CertificateDetail {
   name: string;
@@ -19,6 +21,7 @@ interface CertificateDetail {
 }
 
 export default function CertificateDetailsPage({ params }: { params: Promise<{ name: string }> | { name: string } }) {
+  const router = useRouter();
   // In Next.js 15+, params is a Promise. We need to unwrap it using React.use().
   // We use a fallback to support both Promise and direct object for backward compatibility.
   const resolvedParams = params instanceof Promise ? React.use(params) : params;
@@ -58,7 +61,14 @@ export default function CertificateDetailsPage({ params }: { params: Promise<{ n
       <main className="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         
         <div className="mb-6">
-          <Link href="/certificates" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors">
+          <Link
+            href="/certificates"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, "/certificates");
+            }}
+            className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
+          >
             <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Certificates
           </Link>
         </div>

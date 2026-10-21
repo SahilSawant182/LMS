@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { navigateBack } from '@/utils/navigation';
 import { 
   BookOpen, Check, X, Loader2, Sparkles, Upload, 
   PlayCircle, DollarSign, Award, Layers, Eye, 
@@ -319,15 +320,14 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
           <button
             type="button"
             onClick={() => {
-              if (isEditing && courseId) {
-                router.push(`/course/${encodeURIComponent(courseId)}`);
-              } else {
-                router.push('/courses');
-              }
+              navigateBack(
+                router,
+                isEditing && courseId ? `/course/${encodeURIComponent(courseId)}` : '/courses'
+              );
             }}
             className="self-start md:self-auto inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-sm border border-white/10 transition-colors cursor-pointer"
           >
-            <ArrowLeft className="w-4 h-4" /> {isEditing ? 'Back to Course' : 'Back to Courses'}
+            <ArrowLeft className="w-4 h-4" /> Back
           </button>
         </div>
       </div>

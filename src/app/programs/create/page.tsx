@@ -7,6 +7,7 @@ import { ArrowLeft, Save, Plus, Trash2, LayoutList, BookOpen, Users, Info } from
 import Link from "next/link";
 import Dropdown from "@/components/ui/Dropdown";
 import { createProgram } from "@/services/lms.services";
+import { navigateBack } from "@/utils/navigation";
 
 export default function CreateProgramPage() {
   const router = useRouter();
@@ -112,7 +113,11 @@ export default function CreateProgramPage() {
             <div className="flex items-center gap-3">
               <Link
                 href="/programs"
-                className="p-2 -ml-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigateBack(router, "/programs");
+                }}
+                className="p-2 -ml-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-5 h-5" />
               </Link>

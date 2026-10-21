@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { navigateBack } from '@/utils/navigation';
 import { createProgrammingExercise, ProgrammingExerciseTestCase } from '@/services/lms.services';
 import {
   ArrowLeft,
@@ -230,10 +231,14 @@ function CreateProgrammingExerciseForm() {
           </p>
           <Link
             href="/programming-exercises"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, "/programming-exercises");
+            }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Challenges
+            Back
           </Link>
         </div>
       </div>
@@ -250,10 +255,14 @@ function CreateProgrammingExerciseForm() {
         <div className="max-w-5xl mx-auto relative z-10">
           <Link
             href={returnUrl || "/programming-exercises"}
-            className="inline-flex items-center text-xs font-semibold text-indigo-300 hover:text-white mb-4 transition-colors"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, returnUrl || "/programming-exercises");
+            }}
+            className="inline-flex items-center text-xs font-semibold text-indigo-300 hover:text-white mb-4 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4 mr-1.5" />
-            {returnUrl ? "Back to Lesson Editor" : "Back to Exercises"}
+            {returnUrl ? "Back to Lesson Editor" : "Back"}
           </Link>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>

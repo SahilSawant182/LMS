@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { navigateBack } from '@/utils/navigation';
 import {
   createQuiz,
   updateQuiz,
@@ -740,9 +741,13 @@ export function CreateQuizContent({ initialQuizName }: { initialQuizName?: strin
             </p>
             <Link
               href={returnUrl || "/quizzes"}
-              className="inline-flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all"
+              onClick={(e) => {
+                e.preventDefault();
+                navigateBack(router, returnUrl || "/quizzes");
+              }}
+              className="inline-flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all cursor-pointer"
             >
-              {returnUrl ? "Back to Lesson Editor" : "Back to Quizzes"}
+              {returnUrl ? "Back to Lesson Editor" : "Back"}
             </Link>
           </div>
         </div>
@@ -760,10 +765,14 @@ export function CreateQuizContent({ initialQuizName }: { initialQuizName?: strin
         <div className="flex items-center gap-2 text-sm font-medium">
           <Link
             href={returnUrl || "/quizzes"}
-            className="text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1.5"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, returnUrl || "/quizzes");
+            }}
+            className="text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            Quizzes
+            Back
           </Link>
           <span className="text-slate-600">/</span>
           <span className="text-white font-semibold truncate max-w-[200px] sm:max-w-md">

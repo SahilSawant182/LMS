@@ -35,10 +35,16 @@ export const metadata: Metadata = {
   },
 };
 
+import { Suspense } from "react";
+import NavigationTracker from "@/components/NavigationTracker";
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans bg-white text-slate-800">
+        <Suspense fallback={null}>
+          <NavigationTracker />
+        </Suspense>
         <ToastContainer />
         {children}
       </body>

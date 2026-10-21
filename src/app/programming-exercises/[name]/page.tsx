@@ -13,6 +13,7 @@ import {
   LMSProgrammingExercise,
   LMSProgrammingExerciseSubmission,
 } from '@/services/lms.services';
+import { navigateBack } from '@/utils/navigation';
 import {
   ArrowLeft,
   Code2,
@@ -239,10 +240,14 @@ export default function SolveProgrammingExercisePage() {
           <p className="text-sm text-slate-400">{error || 'This programming challenge does not exist.'}</p>
           <Link
             href="/programming-exercises"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, "/programming-exercises");
+            }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Challenges
+            Back
           </Link>
         </div>
       </div>
@@ -260,10 +265,14 @@ export default function SolveProgrammingExercisePage() {
         <div className="flex items-center gap-3 min-w-0">
           <Link
             href="/programming-exercises"
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-semibold"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, "/programming-exercises");
+            }}
+            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">All Challenges</span>
+            <span className="hidden sm:inline">Back</span>
           </Link>
 
           <div className="h-4 w-px bg-slate-800 hidden sm:block" />

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { getAssignment, createAssignmentSubmission, updateAssignmentSubmission, updateAssignment, deleteAssignment, getAssignmentSubmissions } from '@/services/lms.services';
 import { getImageUrl } from '@/services/api.services';
+import { navigateBack } from '@/utils/navigation';
 import { ArrowLeft, BookOpen, Send, Upload, CheckCircle, Trash2, Edit, Users, ExternalLink, Clock } from 'lucide-react';
 
 export default function AssignmentDetailPage() {
@@ -259,9 +260,16 @@ export default function AssignmentDetailPage() {
       {/* Header */}
       <div className="bg-slate-900 text-white py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
-          <Link href="/assignments" className="inline-flex items-center text-indigo-300 hover:text-white mb-6 transition-colors text-sm font-medium">
+          <Link
+            href="/assignments"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, "/assignments");
+            }}
+            className="inline-flex items-center text-indigo-300 hover:text-white mb-6 transition-colors text-sm font-medium cursor-pointer"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Assignments
+            Back
           </Link>
           
           {loading ? (

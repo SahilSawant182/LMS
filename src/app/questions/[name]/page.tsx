@@ -6,10 +6,12 @@ import Link from 'next/link';
 import { ArrowLeft, HelpCircle, CheckSquare, AlignLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import { getQuestion, getQuestions } from '@/services/lms.services';
 import { formatDate } from '@/utils/formatters';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { navigateBack } from '@/utils/navigation';
 
 export default function QuestionDetailsPage() {
   const params = useParams();
+  const router = useRouter();
   const rawName = (params?.name as string) || '';
   const name = decodeURIComponent(rawName);
 
@@ -162,8 +164,15 @@ interface RenderOption {
       <main className="flex-grow max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         
         <div className="mb-6">
-          <Link href="/questions" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors">
-            <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Practice Questions
+          <Link
+            href="/quizzes?tab=questions"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, "/quizzes?tab=questions");
+            }}
+            className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1.5" /> Back
           </Link>
         </div>
 
@@ -177,10 +186,14 @@ interface RenderOption {
              <h3 className="text-xl font-bold text-slate-900 mb-2">Question Not Found</h3>
              <p className="text-slate-500 max-w-sm mx-auto mb-6">{error || "The question you're looking for doesn't exist."}</p>
              <Link
-               href="/questions"
-               className="inline-flex items-center px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold rounded-lg text-sm transition-colors"
+               href="/quizzes?tab=questions"
+               onClick={(e) => {
+                 e.preventDefault();
+                 navigateBack(router, "/quizzes?tab=questions");
+               }}
+               className="inline-flex items-center px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold rounded-lg text-sm transition-colors cursor-pointer"
              >
-               <ArrowLeft className="w-4 h-4 mr-1.5" /> Return to Practice Questions
+               <ArrowLeft className="w-4 h-4 mr-1.5" /> Back
              </Link>
           </div>
         ) : (

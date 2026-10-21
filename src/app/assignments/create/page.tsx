@@ -5,6 +5,7 @@ import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createAssignment, getCourses } from '@/services/lms.services';
+import { navigateBack } from '@/utils/navigation';
 import { ArrowLeft, BookOpen, Save, CheckCircle } from 'lucide-react';
 
 function CreateAssignmentForm() {
@@ -101,9 +102,16 @@ function CreateAssignmentForm() {
       <div className="bg-slate-900 text-white py-10 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none"></div>
         <div className="max-w-7xl mx-auto relative z-10">
-          <Link href={returnUrl || "/assignments"} className="inline-flex items-center text-indigo-300 hover:text-white mb-6 transition-colors text-sm font-medium">
+          <Link
+            href={returnUrl || "/assignments"}
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, returnUrl || "/assignments");
+            }}
+            className="inline-flex items-center text-indigo-300 hover:text-white mb-6 transition-colors text-sm font-medium cursor-pointer"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            {returnUrl ? "Back to Lesson Editor" : "Back to Assignments"}
+            {returnUrl ? "Back to Lesson Editor" : "Back"}
           </Link>
           
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-2 leading-tight">

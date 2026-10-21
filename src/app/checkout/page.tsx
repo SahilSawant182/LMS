@@ -32,6 +32,7 @@ import {
   CheckoutAddress,
   CheckoutSummary
 } from "@/types/payment.types";
+import { navigateBack } from "@/utils/navigation";
 
 const RAZORPAY_FALLBACK_KEY = "rzp_test_TmszSSoa6e9eLQ";
 
@@ -446,7 +447,11 @@ function CheckoutContent() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <Link
             href={itemLink}
-            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-indigo-600 transition-colors"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, itemLink);
+            }}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to {itemTypeParam === "batch" ? "Batch" : "Course"}
@@ -510,7 +515,11 @@ function CheckoutContent() {
               </button>
               <Link
                 href={itemLink}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-6 py-2.5 rounded-xl text-sm transition-all inline-flex items-center justify-center"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigateBack(router, itemLink);
+                }}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-6 py-2.5 rounded-xl text-sm transition-all inline-flex items-center justify-center cursor-pointer"
               >
                 Back to {itemTypeParam === "batch" ? "Batch" : "Course"}
               </Link>

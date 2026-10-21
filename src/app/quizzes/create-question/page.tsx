@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { createQuestion, CreateQuestionPayload } from "@/services/lms.services";
 import { isAuthorizedInstructor } from "@/services/auth.services";
 import { useRouter, useSearchParams } from "next/navigation";
+import { navigateBack } from "@/utils/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { ShieldAlert, ArrowLeft } from "lucide-react";
@@ -168,11 +169,15 @@ function CreateQuestionForm() {
               Creating assessment questions is restricted to authorized instructors and administrators. As a student, you can view and take quizzes from the assessments catalog.
             </p>
             <Link
-              href="/quizzes"
-              className="inline-flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all shadow-md shadow-indigo-600/20"
+              href={returnUrl || "/quizzes?tab=questions"}
+              onClick={(e) => {
+                e.preventDefault();
+                navigateBack(router, returnUrl || "/quizzes?tab=questions");
+              }}
+              className="inline-flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back to Assessments
+              Back
             </Link>
           </div>
         </div>
@@ -187,9 +192,16 @@ function CreateQuestionForm() {
       {/* Hero Area */}
       <div className="bg-slate-900 text-white pt-10 pb-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
-          <Link href={returnUrl || "/quizzes"} className="inline-flex items-center text-indigo-300 hover:text-white mb-6 transition-colors text-sm font-medium">
+          <Link
+            href={returnUrl || "/quizzes?tab=questions"}
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, returnUrl || "/quizzes?tab=questions");
+            }}
+            className="inline-flex items-center text-indigo-300 hover:text-white mb-6 transition-colors text-sm font-medium cursor-pointer"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            {returnUrl ? "Back to Lesson Editor" : "Back to Assessments"}
+            {returnUrl ? "Back to Lesson Editor" : "Back"}
           </Link>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">Create Question</h1>
           <p className="mt-2 text-indigo-200 max-w-2xl text-sm md:text-base">

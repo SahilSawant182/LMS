@@ -5,11 +5,13 @@ import Navbar from '@/components/Navbar';
 import CourseForm from '@/components/admin/CourseForm';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { navigateBack } from '@/utils/navigation';
 import { getCourseDetails, normalizeCourseColor } from '@/services/lms.services';
 
 export default function EditCoursePage() {
   const params = useParams();
+  const router = useRouter();
   const rawCourseName = params.courseId as string;
   const courseName = decodeURIComponent(rawCourseName || '');
   
@@ -70,9 +72,16 @@ export default function EditCoursePage() {
       
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full mt-16">
         <div className="mb-6 flex items-center">
-          <Link href={`/course/${encodeURIComponent(courseName)}`} className="flex items-center text-slate-500 hover:text-indigo-600 transition-colors font-medium">
+          <Link
+            href={`/course/${encodeURIComponent(courseName)}`}
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, `/course/${encodeURIComponent(courseName)}`);
+            }}
+            className="flex items-center text-slate-500 hover:text-indigo-600 transition-colors font-medium cursor-pointer"
+          >
             <ChevronLeft className="w-5 h-5 mr-1" />
-            Back to Course
+            Back
           </Link>
         </div>
         

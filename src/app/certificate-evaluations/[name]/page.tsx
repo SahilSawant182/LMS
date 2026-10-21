@@ -8,8 +8,11 @@ import {
   ArrowLeft, FileText, CheckCircle, XCircle 
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { navigateBack } from '@/utils/navigation';
 
 export default function CertificateEvaluationDetailPage({ params }: { params: any }) {
+  const router = useRouter();
   const [evalData, setEvalData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -80,7 +83,14 @@ export default function CertificateEvaluationDetailPage({ params }: { params: an
           <XCircle className="w-16 h-16 text-red-400 mb-4" />
           <h2 className="text-2xl font-bold text-slate-900 mb-2">Evaluation Not Found</h2>
           <p className="text-slate-500 mb-6">{error || 'Could not locate the requested evaluation record.'}</p>
-          <Link href="/certificate-evaluations" className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-bold transition-colors">
+          <Link
+            href="/certificate-evaluations"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, "/certificate-evaluations");
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-bold transition-colors cursor-pointer"
+          >
             Go Back to List
           </Link>
         </div>
@@ -95,7 +105,14 @@ export default function CertificateEvaluationDetailPage({ params }: { params: an
       <div className="bg-slate-900 text-white py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none"></div>
         <div className="max-w-4xl mx-auto relative z-10 flex flex-col items-start gap-4">
-          <Link href="/certificate-evaluations" className="flex items-center gap-2 text-indigo-300 hover:text-white transition-colors text-sm font-semibold">
+          <Link
+            href="/certificate-evaluations"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, "/certificate-evaluations");
+            }}
+            className="flex items-center gap-2 text-indigo-300 hover:text-white transition-colors text-sm font-semibold cursor-pointer"
+          >
             <ArrowLeft className="w-4 h-4" /> Back to Evaluations
           </Link>
           <div>

@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { navigateBack } from '@/utils/navigation';
 import { HelpCircle, ChevronRight, Search, PlusCircle, AlignLeft, CheckSquare, List, ArrowLeft } from 'lucide-react';
 import { getQuestions } from '@/services/lms.services';
 import { isAuthorizedInstructor } from '@/services/auth.services';
@@ -19,6 +21,7 @@ interface Question {
 }
 
 export default function QuestionsPage() {
+  const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -100,8 +103,15 @@ export default function QuestionsPage() {
       {/* Main Content */}
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full -mt-6 relative z-20">
         <div className="mb-4">
-          <Link href="/dashboard" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors">
-            <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Dashboard
+          <Link
+            href="/dashboard"
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, "/dashboard");
+            }}
+            className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1.5" /> Back
           </Link>
         </div>
 

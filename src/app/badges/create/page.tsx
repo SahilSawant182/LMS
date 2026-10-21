@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { createBadge, CreateBadgePayload } from '@/services/lms.services';
 import { uploadFile, getImageUrl } from '@/services/api.services';
+import { navigateBack } from '@/utils/navigation';
 
 export default function CreateBadgePage() {
   const router = useRouter();
@@ -193,7 +194,11 @@ export default function CreateBadgePage() {
             <div className="flex items-center gap-2 mb-2">
               <Link
                 href="/badges"
-                className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigateBack(router, "/badges");
+                }}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Back to Badges Catalog

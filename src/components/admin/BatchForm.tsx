@@ -5,6 +5,7 @@ import { createBatch, updateBatch, getMasterData, getQuizzes } from '@/services/
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, Plus, Trash2, Calendar as CalendarIcon, Clock, Users, BookOpen, Tag, Video } from 'lucide-react';
 import Link from 'next/link';
+import { navigateBack } from '@/utils/navigation';
 import Dropdown from '@/components/ui/Dropdown';
 
 interface BatchFormProps {
@@ -206,7 +207,14 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full bg-slate-50 min-h-screen">
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/batches" className="p-1.5 bg-white rounded-md border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm">
+          <Link
+            href={isEdit && initialData?.name ? `/batch/${initialData.name}` : "/batches"}
+            onClick={(e) => {
+              e.preventDefault();
+              navigateBack(router, isEdit && initialData?.name ? `/batch/${initialData.name}` : "/batches");
+            }}
+            className="p-1.5 bg-white rounded-md border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
+          >
             <ArrowLeft className="w-4 h-4 text-slate-600" />
           </Link>
           <h1 className="text-lg font-semibold text-slate-800">{isEdit ? 'Update Batch Details' : 'New Batch Setup'}</h1>

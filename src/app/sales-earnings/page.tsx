@@ -33,6 +33,7 @@ import InstructorPayoutsTab from "@/components/instructor/InstructorPayoutsTab";
 import InstructorSalesReportTab from "@/components/instructor/InstructorSalesReportTab";
 import PaymentSlipModal from "@/components/modals/PaymentSlipModal";
 import Pagination from "@/components/ui/Pagination";
+import { navigateBack } from "@/utils/navigation";
 
 type SalesEarningsTab = "sales" | "payouts" | "reports";
 
@@ -181,7 +182,11 @@ function SalesEarningsContent() {
           <div className="flex items-center gap-2 mb-4">
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition-colors py-1 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10"
+              onClick={(e) => {
+                e.preventDefault();
+                navigateBack(router, "/dashboard");
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition-colors py-1 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Back to Dashboard</span>
