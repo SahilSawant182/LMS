@@ -16,6 +16,66 @@ export const api = axios.create({
   },
 });
 
+// Helper to retrieve current authenticated user email
+export const getCurrentUserEmail = (): string => {
+  if (typeof window === "undefined") return "";
+  const raw =
+    localStorage.getItem("userEmail") ||
+    localStorage.getItem("user") ||
+    localStorage.getItem("email") ||
+    sessionStorage.getItem("userEmail") ||
+    sessionStorage.getItem("user") ||
+    "";
+    
+  if (raw && raw.trim()) {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed.email) return String(parsed.email).trim();
+        if (parsed.user) return String(parsed.user).trim();
+        if (parsed.user_id) return String(parsed.user_id).trim();
+      } catch {}
+    }
+    return trimmed;
+  }
+
+  try {
+    const match = document.cookie.match(/(?:^|;\s*)(?:user_id|user_email|user)=([^;]+)/);
+    if (match && match[1]) {
+      const decoded = decodeURIComponent(match[1]).trim();
+      if (decoded && decoded !== "Guest") return decoded;
+    }
+  } catch {}
+
+  return "";
+};
+
+// Global interceptor to automatically attach user query param on all GET requests
+api.interceptors.request.use((reqConfig) => {
+  const method = (reqConfig.method || "GET").toUpperCase();
+  if (method === "GET") {
+    const userEmail = getCurrentUserEmail();
+    if (userEmail) {
+      const urlHasUser = typeof reqConfig.url === "string" && (reqConfig.url.includes("?user=") || reqConfig.url.includes("&user="));
+      if (!urlHasUser) {
+        if (reqConfig.params instanceof URLSearchParams) {
+          if (!reqConfig.params.has("user")) {
+            reqConfig.params.append("user", userEmail);
+          }
+        } else if (typeof reqConfig.params === "object" && reqConfig.params !== null) {
+          if (!("user" in reqConfig.params) || !(reqConfig.params as any).user) {
+            reqConfig.params = { ...reqConfig.params, user: userEmail };
+          }
+        } else {
+          reqConfig.params = { user: userEmail };
+        }
+      }
+    }
+  }
+  return reqConfig;
+});
+
 // Generic API caller with token injection
 const apiRequest = async (config: AxiosRequestConfig) => {
   const apiKey = typeof window !== "undefined" ? localStorage.getItem("apiKey") : null;
@@ -34,9 +94,32 @@ const apiRequest = async (config: AxiosRequestConfig) => {
   if (!isAuthRoute && !headers.Authorization && apiKey && apiSecret) {
     headers.Authorization = `token ${apiKey}:${apiSecret}`;
   }
+
+  // Ensure user=emailid is appended to all GET APIs query parameters
+  const method = (config.method || "GET").toUpperCase();
+  let params = config.params;
+  if (method === "GET") {
+    const userEmail = getCurrentUserEmail();
+    if (userEmail) {
+      const urlHasUser = typeof config.url === "string" && (config.url.includes("?user=") || config.url.includes("&user="));
+      if (!urlHasUser) {
+        if (params instanceof URLSearchParams) {
+          if (!params.has("user")) {
+            params.append("user", userEmail);
+          }
+        } else if (typeof params === "object" && params !== null) {
+          if (!("user" in params) || !(params as any).user) {
+            params = { ...params, user: userEmail };
+          }
+        } else {
+          params = { user: userEmail };
+        }
+      }
+    }
+  }
   
   try {
-    const response = await api({ ...config, headers });
+    const response = await api({ ...config, headers, params });
     
     if (response.data?.message?.success === false || response.data?.success === false) {
       const errorMessage = response.data?.message?.message || response.data?.message || "Operation failed";
