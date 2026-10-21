@@ -13,6 +13,7 @@ import {
   ArrowLeft, 
   CheckCircle, 
   ChevronRight, 
+  ChevronLeft,
   Lock, 
   Sparkles, 
   ShieldCheck, 
@@ -565,6 +566,8 @@ export default function LessonPage() {
   const [isInstructor, setIsInstructor] = useState(false);
   const [updatingProgress, setUpdatingProgress] = useState(false);
   const [isCompletedLocally, setIsCompletedLocally] = useState(false);
+  const [isCourseCompletedLocally, setIsCourseCompletedLocally] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [isCurriculumSidebarOpen, setIsCurriculumSidebarOpen] = useState(true);
 
   // Automatically shrink the navigation sidebar when opening a particular lesson
@@ -812,26 +815,50 @@ export default function LessonPage() {
       if (pVal?.message || pVal?.data || pVal) {
         setProgress(pVal);
       }
+      let parsedUpdatedPB: any = null;
       if (pbRes.status === 'fulfilled') {
         const rawPB = pbRes.value;
-        setProgressBarData(rawPB?.message ?? rawPB?.data ?? rawPB);
+        const pbVal = rawPB?.message ?? rawPB?.data ?? rawPB;
+        setProgressBarData(pbVal);
+        parsedUpdatedPB = parseProgressBarValue(rawPB);
       }
 
       // Check if all lessons across all chapters are now completed
       const updatedRecords = updatedProgress?.records || updatedProgress?.data?.records || [];
-      const updatedPercent = Number(updatedProgress?.progress || 0);
-      const allDone = updatedPercent >= 100 || (flatLessons.length > 0 && flatLessons.every(l => {
-        const lName = l.lessonName || l.name;
-        const lTitle = l.title || l.lesson_name;
-        if (lName === (lessonData.name || lessonId)) return true;
-        return updatedRecords.some((r: any) => 
-          (r.lesson === lName || (lTitle && r.lesson === lTitle)) && 
-          (r.status === 'Complete' || r.status === 'Completed' || r.completed === 1)
-        );
-      }));
+      const updatedPercent = Number(parsedUpdatedPB?.percent ?? updatedProgress?.progress ?? 0);
 
-      if (allDone) {
-        showToast.success('Course completed successfully!');
+      const checkUpdatedLessonDone = (l: any) => {
+        const lName = (l.lessonName || l.name || '').trim().toLowerCase();
+        const lTitle = (l.title || l.lesson_name || '').trim().toLowerCase();
+        const currName = (lessonData.name || lessonId || '').trim().toLowerCase();
+        const currTarget = (currentTargetId || '').trim().toLowerCase();
+
+        if (lName === currName || lName === currTarget || lTitle === currName || lTitle === currTarget) {
+          return true;
+        }
+        return updatedRecords.some((r: any) => {
+          const rLesson = String(r.lesson || '').trim().toLowerCase();
+          const rLessonName = String(r.lesson_name || '').trim().toLowerCase();
+          const rTitle = String(r.title || '').trim().toLowerCase();
+          const isCompleteStatus = r.status === 'Complete' || r.status === 'Completed' || r.completed === 1 || r.completed === '1';
+          if (!isCompleteStatus) return false;
+          return (
+            (lName && (rLesson === lName || rLessonName === lName || rTitle === lName)) ||
+            (lTitle && (rLesson === lTitle || rLessonName === lTitle || rTitle === lTitle))
+          );
+        });
+      };
+
+      const allOutlineLessonsDone = flatLessons.length > 0
+        ? flatLessons.every(l => checkUpdatedLessonDone(l))
+        : false;
+
+      const shouldCompleteCourse = allOutlineLessonsDone || (isLastLesson && (updatedPercent >= 100 || Boolean(parsedUpdatedPB?.isCompleted)));
+
+      if (shouldCompleteCourse) {
+        setIsCourseCompletedLocally(true);
+        setShowCompletionModal(true);
+        showToast.success('Course completed successfully! Congratulations!');
       } else {
         showToast.success('Lesson marked as completed!');
       }
@@ -839,6 +866,22 @@ export default function LessonPage() {
       showToast.error(err.response?.data?.message || err.message || 'Failed to update progress');
     } finally {
       setUpdatingProgress(false);
+    }
+  };
+
+  const handleCompleteCourse = async () => {
+    if (isCourseComplete) {
+      setShowCompletionModal(true);
+      return;
+    }
+    await handleMarkComplete();
+    const otherLessonsDone = flatLessons.length > 0
+      ? flatLessons.filter(l => (l.lessonName || l.name) !== currentTargetId).every(l => checkLessonRecordedComplete(l))
+      : true;
+
+    if (isLastLesson || otherLessonsDone) {
+      setIsCourseCompletedLocally(true);
+      setShowCompletionModal(true);
     }
   };
 
@@ -889,53 +932,66 @@ export default function LessonPage() {
   const normalizedProgress = progress?.message?.data || progress?.data || progress?.message || progress || {};
   const parsedPB = progressBarData !== null && progressBarData !== undefined ? parseProgressBarValue(progressBarData) : null;
 
-  const progressPercent = parsedPB !== null
-    ? parsedPB.percent
-    : (typeof normalizedProgress.progress === 'number'
-        ? normalizedProgress.progress
-        : typeof courseData?.progress === 'number'
-          ? courseData.progress
-          : Number(normalizedProgress.progress || courseData?.progress || 0));
-
-  const completedLessonsCount = (parsedPB?.completedLessons !== undefined)
-    ? parsedPB.completedLessons
-    : (typeof normalizedProgress.completed_lessons === 'number'
-        ? normalizedProgress.completed_lessons
-        : typeof courseData?.completed_lessons === 'number'
-          ? courseData.completed_lessons
-          : Number(normalizedProgress.completed_lessons || courseData?.completed_lessons || 0));
-
-  const totalLessonsCount = (parsedPB?.totalLessons !== undefined)
-    ? parsedPB.totalLessons
-    : (typeof normalizedProgress.total_lessons === 'number'
-        ? normalizedProgress.total_lessons
-        : typeof courseData?.total_lessons === 'number'
-          ? courseData.total_lessons
-          : Number(normalizedProgress.total_lessons || courseData?.total_lessons || flatLessons.length || 0));
-
   const progressRecords = normalizedProgress.records || normalizedProgress.data?.records || [];
 
-  const isLessonComplete = (lessonItem: { lessonName?: string; name?: string; title?: string; lesson_name?: string }) => {
-    const lName = lessonItem.lessonName || lessonItem.name || '';
-    const lTitle = lessonItem.title || lessonItem.lesson_name || '';
-    if (isCompletedLocally && (lName === currentTargetId || lName === lessonId)) {
+  const checkLessonRecordedComplete = (lessonItem: { lessonName?: string; name?: string; title?: string; lesson_name?: string }) => {
+    const lName = (lessonItem.lessonName || lessonItem.name || '').trim().toLowerCase();
+    const lTitle = (lessonItem.title || lessonItem.lesson_name || '').trim().toLowerCase();
+    const currentTId = (currentTargetId || '').trim().toLowerCase();
+    const currLId = (lessonId || '').trim().toLowerCase();
+
+    if (isCompletedLocally && (lName === currentTId || lName === currLId || lTitle === currentTId || lTitle === currLId)) {
       return true;
     }
-    if (!Array.isArray(progressRecords)) return false;
-    return progressRecords.some((r: any) => 
-      (r.lesson === lName || (lTitle && r.lesson === lTitle)) && 
-      (r.status === 'Complete' || r.status === 'Completed' || r.completed === 1)
-    );
+    if (!Array.isArray(progressRecords) || progressRecords.length === 0) return false;
+
+    return progressRecords.some((r: any) => {
+      const rLesson = String(r.lesson || '').trim().toLowerCase();
+      const rLessonName = String(r.lesson_name || '').trim().toLowerCase();
+      const rTitle = String(r.title || '').trim().toLowerCase();
+      const isCompleteStatus = r.status === 'Complete' || r.status === 'Completed' || r.completed === 1 || r.completed === '1';
+
+      if (!isCompleteStatus) return false;
+
+      return (
+        (lName && (rLesson === lName || rLessonName === lName || rTitle === lName)) ||
+        (lTitle && (rLesson === lTitle || rLessonName === lTitle || rTitle === lTitle))
+      );
+    });
   };
 
-  const currentLessonIsCompleted = isCompletedLocally || isLessonComplete({ lessonName: currentTargetId, title: lessonData?.title || lessonData?.lesson_name || '' });
+  // Accurate outline lesson calculation
+  const totalLessonsInOutline = flatLessons.length;
+  const actualCompletedLessonsCount = flatLessons.filter(l => checkLessonRecordedComplete(l)).length;
+
+  const totalLessonsCount = totalLessonsInOutline > 0
+    ? totalLessonsInOutline
+    : (parsedPB?.totalLessons || Number(normalizedProgress.total_lessons || courseData?.total_lessons || 0));
+
+  // Course is strictly complete only if all syllabus outline lessons are recorded as complete
+  const areAllLessonsCompleted = totalLessonsInOutline > 0
+    ? flatLessons.every(l => checkLessonRecordedComplete(l))
+    : Boolean(parsedPB?.isCompleted || (parsedPB?.pendingLessons === 0 && (parsedPB?.totalLessons || 0) > 0));
 
   const isCourseComplete = Boolean(
-    progressPercent >= 100 ||
-    (totalLessonsCount > 0 && completedLessonsCount >= totalLessonsCount) ||
-    (flatLessons.length > 0 && flatLessons.every(l => isLessonComplete(l))) ||
+    isCourseCompletedLocally ||
+    areAllLessonsCompleted ||
     courseData?.status === 'Completed'
   );
+
+  const completedLessonsCount = isCourseComplete
+    ? totalLessonsCount
+    : actualCompletedLessonsCount;
+
+  const progressPercent = totalLessonsCount > 0
+    ? (isCourseComplete ? 100 : Math.min(100, Math.round((actualCompletedLessonsCount / totalLessonsCount) * 100)))
+    : (parsedPB?.percent ?? 0);
+
+  const isLessonComplete = (lessonItem: { lessonName?: string; name?: string; title?: string; lesson_name?: string }) => {
+    return checkLessonRecordedComplete(lessonItem);
+  };
+
+  const currentLessonIsCompleted = isCompletedLocally || checkLessonRecordedComplete({ lessonName: currentTargetId, title: lessonData?.title || lessonData?.lesson_name || '' });
 
   // Find current lesson title from outline if lessonData is null
   const currentLessonFromOutline = flatLessons.find(l => l.lessonName === currentTargetId || l.lessonName === lessonId);
@@ -1104,30 +1160,42 @@ export default function LessonPage() {
               <button 
                 onClick={() => prevLesson && router.push(`/course/${courseId}/${encodeURIComponent(prevLesson.chapterName)}/${encodeURIComponent(prevLesson.lessonName)}`)}
                 disabled={!prevLesson}
-                className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 hover:border-slate-300 font-semibold text-sm transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 hover:border-slate-300 font-semibold text-sm transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5"
               >
-                Previous
+                <ChevronLeft className="w-4 h-4" /> Previous
               </button>
               
-              {nextLesson ? (
+              {isCourseComplete ? (
+                <button
+                  onClick={() => setShowCompletionModal(true)}
+                  className="px-4 py-2 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 font-bold text-sm rounded-lg flex items-center gap-2 cursor-pointer transition-colors"
+                >
+                  <CheckCircle className="w-4 h-4 text-emerald-600" /> Course Completed
+                </button>
+              ) : nextLesson ? (
                 <button 
                   onClick={() => router.push(`/course/${courseId}/${encodeURIComponent(nextLesson.chapterName)}/${encodeURIComponent(nextLesson.lessonName)}`)}
                   className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm transition-all shadow-sm shadow-indigo-200 flex items-center gap-2 cursor-pointer"
                 >
                   Next Lesson <ChevronRight className="w-4 h-4" />
                 </button>
-              ) : isCourseComplete ? (
-                <span className="px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-sm rounded-lg flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600" /> Course Completed
-                </span>
               ) : (
                 <button
-                  onClick={handleMarkComplete}
+                  onClick={handleCompleteCourse}
                   disabled={updatingProgress}
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-lg shadow-sm shadow-indigo-200 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg shadow-sm shadow-emerald-200 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
                 >
-                  {updatingProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  {updatingProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4" />}
                   Complete Course
+                </button>
+              )}
+
+              {isCourseComplete && nextLesson && (
+                <button 
+                  onClick={() => router.push(`/course/${courseId}/${encodeURIComponent(nextLesson.chapterName)}/${encodeURIComponent(nextLesson.lessonName)}`)}
+                  className="px-4 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-100 font-semibold text-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  Next Lesson <ChevronRight className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -1352,20 +1420,29 @@ export default function LessonPage() {
                       {isCourseComplete ? 'Course Status: Completed' : `Course Progress: ${Math.round(progressPercent)}%`}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {completedLessonsCount} of {totalLessonsCount} lessons completed
+                      {isCourseComplete 
+                        ? `All ${totalLessonsCount || flatLessons.length} lessons completed` 
+                        : `${completedLessonsCount} of ${totalLessonsCount || flatLessons.length} lessons completed`}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                   {isCourseComplete ? (
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={() => setShowCompletionModal(true)}
+                        className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl font-bold text-sm flex items-center gap-2 transition-colors cursor-pointer"
+                      >
+                        <CheckCircle className="w-4 h-4 text-emerald-500" />
+                        Course Completed
+                      </button>
                       {Boolean(courseData?.has_certificate || courseData?.certificate) && (
                         <Link
                           href="/certificates"
-                          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-1.5"
+                          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
                         >
-                          <Award className="w-4 h-4" /> Certificate
+                          <Award className="w-4 h-4" /> View Certificate
                         </Link>
                       )}
                       <Link
@@ -1376,15 +1453,35 @@ export default function LessonPage() {
                       </Link>
                     </div>
                   ) : currentLessonIsCompleted ? (
-                    <div className="px-6 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl font-bold text-sm flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-500" />
-                      Lesson Completed
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="px-5 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl font-bold text-sm flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-emerald-500" />
+                        Lesson Completed
+                      </div>
+
+                      {nextLesson ? (
+                        <button
+                          onClick={() => router.push(`/course/${courseId}/${encodeURIComponent(nextLesson.chapterName)}/${encodeURIComponent(nextLesson.lessonName)}`)}
+                          className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+                        >
+                          Next Lesson <ChevronRight className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={handleCompleteCourse}
+                          disabled={updatingProgress}
+                          className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md shadow-emerald-200 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
+                        >
+                          {updatingProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4" />}
+                          Complete Course
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <button 
                       onClick={handleMarkComplete}
                       disabled={updatingProgress}
-                      className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                      className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
                     >
                       {updatingProgress ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -1394,6 +1491,55 @@ export default function LessonPage() {
                       {updatingProgress ? 'Updating...' : isLastLesson ? 'Complete Course' : 'Mark as Complete'}
                     </button>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Course Completion Celebration Modal */}
+          {showCompletionModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100 text-center relative">
+                <button
+                  onClick={() => setShowCompletionModal(false)}
+                  className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner">
+                  <Award className="w-10 h-10" />
+                </div>
+                <span className="inline-block px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full mb-3 border border-emerald-200">
+                  Course 100% Completed!
+                </span>
+                <h2 className="text-2xl font-black text-slate-900 mb-2">
+                  Congratulations!
+                </h2>
+                <p className="text-slate-600 text-sm mb-6 leading-relaxed">
+                  You have successfully completed all lessons and chapters in <span className="font-semibold text-slate-800">{courseData?.title || courseId}</span>.
+                </p>
+
+                <div className="space-y-3">
+                  {Boolean(courseData?.has_certificate || courseData?.certificate) && (
+                    <Link
+                      href="/certificates"
+                      className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md shadow-emerald-200 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Award className="w-4 h-4" /> View Certificate
+                    </Link>
+                  )}
+                  <Link
+                    href={`/course/${courseId}`}
+                    className="w-full py-3 px-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" /> Back to Course Overview
+                  </Link>
+                  <button
+                    onClick={() => setShowCompletionModal(false)}
+                    className="w-full py-2.5 text-slate-400 hover:text-slate-600 font-medium text-xs transition-colors"
+                  >
+                    Stay on Lesson
+                  </button>
                 </div>
               </div>
             </div>

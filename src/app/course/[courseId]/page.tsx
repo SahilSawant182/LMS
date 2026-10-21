@@ -361,7 +361,11 @@ export default function CourseDetailPage() {
 
       if (progressBarRes.status === 'fulfilled') {
         const rawPB = progressBarRes.value;
+        const parsed = parseProgressBarValue(rawPB);
         setProgressBarData(rawPB?.message ?? rawPB?.data ?? rawPB);
+        if (parsed.percent > 0 || (parsed.completedLessons || 0) > 0 || parsed.isCompleted) {
+          setIsEnrolled(true);
+        }
       }
 
       if (assignmentsRes.status === 'fulfilled') {
@@ -642,47 +646,54 @@ export default function CourseDetailPage() {
   // Normalized progress calculations from backend sources
   const normalizedProgress = progress?.message?.data || progress?.data || progress?.message || progress || {};
   const parsedPB = progressBarData !== null && progressBarData !== undefined ? parseProgressBarValue(progressBarData) : null;
-
-  const progressPercent = parsedPB !== null
-    ? parsedPB.percent
-    : (typeof normalizedProgress.progress === 'number'
-        ? normalizedProgress.progress
-        : typeof enrollmentData?.progress === 'number'
-          ? enrollmentData.progress
-          : Number(normalizedProgress.progress || enrollmentData?.progress || 0));
-
-  const completedLessonsCount = (parsedPB?.completedLessons !== undefined)
-    ? parsedPB.completedLessons
-    : (typeof normalizedProgress.completed_lessons === 'number'
-        ? normalizedProgress.completed_lessons
-        : typeof enrollmentData?.completed_lessons === 'number'
-          ? enrollmentData.completed_lessons
-          : Number(normalizedProgress.completed_lessons || enrollmentData?.completed_lessons || 0));
-
   const allOutlineLessons = outline.flatMap((c: any) => c.lessons || []);
   const progressRecords = normalizedProgress.records || normalizedProgress.data?.records || [];
 
-  const totalLessonsCount = (parsedPB?.totalLessons !== undefined)
-    ? parsedPB.totalLessons
-    : (typeof normalizedProgress.total_lessons === 'number'
-        ? normalizedProgress.total_lessons
-        : typeof enrollmentData?.total_lessons === 'number'
-          ? enrollmentData.total_lessons
-          : Number(normalizedProgress.total_lessons || enrollmentData?.total_lessons || details?.lessons || allOutlineLessons.length || 0));
-  const isAllOutlineLessonsComplete = allOutlineLessons.length > 0 && allOutlineLessons.every((l: any) => {
-    return progressRecords.some((r: any) => 
-      (r.lesson === l.name || r.lesson === l.title || r.lesson === l.lesson_name) && 
-      (r.status === 'Complete' || r.status === 'Completed' || r.completed === 1)
-    );
-  });
+  const checkOutlineLessonComplete = (l: any) => {
+    const lName = (l.name || '').trim().toLowerCase();
+    const lTitle = (l.title || l.lesson_name || '').trim().toLowerCase();
+    if (!Array.isArray(progressRecords) || progressRecords.length === 0) return false;
+    return progressRecords.some((r: any) => {
+      const rLesson = String(r.lesson || '').trim().toLowerCase();
+      const rLessonName = String(r.lesson_name || '').trim().toLowerCase();
+      const rTitle = String(r.title || '').trim().toLowerCase();
+      const isCompleteStatus = r.status === 'Complete' || r.status === 'Completed' || r.completed === 1 || r.completed === '1';
+      if (!isCompleteStatus) return false;
+      return (
+        (lName && (rLesson === lName || rLessonName === lName || rTitle === lName)) ||
+        (lTitle && (rLesson === lTitle || rLessonName === lTitle || rTitle === lTitle))
+      );
+    });
+  };
 
-  const isCourseComplete = Boolean(isEnrolled && (
-    (parsedPB?.isCompleted) ||
-    progressPercent >= 100 ||
-    (totalLessonsCount > 0 && completedLessonsCount >= totalLessonsCount) ||
-    isAllOutlineLessonsComplete ||
+  const actualCompletedOutlineCount = allOutlineLessons.filter(l => checkOutlineLessonComplete(l)).length;
+  const isAllOutlineLessonsComplete = allOutlineLessons.length > 0 && allOutlineLessons.every(l => checkOutlineLessonComplete(l));
+
+  const totalLessonsCount = allOutlineLessons.length > 0
+    ? allOutlineLessons.length
+    : (parsedPB?.totalLessons || Number(normalizedProgress.total_lessons || enrollmentData?.total_lessons || details?.lessons || 0));
+
+  const isCourseComplete = Boolean(
+    (allOutlineLessons.length > 0 ? isAllOutlineLessonsComplete : Boolean(parsedPB?.isCompleted)) ||
     enrollmentData?.status === 'Completed'
-  ));
+  );
+
+  const completedLessonsCount = isCourseComplete
+    ? totalLessonsCount
+    : actualCompletedOutlineCount;
+
+  const progressPercent = totalLessonsCount > 0
+    ? (isCourseComplete ? 100 : Math.min(100, Math.round((actualCompletedOutlineCount / totalLessonsCount) * 100)))
+    : (parsedPB?.percent ?? 0);
+
+  const isUserEnrolled = Boolean(
+    isEnrolled ||
+    isCourseComplete ||
+    enrollmentData?.is_enrolled ||
+    (parsedPB !== null && ((parsedPB.completedLessons || 0) > 0 || (parsedPB.percent || 0) > 0 || parsedPB.isCompleted)) ||
+    (Array.isArray(progressRecords) && progressRecords.length > 0) ||
+    details?.membership
+  );
 
   const hasCertificate = Boolean(details?.has_certificate || enrollmentData?.has_certificate || enrollmentData?.certificate);
 
@@ -888,12 +899,12 @@ export default function CourseDetailPage() {
                       {chapter.lessons && chapter.lessons.length > 0 ? (
                         <ul className="divide-y divide-slate-100">
                           {chapter.lessons.map((lesson: any, lIndex: number) => {
-                            const isLocked = !isInstructor && !isEnrolled && isPaid && !isFree && (lesson.is_locked === true || (!lesson.include_in_preview && lesson.include_in_preview !== 1));
-                            const isPreview = !isInstructor && !isEnrolled && Boolean(lesson.include_in_preview === 1 || lesson.include_in_preview === true);
-                            const isLessonCompleted = isEnrolled && progressRecords.some((r: any) => 
+                            const isLocked = !isInstructor && !isUserEnrolled && isPaid && !isFree && (lesson.is_locked === true || (!lesson.include_in_preview && lesson.include_in_preview !== 1));
+                            const isPreview = !isInstructor && !isUserEnrolled && Boolean(lesson.include_in_preview === 1 || lesson.include_in_preview === true);
+                            const isLessonCompleted = isUserEnrolled && (isCourseComplete || progressRecords.some((r: any) => 
                               (r.lesson === lesson.name || r.lesson === lesson.title || r.lesson === lesson.lesson_name) && 
                               (r.status === 'Complete' || r.status === 'Completed' || r.completed === 1)
-                            );
+                            ));
 
                             return (
                               <li key={lesson.name || lIndex} className="py-3 flex justify-between items-center group/lesson">
@@ -1078,7 +1089,7 @@ export default function CourseDetailPage() {
                       <Trash2 className="w-3.5 h-3.5 text-rose-600" />
                       {reviewDeleting ? 'Deleting Review...' : 'Delete Your Review'}
                     </button>
-                  ) : isEnrolled ? (
+                  ) : isUserEnrolled ? (
                     <button
                       onClick={() => {
                         setReviewRating(5);
@@ -1267,7 +1278,7 @@ export default function CourseDetailPage() {
                     : "Be the first student to review this course and help others learn!"}
                 </p>
                 {!isInstructor && (
-                  isEnrolled ? (
+                  isUserEnrolled ? (
                     <button
                       onClick={() => {
                         setReviewRating(5);
@@ -1535,7 +1546,7 @@ export default function CourseDetailPage() {
 
               {/* Price & CTA */}
               <div className="mb-6">
-                {isEnrolled ? (
+                {isUserEnrolled ? (
                   <div className="flex items-center gap-2 mb-3">
                     <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Purchased & Enrolled
@@ -1554,7 +1565,7 @@ export default function CourseDetailPage() {
                   </div>
                 )}
 
-                {isEnrolled && (
+                {isUserEnrolled && (
                   <div className="mt-4 mb-5 bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
@@ -1621,7 +1632,7 @@ export default function CourseDetailPage() {
                 ) : (
                   <button
                     onClick={() => {
-                      if (isEnrolled) {
+                      if (isUserEnrolled) {
                         const firstChapter = outline?.find(c => c.lessons && c.lessons.length > 0) || outline?.[0];
                         const firstLesson = firstChapter?.lessons?.[0];
                         if (firstChapter && firstLesson) {
@@ -1637,13 +1648,13 @@ export default function CourseDetailPage() {
                       }
                     }}
                     disabled={enrollLoading}
-                    className={`w-full font-bold py-3.5 px-4 rounded-xl transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 mt-3 flex justify-center items-center gap-2 text-sm disabled:opacity-50 active:scale-95 cursor-pointer ${isEnrolled
+                    className={`w-full font-bold py-3.5 px-4 rounded-xl transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 mt-3 flex justify-center items-center gap-2 text-sm disabled:opacity-50 active:scale-95 cursor-pointer ${isUserEnrolled
                         ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-200"
                         : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-200"
                       }`}
                   >
                     {enrollLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    {isEnrolled
+                    {isUserEnrolled
                       ? 'Continue Learning'
                       : isPaid && !isFree
                         ? `Buy Now for ${currencySymbol} ${currentPrice.toLocaleString("en-IN")}`
