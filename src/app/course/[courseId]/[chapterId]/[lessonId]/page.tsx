@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getLesson, getChapters, getLessons, getCourseProgress, createCourseProgress, getCourse } from '@/services/lms.services';
+import { getLesson, getChapters, getLessons, getCourseProgress, getCourseProgressBar, parseProgressBarValue, createCourseProgress, getCourse } from '@/services/lms.services';
 import { getCourseWithEnrollment } from '@/services/payment.services';
 import { getImageUrl } from '@/services/api.services';
 import { CourseWithEnrollment } from '@/types/payment.types';
@@ -553,6 +553,7 @@ export default function LessonPage() {
   const [courseData, setCourseData] = useState<CourseWithEnrollment | null>(null);
   const [outline, setOutline] = useState<any[]>([]);
   const [progress, setProgress] = useState<any>(null);
+  const [progressBarData, setProgressBarData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -615,11 +616,12 @@ export default function LessonPage() {
       setError(null);
       setIsPaywallLocked(false);
       try {
-        const [lessonRes, chaptersRes, lessonsRes, progressRes, courseEnrollRes, courseRes] = await Promise.allSettled([
+        const [lessonRes, chaptersRes, lessonsRes, progressRes, progressBarRes, courseEnrollRes, courseRes] = await Promise.allSettled([
           getLesson({ course: courseId, chapter: chapterId, name: lessonId }),
           getChapters({ course: courseId }),
           getLessons({ course: courseId }),
-          getCourseProgress(courseId),
+          getCourseProgress(courseId, currentEmail),
+          getCourseProgressBar({ course: courseId, member: currentEmail }),
           getCourseWithEnrollment(courseId),
           getCourse(courseId)
         ]);
@@ -776,6 +778,11 @@ export default function LessonPage() {
           const rawProgress = progressRes.value;
           setProgress(rawProgress);
         }
+
+        if (progressBarRes.status === 'fulfilled') {
+          const rawPB = progressBarRes.value;
+          setProgressBarData(rawPB?.message ?? rawPB?.data ?? rawPB);
+        }
       } catch (err: any) {
         setError(err.message || 'Could not load the lesson.');
       } finally {
@@ -796,10 +803,18 @@ export default function LessonPage() {
         status: "Complete"
       });
       setIsCompletedLocally(true);
-      const progressRes = await getCourseProgress(courseId);
-      const updatedProgress = progressRes?.message?.data || progressRes?.data || progressRes?.message || progressRes;
-      if (progressRes?.message || progressRes?.data || progressRes) {
-        setProgress(progressRes);
+      const [progressRes, pbRes] = await Promise.allSettled([
+        getCourseProgress(courseId, userEmail),
+        getCourseProgressBar({ course: courseId, member: userEmail })
+      ]);
+      const pVal = progressRes.status === 'fulfilled' ? progressRes.value : null;
+      const updatedProgress = pVal?.message?.data || pVal?.data || pVal?.message || pVal;
+      if (pVal?.message || pVal?.data || pVal) {
+        setProgress(pVal);
+      }
+      if (pbRes.status === 'fulfilled') {
+        const rawPB = pbRes.value;
+        setProgressBarData(rawPB?.message ?? rawPB?.data ?? rawPB);
       }
 
       // Check if all lessons across all chapters are now completed
@@ -872,23 +887,31 @@ export default function LessonPage() {
   
   // Dynamic progress calculations from backend sources
   const normalizedProgress = progress?.message?.data || progress?.data || progress?.message || progress || {};
-  const progressPercent = typeof normalizedProgress.progress === 'number'
-    ? normalizedProgress.progress
-    : typeof courseData?.progress === 'number'
-      ? courseData.progress
-      : Number(normalizedProgress.progress || courseData?.progress || 0);
+  const parsedPB = progressBarData !== null && progressBarData !== undefined ? parseProgressBarValue(progressBarData) : null;
 
-  const completedLessonsCount = typeof normalizedProgress.completed_lessons === 'number'
-    ? normalizedProgress.completed_lessons
-    : typeof courseData?.completed_lessons === 'number'
-      ? courseData.completed_lessons
-      : Number(normalizedProgress.completed_lessons || courseData?.completed_lessons || 0);
+  const progressPercent = parsedPB !== null
+    ? parsedPB.percent
+    : (typeof normalizedProgress.progress === 'number'
+        ? normalizedProgress.progress
+        : typeof courseData?.progress === 'number'
+          ? courseData.progress
+          : Number(normalizedProgress.progress || courseData?.progress || 0));
 
-  const totalLessonsCount = typeof normalizedProgress.total_lessons === 'number'
-    ? normalizedProgress.total_lessons
-    : typeof courseData?.total_lessons === 'number'
-      ? courseData.total_lessons
-      : Number(normalizedProgress.total_lessons || courseData?.total_lessons || flatLessons.length || 0);
+  const completedLessonsCount = (parsedPB?.completedLessons !== undefined)
+    ? parsedPB.completedLessons
+    : (typeof normalizedProgress.completed_lessons === 'number'
+        ? normalizedProgress.completed_lessons
+        : typeof courseData?.completed_lessons === 'number'
+          ? courseData.completed_lessons
+          : Number(normalizedProgress.completed_lessons || courseData?.completed_lessons || 0));
+
+  const totalLessonsCount = (parsedPB?.totalLessons !== undefined)
+    ? parsedPB.totalLessons
+    : (typeof normalizedProgress.total_lessons === 'number'
+        ? normalizedProgress.total_lessons
+        : typeof courseData?.total_lessons === 'number'
+          ? courseData.total_lessons
+          : Number(normalizedProgress.total_lessons || courseData?.total_lessons || flatLessons.length || 0));
 
   const progressRecords = normalizedProgress.records || normalizedProgress.data?.records || [];
 
@@ -940,7 +963,7 @@ export default function LessonPage() {
             </h2>
             
             {/* Progress bar */}
-            {progress && (
+            {(progress || progressBarData !== null) && (
               <div className="mt-5">
                 <div className="flex justify-between text-xs font-medium text-slate-400 mb-2">
                   <span>Course Progress</span>

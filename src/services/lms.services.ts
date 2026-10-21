@@ -802,21 +802,190 @@ export const deleteCertificateEvaluation = async (name: string) => {
   });
 };
 
-export const getCourseProgress = async (course: string) => {
+export interface CourseProgressBarPayload {
+  course: string;
+  member?: string;
+}
+
+export interface CourseProgressData {
+  course?: string;
+  member?: string;
+  total_lessons?: number;
+  completed_lessons?: number;
+  pending_lessons?: number;
+  progress_percentage?: number;
+  progress_status?: string;
+  [key: string]: any;
+}
+
+export interface ParsedProgressBar {
+  percent: number;
+  completedLessons?: number;
+  totalLessons?: number;
+  pendingLessons?: number;
+  progressStatus?: string;
+  isCompleted?: boolean;
+  course?: string;
+  member?: string;
+  raw?: any;
+}
+
+export const getCourseProgressBar = async (
+  payload: CourseProgressBarPayload | string,
+  memberParam?: string
+) => {
+  let course = "";
+  let member = "";
+
+  if (typeof payload === "string") {
+    course = payload;
+    member = memberParam || getCurrentUserEmail();
+  } else if (payload && typeof payload === "object") {
+    course = payload.course;
+    member = payload.member || memberParam || getCurrentUserEmail();
+  }
+
+  const params: Record<string, any> = { course };
+  if (member) {
+    params.member = member;
+  }
+
+  const endpoint = "method/lms.lms.doctype.lms_course.lms_course.get_course_progress_bar";
+
+  try {
+    const res = await apiService.get(endpoint, { params });
+    return res?.data || res?.message?.data || res?.message || res;
+  } catch (err: any) {
+    // If GET is not allowed or rejected with 405/417, fallback to POST
+    const res = await apiService.post(endpoint, params);
+    return res?.data || res?.message?.data || res?.message || res;
+  }
+};
+
+export const parseProgressBarValue = (response: any): ParsedProgressBar => {
+  if (response === null || response === undefined) {
+    return { percent: 0, raw: response };
+  }
+
+  // Direct number
+  if (typeof response === "number" && !isNaN(response)) {
+    const p = Math.max(0, Math.min(100, Math.round(response)));
+    return { percent: p, isCompleted: p >= 100, raw: response };
+  }
+
+  // Locate the actual payload object:
+  // e.g. { message: { success: true, message: "...", data: { ... } } }
+  // or { success: true, message: "...", data: { ... } }
+  // or { course: "...", ... }
+  let payload = response;
+
+  if (payload && typeof payload === "object") {
+    if (payload.data && typeof payload.data === "object") {
+      payload = payload.data;
+    } else if (payload.message && typeof payload.message === "object") {
+      if (payload.message.data && typeof payload.message.data === "object") {
+        payload = payload.message.data;
+      } else {
+        payload = payload.message;
+      }
+    }
+  }
+
+  if (payload && typeof payload === "object") {
+    const rawVal =
+      payload.progress_percentage ??
+      payload.progress_bar ??
+      payload.progress ??
+      payload.percent ??
+      payload.percentage ??
+      payload.progress_percent;
+
+    let percent = 0;
+    if (typeof rawVal === "number" && !isNaN(rawVal)) {
+      percent = Math.max(0, Math.min(100, Math.round(rawVal)));
+    } else if (typeof rawVal === "string" && rawVal.trim() !== "") {
+      const num = Number(rawVal.replace("%", "").trim());
+      if (!isNaN(num)) {
+        percent = Math.max(0, Math.min(100, Math.round(num)));
+      }
+    }
+
+    const completed =
+      typeof payload.completed_lessons === "number"
+        ? payload.completed_lessons
+        : typeof payload.completed === "number"
+        ? payload.completed
+        : undefined;
+
+    const total =
+      typeof payload.total_lessons === "number"
+        ? payload.total_lessons
+        : typeof payload.total === "number"
+        ? payload.total
+        : undefined;
+
+    const pending =
+      typeof payload.pending_lessons === "number"
+        ? payload.pending_lessons
+        : typeof payload.pending === "number"
+        ? payload.pending
+        : undefined;
+
+    const status = payload.progress_status || payload.status || "";
+    const isCompleted =
+      status === "Completed" ||
+      status === "Complete" ||
+      percent >= 100 ||
+      (total !== undefined && completed !== undefined && total > 0 && completed >= total);
+
+    return {
+      percent,
+      completedLessons: completed,
+      totalLessons: total,
+      pendingLessons: pending,
+      progressStatus: status,
+      isCompleted,
+      course: payload.course,
+      member: payload.member,
+      raw: response,
+    };
+  }
+
+  // Fallback for string numbers (e.g. "50" or "50%")
+  if (typeof response === "string" && response.trim() !== "") {
+    const num = Number(response.replace("%", "").trim());
+    if (!isNaN(num)) {
+      const p = Math.max(0, Math.min(100, Math.round(num)));
+      return { percent: p, isCompleted: p >= 100, raw: response };
+    }
+  }
+
+  return { percent: 0, raw: response };
+};
+
+export const getCourseProgress = async (course: string, memberParam?: string) => {
+  const member = memberParam || getCurrentUserEmail();
+  const params: Record<string, any> = { course };
+  if (member) params.member = member;
+
   try {
     return await apiService.get(`method/${API_METHOD_PREFIX}.get_course_progress`, {
-      params: { course },
+      params,
       headers: {
         'Authorization': `token ${API_TOKEN}`
       }
     });
   } catch (err) {
-    return await apiService.get(`method/lms.lms.doctype.lms_course_progress.lms_course_progress.get_course_progress`, {
-      params: { course },
-      headers: {
-        'Authorization': `token ${API_TOKEN}`
-      }
-    });
+    try {
+      return await apiService.get(`method/lms.lms.doctype.lms_course_progress.lms_course_progress.get_course_progress`, {
+        params,
+        headers: {
+          'Authorization': `token ${API_TOKEN}`
+        }
+      });
+    } catch (e) {
+      return await getCourseProgressBar({ course, member });
+    }
   }
 };
 

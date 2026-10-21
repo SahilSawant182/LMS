@@ -48,6 +48,7 @@ import {
   InstructorDashboardData
 } from "@/services/payment.services";
 import { getInstructorSalesReport } from "@/services/billing.services";
+import { getCourseProgressBar, parseProgressBarValue } from "@/services/lms.services";
 import { MonthlyBreakdownItem } from "@/types/billing.types";
 import { getImageUrl } from "@/services/api.services";
 import { formatDate } from "@/utils/formatters";
@@ -203,6 +204,46 @@ export function DashboardContent() {
           programs: enrolledPrograms,
           stats: dashboardStats,
         });
+
+        // Dynamically fetch accurate real-time course progress for each enrolled course
+        const studentEmail = typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
+        if (enrolledCourses.length > 0) {
+          try {
+            const dynamicCourses = await Promise.all(
+              enrolledCourses.map(async (c: any) => {
+                const courseId = c.course || c.name || c.course_title;
+                if (!courseId) return c;
+                try {
+                  const pbRes = await getCourseProgressBar({ course: courseId, member: studentEmail });
+                  const parsed = parseProgressBarValue(pbRes);
+                  return {
+                    ...c,
+                    progress: parsed.percent,
+                    completed_lessons: parsed.completedLessons !== undefined ? parsed.completedLessons : c.completed_lessons,
+                    total_lessons: parsed.totalLessons !== undefined ? parsed.totalLessons : c.total_lessons,
+                    pending_lessons: parsed.pendingLessons !== undefined ? parsed.pendingLessons : c.pending_lessons,
+                    progress_status: parsed.progressStatus || c.progress_status
+                  };
+                } catch (e) {
+                  return c;
+                }
+              })
+            );
+
+            const updatedStats = {
+              ...dashboardStats,
+              completed_courses: dynamicCourses.filter((c: any) => (c.progress || 0) >= 100 || (c.completed_lessons > 0 && c.total_lessons > 0 && c.completed_lessons >= c.total_lessons)).length,
+            };
+
+            setStudentData((prev: any) => ({
+              ...prev,
+              courses: dynamicCourses,
+              stats: updatedStats
+            }));
+          } catch (pErr) {
+            console.warn("Failed to dynamically update dashboard course progress:", pErr);
+          }
+        }
 
         // Fetch instructor dashboard
         try {

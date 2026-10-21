@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import { getEnrollments, getCourseProgressFiltered } from '@/services/lms.services';
+import { getEnrollments, getCourseProgressFiltered, getCourseProgressBar, parseProgressBarValue } from '@/services/lms.services';
 import { BookOpen, User, Users, Calendar, BookOpenCheck, ArrowRight, TrendingUp, ChevronDown, ChevronUp, CheckCircle, Clock } from 'lucide-react';
 import { formatDate } from '@/utils/formatters';
 
@@ -45,8 +45,25 @@ export default function EnrollmentsPage() {
       try {
         const res = await getEnrollments();
         const data = Array.isArray(res) ? res : (res?.data || res?.message?.data || []);
-        if (data) {
-          setEnrollments(Array.isArray(data) ? data : []);
+        if (data && Array.isArray(data)) {
+          setEnrollments(data);
+          try {
+            const enriched = await Promise.all(
+              data.map(async (enr: any) => {
+                if (enr.course && enr.member) {
+                  try {
+                    const pbRes = await getCourseProgressBar({ course: enr.course, member: enr.member });
+                    const parsed = parseProgressBarValue(pbRes);
+                    return { ...enr, progress: parsed.percent };
+                  } catch (e) {
+                    return enr;
+                  }
+                }
+                return enr;
+              })
+            );
+            setEnrollments(enriched);
+          } catch (e) {}
         }
       } catch (err: any) {
         setError(err.message || 'Failed to fetch enrollments');

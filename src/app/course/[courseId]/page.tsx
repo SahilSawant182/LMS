@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   getCourse, getCourseDetails, getChapters, getLessons, getReviews, 
-  createChapter, createLesson, getCourseProgress, getAssignments, 
+  createChapter, createLesson, getCourseProgress, getCourseProgressBar, parseProgressBarValue, getAssignments, 
   getAssignmentSubmissions, enrollInCourse,
   getCourseReviewList, createCourseReview, deleteCourseReview, LMSCourseReview
 } from '@/services/lms.services';
@@ -69,6 +69,7 @@ export default function CourseDetailPage() {
   const [outline, setOutline] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [progress, setProgress] = useState<any>(null);
+  const [progressBarData, setProgressBarData] = useState<any>(null);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -146,12 +147,14 @@ export default function CourseDetailPage() {
   const fetchCourseData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const [detailsRes, outlineRes, reviewsRes, lessonsRes, progressRes, assignmentsRes, submissionsRes, courseReviewsRes, enrollRes] = await Promise.allSettled([
+      const email = typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
+      const [detailsRes, outlineRes, reviewsRes, lessonsRes, progressRes, progressBarRes, assignmentsRes, submissionsRes, courseReviewsRes, enrollRes] = await Promise.allSettled([
         getCourse(courseId),
         getChapters({ course: courseId }),
         getReviews({ course: courseId }),
         getLessons({ course: courseId }),
-        getCourseProgress(courseId),
+        getCourseProgress(courseId, email),
+        getCourseProgressBar({ course: courseId, member: email }),
         getAssignments(),
         getAssignmentSubmissions(),
         getCourseReviewList({ course: courseId }),
@@ -356,6 +359,11 @@ export default function CourseDetailPage() {
         setProgress(rawProgress?.message || rawProgress?.data || rawProgress);
       }
 
+      if (progressBarRes.status === 'fulfilled') {
+        const rawPB = progressBarRes.value;
+        setProgressBarData(rawPB?.message ?? rawPB?.data ?? rawPB);
+      }
+
       if (assignmentsRes.status === 'fulfilled') {
         const rawAss = assignmentsRes.value?.data || assignmentsRes.value;
         const assData = rawAss?.message?.data?.assignments || rawAss?.message?.assignments || rawAss?.assignments || rawAss?.data || rawAss?.message || [];
@@ -522,9 +530,20 @@ export default function CourseDetailPage() {
       await enrollInCourse({ course: courseId });
       showToast.success('Successfully enrolled in this course!');
       setIsEnrolled(true);
+      const email = typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
       // Refresh progress data to show "Continue Learning"
-      const progressRes = await getCourseProgress(courseId);
-      setProgress(progressRes?.message || progressRes?.data || progressRes);
+      const [progressRes, pbRes] = await Promise.allSettled([
+        getCourseProgress(courseId, email),
+        getCourseProgressBar({ course: courseId, member: email })
+      ]);
+      if (progressRes.status === 'fulfilled') {
+        const rawProgress = progressRes.value;
+        setProgress(rawProgress?.message || rawProgress?.data || rawProgress);
+      }
+      if (pbRes.status === 'fulfilled') {
+        const rawPB = pbRes.value;
+        setProgressBarData(rawPB?.message ?? rawPB?.data ?? rawPB);
+      }
       await fetchCourseData(true);
     } catch (err: any) {
       showToast.error(err.response?.data?.message || err.message || 'Failed to enroll in course');
@@ -622,26 +641,34 @@ export default function CourseDetailPage() {
 
   // Normalized progress calculations from backend sources
   const normalizedProgress = progress?.message?.data || progress?.data || progress?.message || progress || {};
-  const progressPercent = typeof normalizedProgress.progress === 'number'
-    ? normalizedProgress.progress
-    : typeof enrollmentData?.progress === 'number'
-      ? enrollmentData.progress
-      : Number(normalizedProgress.progress || enrollmentData?.progress || 0);
+  const parsedPB = progressBarData !== null && progressBarData !== undefined ? parseProgressBarValue(progressBarData) : null;
 
-  const completedLessonsCount = typeof normalizedProgress.completed_lessons === 'number'
-    ? normalizedProgress.completed_lessons
-    : typeof enrollmentData?.completed_lessons === 'number'
-      ? enrollmentData.completed_lessons
-      : Number(normalizedProgress.completed_lessons || enrollmentData?.completed_lessons || 0);
+  const progressPercent = parsedPB !== null
+    ? parsedPB.percent
+    : (typeof normalizedProgress.progress === 'number'
+        ? normalizedProgress.progress
+        : typeof enrollmentData?.progress === 'number'
+          ? enrollmentData.progress
+          : Number(normalizedProgress.progress || enrollmentData?.progress || 0));
+
+  const completedLessonsCount = (parsedPB?.completedLessons !== undefined)
+    ? parsedPB.completedLessons
+    : (typeof normalizedProgress.completed_lessons === 'number'
+        ? normalizedProgress.completed_lessons
+        : typeof enrollmentData?.completed_lessons === 'number'
+          ? enrollmentData.completed_lessons
+          : Number(normalizedProgress.completed_lessons || enrollmentData?.completed_lessons || 0));
 
   const allOutlineLessons = outline.flatMap((c: any) => c.lessons || []);
   const progressRecords = normalizedProgress.records || normalizedProgress.data?.records || [];
 
-  const totalLessonsCount = typeof normalizedProgress.total_lessons === 'number'
-    ? normalizedProgress.total_lessons
-    : typeof enrollmentData?.total_lessons === 'number'
-      ? enrollmentData.total_lessons
-      : Number(normalizedProgress.total_lessons || enrollmentData?.total_lessons || details?.lessons || allOutlineLessons.length || 0);
+  const totalLessonsCount = (parsedPB?.totalLessons !== undefined)
+    ? parsedPB.totalLessons
+    : (typeof normalizedProgress.total_lessons === 'number'
+        ? normalizedProgress.total_lessons
+        : typeof enrollmentData?.total_lessons === 'number'
+          ? enrollmentData.total_lessons
+          : Number(normalizedProgress.total_lessons || enrollmentData?.total_lessons || details?.lessons || allOutlineLessons.length || 0));
   const isAllOutlineLessonsComplete = allOutlineLessons.length > 0 && allOutlineLessons.every((l: any) => {
     return progressRecords.some((r: any) => 
       (r.lesson === l.name || r.lesson === l.title || r.lesson === l.lesson_name) && 
@@ -650,6 +677,7 @@ export default function CourseDetailPage() {
   });
 
   const isCourseComplete = Boolean(isEnrolled && (
+    (parsedPB?.isCompleted) ||
     progressPercent >= 100 ||
     (totalLessonsCount > 0 && completedLessonsCount >= totalLessonsCount) ||
     isAllOutlineLessonsComplete ||
