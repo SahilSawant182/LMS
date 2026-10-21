@@ -2130,6 +2130,37 @@ export const createLMSCoupon = async (payload: CreateLMSCouponPayload) => {
   );
 };
 
+export const updateLMSCoupon = async (name: string, payload: Partial<CreateLMSCouponPayload>): Promise<any> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+
+  try {
+    return await apiService.post(
+      "method/lms.lms.doctype.lms_coupon.lms_coupon.update_lms_coupon",
+      { name, ...payload },
+      { headers }
+    );
+  } catch (err: any) {
+    console.warn("update_lms_coupon failed, falling back to resource/LMS Coupon:", err);
+    return await apiService.put(
+      `resource/LMS Coupon/${encodeURIComponent(name)}`,
+      payload,
+      { headers }
+    );
+  }
+};
+
 export const getCategoryList = async (): Promise<any> => {
   const headers: Record<string, string> = {};
   if (typeof window !== "undefined") {

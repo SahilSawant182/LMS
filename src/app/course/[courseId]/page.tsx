@@ -969,83 +969,6 @@ export default function CourseDetailPage() {
                         <p className="text-xs text-slate-400 py-3 italic">No lessons in this chapter.</p>
                       )}
 
-                      {/* Chapter Assessment & Assignment Integration */}
-                      <div className="mt-3 pt-3 border-t border-slate-100/90 space-y-2">
-                        {/* Chapter Assessment */}
-                        <div className="p-2.5 rounded-xl bg-indigo-50/50 border border-indigo-100/70 flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
-                              <HelpCircle className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className="text-xs font-bold text-slate-800">
-                                Chapter Assessment
-                              </p>
-                              <p className="text-[11px] text-slate-500">
-                                Comprehensive assessment for {chapter.title || chapter.name}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {isInstructor ? (
-                              <Link
-                                href={`/quizzes/create-question?course=${encodeURIComponent(courseId)}&chapter=${encodeURIComponent(chapter.name)}&returnUrl=${encodeURIComponent(`/course/${courseId}`)}`}
-                                className="px-2.5 py-1 text-[11px] font-bold text-indigo-700 hover:text-white bg-white hover:bg-indigo-600 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
-                              >
-                                <Plus className="w-3 h-3" /> Assessment
-                              </Link>
-                            ) : (
-                              <Link
-                                href="/quizzes"
-                                className="px-3 py-1 text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-2xs"
-                              >
-                                Take Assessment
-                              </Link>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Chapter Assignment */}
-                        <div className="p-2.5 rounded-xl bg-violet-50/50 border border-violet-100/70 flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center shrink-0">
-                              <FileText className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className="text-xs font-bold text-slate-800">
-                                Chapter Assignment
-                              </p>
-                              <p className="text-[11px] text-slate-500">
-                                Hands-on assignment unlocked after completing chapter lessons
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {isInstructor ? (
-                              <Link
-                                href={`/assignments/create?course=${encodeURIComponent(courseId)}&chapter=${encodeURIComponent(chapter.name)}`}
-                                className="px-2.5 py-1 text-[11px] font-bold text-violet-700 hover:text-white bg-white hover:bg-violet-600 border border-violet-200 rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
-                              >
-                                <Plus className="w-3 h-3" /> Assignment
-                              </Link>
-                            ) : (
-                              <Link
-                                href={
-                                  assignments.find((a: any) => a.chapter === chapter.name)
-                                    ? `/assignments/${assignments.find((a: any) => a.chapter === chapter.name).name}`
-                                    : `/assignments`
-                                }
-                                className="px-3 py-1 text-[11px] font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-lg transition-colors shadow-2xs"
-                              >
-                                View Assignment
-                              </Link>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
                       {/* Add Lesson UI */}
                       {isInstructor && (
                         <div className="mt-3 mb-2 flex items-center justify-between">
@@ -1677,20 +1600,6 @@ export default function CourseDetailPage() {
                     <Edit className="w-4 h-4" /> Manage / Edit Course
                   </Link>
                 )}
-
-                {/* Quizzes & Questions moved here from Navbar */}
-                <Link
-                  href={`/quizzes`}
-                  className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-3 px-4 rounded-lg transition-all mt-3 flex justify-center items-center gap-2 text-sm border border-indigo-100"
-                >
-                  <Award className="w-4 h-4" /> Course Quizzes
-                </Link>
-                <Link
-                  href={`/questions`}
-                  className="w-full bg-white hover:bg-slate-50 text-slate-700 font-bold py-3 px-4 rounded-lg transition-all mt-3 flex justify-center items-center gap-2 text-sm border border-slate-200"
-                >
-                  <BookOpen className="w-4 h-4" /> Practice Questions
-                </Link>
                 <p className="text-center text-[11px] text-slate-500 mt-3 flex items-center justify-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> 30-Day Money-Back Guarantee
                 </p>

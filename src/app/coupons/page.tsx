@@ -28,7 +28,8 @@ import {
   BookOpen,
   AlertCircle,
   ArrowRight,
-  ShieldAlert
+  ShieldAlert,
+  Edit3
 } from 'lucide-react';
 import { getLMSCouponList, getLMSCoupon, LMSCoupon } from '@/services/lms.services';
 
@@ -492,12 +493,23 @@ export default function CouponsPage() {
 
                     {/* Footer Action */}
                     <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                      <button
-                        onClick={() => handleInspectCoupon(coupon.name)}
-                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:underline inline-flex items-center gap-1"
-                      >
-                        View Full Details <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleInspectCoupon(coupon.name)}
+                          className="text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          View Full Details <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+
+                        {isInstructor && (
+                          <Link
+                            href={`/coupons/create?edit=${encodeURIComponent(coupon.name)}`}
+                            className="text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" /> Edit
+                          </Link>
+                        )}
+                      </div>
 
                       <button
                         onClick={() => handleCopyCode(coupon.code)}
@@ -626,23 +638,35 @@ export default function CouponsPage() {
 
             {/* Footer */}
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-              <button
-                onClick={() => handleCopyCode(selectedCoupon.code)}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
-              >
-                {copiedCode === selectedCoupon.code ? (
-                  <>
-                    <Check className="w-3.5 h-3.5" /> Code Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" /> Copy Code
-                  </>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleCopyCode(selectedCoupon.code)}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
+                >
+                  {copiedCode === selectedCoupon.code ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" /> Code Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" /> Copy Code
+                    </>
+                  )}
+                </button>
+
+                {isInstructor && (
+                  <Link
+                    href={`/coupons/create?edit=${encodeURIComponent(selectedCoupon.name)}`}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/20 cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" /> Edit Coupon
+                  </Link>
                 )}
-              </button>
+              </div>
+
               <button
                 onClick={() => setSelectedCoupon(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
               >
                 Close
               </button>
