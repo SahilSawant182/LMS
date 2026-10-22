@@ -811,45 +811,83 @@ export const getQuizSubmissionDetails = async (submission: string | { submission
   return getQuizResult(submissionId);
 };
 
-export const getQuizResult = async (submission: string) => {
-  if (!submission) return null;
+export const getQuizResult = async (submission: string | { submission: string }) => {
+  const submissionId = typeof submission === 'string' ? submission : (submission as any)?.submission;
+  if (!submissionId) return null;
 
-  // 1. Try get_quiz_submission_details
-  try {
-    const res = await apiService.get(
-      "method/lms.lms.doctype.lms_quiz_submission.lms_quiz_submission.get_quiz_submission_details",
-      { params: { submission } }
-    );
-    const data = res?.message?.data || res?.data || res?.message || res;
-    if (data) return data;
-  } catch (e) {}
+  console.log("getQuizResult calling with submissionId:", submissionId);
 
-  // 2. Primary method: lms.lms.doctype.lms_course.lms_course.get_quiz_result
-  try {
-    const res = await apiService.get(
-      "method/lms.lms.doctype.lms_course.lms_course.get_quiz_result",
-      { params: { submission } }
-    );
-    const data = res?.message?.data || res?.data || res?.message || res;
-    if (data) return data;
-  } catch (err) {
-    // Fallback if backend registered with 'octype'
+  const extractResultData = (raw: any) => {
+    if (!raw || typeof raw !== "object") return null;
+    const candidates = [
+      raw?.data?.data,
+      raw?.message?.data,
+      raw?.data,
+      raw?.message,
+      raw
+    ];
+    for (const c of candidates) {
+      if (
+        c &&
+        typeof c === "object" &&
+        (c.score !== undefined ||
+          c.marks !== undefined ||
+          c.percentage !== undefined ||
+          c.status !== undefined ||
+          c.result !== undefined ||
+          c.submission !== undefined ||
+          c.submission_id !== undefined ||
+          c.name !== undefined ||
+          c.quiz !== undefined ||
+          c.questions !== undefined ||
+          c.answers !== undefined)
+      ) {
+        return c;
+      }
+    }
+    if (Object.keys(raw).length > 0 && !raw.message && !raw.success) {
+      return raw;
+    }
+    return null;
+  };
+
+  // 1. Primary method requested: lms.lms.doctype.lms_course.lms_course.get_quiz_result
+  const methods = [
+    "method/lms.lms.doctype.lms_course.lms_course.get_quiz_result",
+    "method/lms.lms.octype.lms_course.lms_course.get_quiz_result",
+    "method/lms.lms.doctype.lms_quiz_submission.lms_quiz_submission.get_quiz_submission_details"
+  ];
+
+  for (const methodUrl of methods) {
+    // Try GET with query param ?submission= first (matches confirmed endpoint)
     try {
-      const res = await apiService.get(
-        "method/lms.lms.octype.lms_course.lms_course.get_quiz_result",
-        { params: { submission } }
-      );
-      const data = res?.message?.data || res?.data || res?.message || res;
-      if (data) return data;
-    } catch (e) {
-      console.warn("get_quiz_result primary and octype calls failed:", err);
+      const res = await apiService.get(methodUrl, {
+        params: { submission: submissionId }
+      });
+      const data = extractResultData(res);
+      if (data) {
+        return data;
+      }
+    } catch (err) {
+      console.warn(`getQuizResult GET ${methodUrl} failed:`, err);
+    }
+
+    // Try POST with body { submission: submissionId } as fallback
+    try {
+      const resPost = await apiService.post(methodUrl, { submission: submissionId });
+      const dataPost = extractResultData(resPost);
+      if (dataPost) {
+        return dataPost;
+      }
+    } catch (errPost) {
+      console.warn(`getQuizResult POST ${methodUrl} failed:`, errPost);
     }
   }
 
-  // 3. Resource fallback
+  // 2. Resource fallback
   try {
-    const res = await apiService.get(`resource/LMS Quiz Submission/${encodeURIComponent(submission)}`);
-    return res?.data || res?.message || res;
+    const res = await apiService.get(`resource/LMS Quiz Submission/${encodeURIComponent(submissionId)}`);
+    return extractResultData(res) || res?.data || res?.message || res;
   } catch (e) {
     return null;
   }

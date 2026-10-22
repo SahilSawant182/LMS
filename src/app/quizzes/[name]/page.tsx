@@ -13,6 +13,7 @@ import {
   CreateQuizSubmissionPayload
 } from "@/services/lms.services";
 import { isAuthorizedInstructor } from "@/services/auth.services";
+import { getCurrentUserEmail } from "@/services/api.services";
 import { formatDate } from "@/utils/formatters";
 import { navigateBack } from "@/utils/navigation";
 import { useParams, useRouter } from "next/navigation";
@@ -139,6 +140,27 @@ export default function QuizDetailsPage() {
 
   const bankMapRef = useRef<Map<string, any>>(new Map());
 
+  const getQuestionTitle = (qIdOrText: string): string => {
+    if (!qIdOrText) return "Question";
+    const clean = String(qIdOrText).trim();
+    const matched =
+      (quiz?.questions || []).find((q: any) =>
+        q.question === clean ||
+        q.name === clean ||
+        q.qts_id === clean ||
+        q.question_id === clean
+      ) || bankMapRef.current.get(clean.toLowerCase());
+
+    return (
+      matched?.question_detail ||
+      matched?.question_title ||
+      matched?.question_text ||
+      matched?.title ||
+      (matched?.question && !matched.question.startsWith("QTS-") ? matched.question : "") ||
+      clean
+    );
+  };
+
   const resolveQuestionId = (q: any): string => {
     if (!q) return "";
     if (typeof q.qts_id === "string" && q.qts_id.startsWith("QTS-")) return q.qts_id.trim();
@@ -183,15 +205,13 @@ export default function QuizDetailsPage() {
 
   const fetchSubmissions = async () => {
     if (!name) return;
+    const isInst = isAuthorizedInstructor();
+    // get_quiz_submissions is strictly for instructors managing student submissions
+    if (!isInst) return;
+
     setLoadingSubmissions(true);
     try {
-      const email = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
-      const isInst = isAuthorizedInstructor();
       const filters: any = { quiz: name };
-      // For student role, filter by member/user; for instructor, list all student submissions
-      if (!isInst && email) {
-        filters.member = email;
-      }
       const res = await getQuizSubmissions(filters);
       setSubmissions(Array.isArray(res) ? res : []);
     } catch (e) {
@@ -206,13 +226,18 @@ export default function QuizDetailsPage() {
     setLoadingResult(true);
     setResultModalOpen(true);
     try {
-      const res = await getQuizSubmissionDetails(submissionId);
-      setSelectedResult(res || { submission: submissionId });
+      const res = await getQuizResult(submissionId);
+      if (res) {
+        setSelectedResult(res);
+      } else {
+        const detailsRes = await getQuizSubmissionDetails(submissionId);
+        setSelectedResult(detailsRes || { submission: submissionId });
+      }
     } catch (e) {
-      console.warn("Failed to fetch quiz submission details:", e);
+      console.warn("Failed to fetch quiz result:", e);
       try {
-        const fallbackRes = await getQuizResult(submissionId);
-        setSelectedResult(fallbackRes || { submission: submissionId });
+        const detailsRes = await getQuizSubmissionDetails(submissionId);
+        setSelectedResult(detailsRes || { submission: submissionId });
       } catch (err) {
         setSelectedResult({ submission: submissionId });
       }
@@ -409,7 +434,7 @@ export default function QuizDetailsPage() {
             questions: data.questions,
           });
         } else {
-          setError("Assessment details could not be loaded.");
+          setError("Quiz details could not be loaded.");
         }
       } catch (err: any) {
         setError(err.message || "Failed to fetch quiz details");
@@ -419,7 +444,9 @@ export default function QuizDetailsPage() {
     };
 
     fetchQuiz();
-    fetchSubmissions();
+    if (isAuthorizedInstructor()) {
+      fetchSubmissions();
+    }
   }, [name]);
 
   const primaryAuthor = useMemo(() => {
@@ -437,6 +464,35 @@ export default function QuizDetailsPage() {
     }
     return 0;
   }, [quiz]);
+
+  // Automatic effect to guarantee get_quiz_result is loaded after submission (must be declared before early returns)
+  useEffect(() => {
+    if (submitted && !lastSubmissionResult) {
+      const fetchResult = async () => {
+        try {
+          let sid = lastSubmissionId;
+          if (!sid) {
+            const userEmail = getCurrentUserEmail();
+            const subs = await getQuizSubmissions({ quiz: quiz?.name || name, member: userEmail });
+            if (Array.isArray(subs) && subs.length > 0) {
+              sid = subs[0]?.name || subs[0]?.submission;
+              if (sid) setLastSubmissionId(sid);
+              if (subs[0] && (subs[0].score !== undefined || subs[0].percentage !== undefined)) {
+                setLastSubmissionResult(subs[0]);
+              }
+            }
+          }
+          if (sid) {
+            const resData = await getQuizResult(sid);
+            if (resData) setLastSubmissionResult(resData);
+          }
+        } catch (e) {
+          console.warn("Automatic post-submission getQuizResult fetch failed:", e);
+        }
+      };
+      fetchResult();
+    }
+  }, [submitted, lastSubmissionId, lastSubmissionResult, quiz, name]);
 
   if (loading) {
     return (
@@ -572,66 +628,143 @@ export default function QuizDetailsPage() {
         answers: answersPayload
       };
 
+      console.log("Submitting quiz payload:", payload);
       const res = await createQuizSubmission(payload);
-      
-      const subId =
-        typeof res === "string"
-          ? res
-          : (res?.name || res?.submission || res?.submission_name || res?.data?.name || res?.message?.name || res?.id || "");
+      console.log("createQuizSubmission response:", res);
+
+      const isValidSubmissionId = (id: any): boolean => {
+        if (!id || typeof id !== "string") return false;
+        const s = id.trim();
+        if (s.length === 0 || s.length > 60) return false;
+        if (s.includes(" ") || s.includes("\n") || s.includes("\t")) return false;
+        const lower = s.toLowerCase();
+        if (
+          lower.includes("success") ||
+          lower.includes("created") ||
+          lower.includes("failed") ||
+          lower.includes("error") ||
+          lower.includes("submitted") ||
+          lower.includes("completed") ||
+          lower.includes("true") ||
+          lower.includes("false")
+        ) {
+          return false;
+        }
+        return true;
+      };
+
+      let subId = "";
+      if (isValidSubmissionId(res)) {
+        subId = String(res).trim();
+      } else if (res && typeof res === "object") {
+        const candidates = [
+          res.name,
+          res.submission,
+          res.submission_name,
+          res.id,
+          res.data?.name,
+          res.data?.submission,
+          res.data?.id,
+          res.message?.name,
+          res.message?.submission,
+          res.message?.data?.name,
+          res.message?.data?.submission,
+          typeof res.message === "string" ? res.message : ""
+        ];
+        for (const c of candidates) {
+          if (isValidSubmissionId(c)) {
+            subId = c.trim();
+            break;
+          }
+        }
+      }
+
+      // If subId is still not extracted from res, immediately look up the latest submission for this quiz
+      if (!subId) {
+        try {
+          const userEmail = getCurrentUserEmail();
+          const subs = await getQuizSubmissions({ quiz: quiz.name || name, member: userEmail });
+          if (Array.isArray(subs) && subs.length > 0) {
+            const firstSub = subs[0];
+            const candidateId = firstSub?.name || firstSub?.submission;
+            if (isValidSubmissionId(candidateId)) {
+              subId = candidateId;
+            }
+            if (firstSub && (firstSub.score !== undefined || firstSub.percentage !== undefined || firstSub.status)) {
+              setLastSubmissionResult(firstSub);
+            }
+          }
+        } catch (subErr) {
+          console.warn("Could not retrieve latest submission ID from list:", subErr);
+        }
+      }
 
       if (subId) {
         setLastSubmissionId(subId);
         try {
-          const details = await getQuizSubmissionDetails(subId);
-          if (details) {
-            setLastSubmissionResult(details);
+          // Explicitly call get_quiz_result immediately after create_quiz_submission as required
+          console.log("Triggering getQuizResult for submission ID:", subId);
+          const resultData = await getQuizResult(subId);
+          if (resultData) {
+            console.log("getQuizResult response data:", resultData);
+            setLastSubmissionResult(resultData);
           }
         } catch (detailErr) {
-          console.warn("Could not fetch submission details immediately:", detailErr);
+          console.warn("Could not fetch quiz result immediately:", detailErr);
         }
       }
 
-      await fetchSubmissions();
+      // Only instructors need to fetch student submissions
+      if (isInstructor) {
+        await fetchSubmissions();
+      }
       setSubmitted(true);
     } catch (err: any) {
       console.error("Failed to submit quiz:", err);
-      setSubmissionError(err?.message || "Failed to submit assessment. Please try again.");
+      setSubmissionError(err?.message || "Failed to submit quiz. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const currentQuestion = quiz.questions?.[currentQuestionIndex];
-  const isLastQuestion = quiz.questions ? currentQuestionIndex === quiz.questions.length - 1 : true;
-  const progressPercentage = quiz.questions?.length
+  const currentQuestion = quiz?.questions?.[currentQuestionIndex];
+  const isLastQuestion = quiz?.questions ? currentQuestionIndex === quiz.questions.length - 1 : true;
+  const progressPercentage = quiz?.questions?.length
     ? ((currentQuestionIndex + 1) / quiz.questions.length) * 100
     : 0;
 
   if (submitted) {
+    const isPassed =
+      lastSubmissionResult?.status === "Passed" ||
+      (lastSubmissionResult?.percentage !== undefined &&
+        Number(lastSubmissionResult.percentage) >= Number(lastSubmissionResult.passing_percentage || quiz.passing_percentage || 100));
+
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <Navbar />
         <div className="flex-1 py-12 px-4 flex flex-col items-center justify-center">
           <div className="bg-white p-8 md:p-10 rounded-2xl shadow-sm max-w-xl w-full text-center border border-gray-200">
-            <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle2 className="w-10 h-10 text-green-500" />
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 ${
+              isPassed ? "bg-emerald-50 text-emerald-500" : "bg-indigo-50 text-indigo-500"
+            }`}>
+              <CheckCircle2 className="w-10 h-10 text-emerald-500" />
             </div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Assessment Submitted</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Quiz Result</h2>
             <p className="text-gray-500 mb-8 text-sm">
               You have completed <span className="font-semibold text-gray-900">{quiz.title || quiz.name}</span>.
             </p>
             
-            {/* Live Evaluation Highlight from get_quiz_submission_details */}
-            {lastSubmissionResult && (
+            {/* Live Evaluation Highlight from get_quiz_result */}
+            {lastSubmissionResult ? (
               <div className="mb-6 p-5 rounded-xl bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/50 border border-indigo-100 text-left">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
-                      Evaluation Result
+                      Quiz Result
                     </span>
                     <h4 className="text-2xl font-extrabold text-gray-900 mt-1">
                       {lastSubmissionResult.score !== undefined ? lastSubmissionResult.score : (lastSubmissionResult.marks ?? "-")}{" "}
-                      <span className="text-xs font-semibold text-gray-400">/ {totalCalculatedMarks} Marks</span>
+                      <span className="text-xs font-semibold text-gray-400">/ {lastSubmissionResult.score_out_of || totalCalculatedMarks} Marks</span>
                     </h4>
                     {lastSubmissionResult.percentage !== undefined && (
                       <p className="text-xs text-gray-500 mt-0.5">
@@ -641,11 +774,11 @@ export default function QuizDetailsPage() {
                   </div>
                   <div>
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold ${
-                      lastSubmissionResult.status === "Passed" || (lastSubmissionResult.percentage !== undefined && Number(lastSubmissionResult.percentage) >= Number(quiz.passing_percentage))
+                      isPassed
                         ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
                         : "bg-rose-100 text-rose-800 border border-rose-200"
                     }`}>
-                      {lastSubmissionResult.status === "Passed" || (lastSubmissionResult.percentage !== undefined && Number(lastSubmissionResult.percentage) >= Number(quiz.passing_percentage)) ? (
+                      {isPassed ? (
                         <>
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                           Passed
@@ -660,11 +793,16 @@ export default function QuizDetailsPage() {
                   </div>
                 </div>
               </div>
+            ) : (
+              <div className="mb-6 p-4 rounded-xl bg-indigo-50/50 border border-indigo-100 text-indigo-700 text-xs flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                <span>Fetching Quiz Result...</span>
+              </div>
             )}
 
             <div className="bg-gray-50 rounded-xl p-6 mb-8 text-left border border-gray-100">
               <h3 className="font-semibold text-gray-900 mb-4 text-xs uppercase tracking-wider">
-                Submission Summary
+                Quiz Result Summary
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
@@ -679,6 +817,53 @@ export default function QuizDetailsPage() {
                   <span className="text-2xl font-bold text-gray-900">{totalCalculatedMarks}</span>
                 </div>
               </div>
+
+              {/* Question Breakdown from get_quiz_result */}
+              {(() => {
+                const resultList = Array.isArray(lastSubmissionResult?.result)
+                  ? lastSubmissionResult.result
+                  : Array.isArray(lastSubmissionResult?.questions)
+                  ? lastSubmissionResult.questions
+                  : [];
+                if (resultList.length === 0) return null;
+
+                return (
+                  <div className="mt-5 pt-5 border-t border-gray-200 space-y-2.5">
+                    <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                      Question Answers & Breakdown
+                    </h4>
+                    <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                      {resultList.map((item: any, idx: number) => {
+                        const qTitle = getQuestionTitle(item.question || item.name);
+                        const ans = item.answer || item.selected_option || "-";
+                        const isCorrect = item.is_correct === 1 || item.is_correct === true || Number(item.marks) > 0;
+                        return (
+                          <div key={idx} className="p-3 bg-white rounded-lg border border-gray-200 text-xs flex items-start justify-between gap-3 shadow-xs">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-900 leading-snug">
+                                {idx + 1}. {qTitle}
+                              </p>
+                              <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
+                                <span>Your answer: <strong className="text-gray-800">{ans}</strong></span>
+                                {item.marks !== undefined && (
+                                  <span className="text-gray-400">• Marks: {item.marks}</span>
+                                )}
+                              </div>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                              isCorrect
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : "bg-rose-50 text-rose-700 border border-rose-200"
+                            }`}>
+                              {isCorrect ? "Correct" : "Incorrect"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {quiz.show_answers ? (
                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex items-center gap-2">
@@ -696,7 +881,7 @@ export default function QuizDetailsPage() {
                   className="inline-flex justify-center items-center px-6 py-2.5 font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors flex-1 text-sm cursor-pointer"
                 >
                   <Eye className="w-4 h-4 mr-1.5" />
-                  View Evaluation
+                  View Quiz Result
                 </button>
               )}
               <button
@@ -708,7 +893,7 @@ export default function QuizDetailsPage() {
                 className="inline-flex justify-center items-center px-6 py-2.5 font-medium rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors flex-1 text-sm shadow-sm cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4 mr-1.5" />
-                Retake Assessment
+                Retake Quiz
               </button>
               <Link
                 href="/quizzes"
@@ -781,7 +966,7 @@ export default function QuizDetailsPage() {
               <div className="p-6 md:p-8">
                 <div className="flex justify-between items-start mb-6 gap-4">
                   <h2 className="text-xl md:text-2xl font-semibold text-gray-900 leading-snug">
-                    {currentQuestion.question_detail || currentQuestion.question || "Assessment Question"}
+                    {currentQuestion.question_detail || currentQuestion.question || "Quiz Question"}
                   </h2>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
@@ -1001,7 +1186,7 @@ export default function QuizDetailsPage() {
               }`}
             >
               <FileQuestion className="w-4 h-4" />
-              <span>Assessment Details</span>
+              <span>Quiz Details</span>
             </button>
             <button
               onClick={() => setActiveTab("submissions")}
@@ -1032,7 +1217,7 @@ export default function QuizDetailsPage() {
                   <div>
                     <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                       <Users className="w-5 h-5 text-indigo-600" />
-                      Student Assessment Submissions
+                      Student Quiz Submissions
                     </h3>
                     <p className="text-xs text-gray-500 mt-1">
                       Showing all student attempts for <span className="font-semibold text-gray-700">{quiz.title || quiz.name}</span>. Click on any row to view full result breakdown.
@@ -1133,7 +1318,7 @@ export default function QuizDetailsPage() {
                     <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
                       <FileQuestion className="w-4 h-4 text-indigo-600" />
                     </div>
-                    Assessment Details
+                    Quiz Details
                   </h3>
                   {isInstructor && (
                     <span className="text-xs text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md font-semibold border border-indigo-100">
@@ -1255,7 +1440,7 @@ export default function QuizDetailsPage() {
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                         <History className="w-4 h-4 text-indigo-600" />
-                        Your Assessment History & Results
+                        Your Quiz History & Results
                       </h4>
                       <span className="text-[11px] text-slate-500">
                         {submissions.length} / {quiz.max_attempts} attempts used
@@ -1323,7 +1508,7 @@ export default function QuizDetailsPage() {
                 <div className="bg-gray-50/80 rounded-xl p-5 border border-gray-200 mb-6">
                   <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-4 flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                    Assessment Policy & Settings
+                    Quiz Policy & Settings
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
                     <div className="flex items-start gap-2.5">
@@ -1432,7 +1617,7 @@ export default function QuizDetailsPage() {
                       onClick={startQuiz}
                       className="w-full md:w-1/2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 active:scale-[0.99] cursor-pointer"
                     >
-                      <span>Begin Assessment Now</span>
+                      <span>Start Quiz Now</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   ) : (
@@ -1441,11 +1626,11 @@ export default function QuizDetailsPage() {
                         disabled
                         className="w-full md:w-1/2 px-6 py-3 bg-gray-100 text-gray-400 text-sm font-semibold rounded-xl border border-gray-200 cursor-not-allowed flex items-center justify-center gap-2 mx-auto"
                       >
-                        <span>Begin Assessment Now</span>
+                        <span>Start Quiz Now</span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                       <p className="text-xs text-gray-400 mt-2">
-                        Cannot begin assessment because it currently contains 0 questions.
+                        Cannot begin quiz because it currently contains 0 questions.
                       </p>
                     </div>
                   )}
@@ -1466,7 +1651,7 @@ export default function QuizDetailsPage() {
                   <FileCheck2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-gray-900">Quiz Assessment Result</h3>
+                  <h3 className="text-base font-bold text-gray-900">Quiz Result</h3>
                   <p className="text-xs text-gray-500 font-mono">
                     ID: {selectedResult?.name || selectedResult?.submission || "Evaluation"}
                   </p>
@@ -1495,7 +1680,7 @@ export default function QuizDetailsPage() {
                   <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/50 border border-indigo-100 flex items-center justify-between gap-4">
                     <div>
                       <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
-                        Assessment Performance
+                        Quiz Result
                       </span>
                       <h4 className="text-3xl font-extrabold text-gray-900 mt-1">
                         {selectedResult.score !== undefined ? selectedResult.score : (selectedResult.marks || "-")}{" "}
@@ -1555,36 +1740,55 @@ export default function QuizDetailsPage() {
                   </div>
 
                   {/* Questions Breakdown / Review if available */}
-                  {Array.isArray(selectedResult.questions || selectedResult.results) && (selectedResult.questions || selectedResult.results).length > 0 && (
-                    <div className="space-y-3">
-                      <h5 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Question Breakdown & Answers
-                      </h5>
-                      <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                        {(selectedResult.questions || selectedResult.results).map((item: any, qIdx: number) => (
-                          <div key={qIdx} className="p-3 rounded-lg border border-gray-100 bg-gray-50/50 text-xs flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-medium text-gray-800">
-                                {qIdx + 1}. {item.question || item.title || `Question ${qIdx + 1}`}
-                              </p>
-                              {item.selected_option && (
-                                <p className="text-[11px] text-gray-500 mt-1">
-                                  Your answer: <span className="font-semibold text-gray-700">{item.selected_option}</span>
-                                </p>
-                              )}
-                            </div>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
-                              item.is_correct || item.score > 0
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-rose-50 text-rose-700"
-                            }`}>
-                              {item.is_correct || item.score > 0 ? "Correct" : "Incorrect"}
-                            </span>
-                          </div>
-                        ))}
+                  {(() => {
+                    const resultItems = Array.isArray(selectedResult.result)
+                      ? selectedResult.result
+                      : Array.isArray(selectedResult.questions)
+                      ? selectedResult.questions
+                      : Array.isArray(selectedResult.results)
+                      ? selectedResult.results
+                      : [];
+
+                    if (resultItems.length === 0) return null;
+
+                    return (
+                      <div className="space-y-3">
+                        <h5 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                          Question Breakdown & Answers
+                        </h5>
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                          {resultItems.map((item: any, qIdx: number) => {
+                            const questionText = getQuestionTitle(item.question || item.name);
+                            const answerVal = item.answer || item.selected_option || "-";
+                            const isCorrect = item.is_correct === 1 || item.is_correct === true || Number(item.marks) > 0;
+
+                            return (
+                              <div key={qIdx} className="p-3 rounded-lg border border-gray-100 bg-gray-50/50 text-xs flex items-start justify-between gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-gray-900 leading-snug">
+                                    {qIdx + 1}. {questionText}
+                                  </p>
+                                  <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
+                                    <span>Your answer: <strong className="text-gray-800">{answerVal}</strong></span>
+                                    {item.marks !== undefined && (
+                                      <span className="text-gray-400">• Marks: {item.marks}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                                  isCorrect
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : "bg-rose-50 text-rose-700 border border-rose-200"
+                                }`}>
+                                  {isCorrect ? "Correct" : "Incorrect"}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </>
               ) : (
                 <div className="py-8 text-center text-xs text-gray-500">
