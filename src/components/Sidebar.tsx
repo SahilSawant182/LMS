@@ -31,7 +31,7 @@ import {
   PenTool,
 } from 'lucide-react';
 import CreateChapterModal from '@/components/admin/CreateChapterModal';
-import { logout } from '@/services/auth.services';
+import { logout, isAuthorizedInstructor } from '@/services/auth.services';
 
 interface SidebarProps {
   isOpenMobile?: boolean;
@@ -108,17 +108,7 @@ export default function Sidebar({
   const checkInstructor = (): boolean => {
     if (typeof window === 'undefined') return false;
     try {
-      const rolesStr = localStorage.getItem('roles') || '';
-      const roles = rolesStr.startsWith('[') ? JSON.parse(rolesStr) : rolesStr;
-      const hasRole = Array.isArray(roles)
-        ? roles.some((r: string) =>
-            ['Instructor', 'Administrator', 'System Manager', 'Course Creator'].includes(r)
-          )
-        : ['Instructor', 'Administrator', 'System Manager', 'Course Creator'].some((r: string) =>
-            rolesStr.includes(r)
-          );
-      if (hasRole) return true;
-      if (localStorage.getItem('isInstructor') === 'true') return true;
+      return isAuthorizedInstructor();
     } catch {}
     return false;
   };

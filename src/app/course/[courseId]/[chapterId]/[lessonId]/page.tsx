@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { getLesson, getChapters, getLessons, getCourseProgress, getCourseProgressBar, parseProgressBarValue, createCourseProgress, getCourse } from '@/services/lms.services';
 import { getCourseWithEnrollment } from '@/services/payment.services';
 import { getImageUrl } from '@/services/api.services';
+import { isAuthorizedInstructor } from '@/services/auth.services';
 import { CourseWithEnrollment } from '@/types/payment.types';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
@@ -584,25 +585,7 @@ export default function LessonPage() {
   const checkInstructorRole = (cDataObj?: any, cDetails?: any): boolean => {
     if (typeof window === 'undefined') return false;
     try {
-      const rolesStr = localStorage.getItem('roles') || '';
-      const roles = rolesStr.startsWith('[') ? JSON.parse(rolesStr) : rolesStr;
-      const hasRole = Array.isArray(roles)
-        ? roles.some((r: string) => ['Instructor', 'Administrator', 'System Manager', 'Course Creator'].includes(r))
-        : ['Instructor', 'Administrator', 'System Manager', 'Course Creator'].some(r => rolesStr.includes(r));
-      if (hasRole) return true;
-      if (localStorage.getItem('isInstructor') === 'true') return true;
-      
-      const email = localStorage.getItem('userEmail') || localStorage.getItem('user_email') || '';
-      if (email) {
-        if (cDataObj?.owner === email || cDataObj?.owner === 'Administrator') return true;
-        if (cDetails?.owner === email || cDetails?.owner === 'Administrator') return true;
-        if (Array.isArray(cDataObj?.instructors) && cDataObj.instructors.some((i: any) => 
-          i.instructor === email || i.owner === email || i.name === email || i.username === email
-        )) return true;
-        if (Array.isArray(cDetails?.instructors) && cDetails.instructors.some((i: any) => 
-          i.instructor === email || i.owner === email || i.name === email || i.username === email
-        )) return true;
-      }
+      return isAuthorizedInstructor();
     } catch (e) {}
     return false;
   };
@@ -745,20 +728,40 @@ export default function LessonPage() {
 
         const rawCh = (courseObj && Array.isArray(courseObj.chapters) && courseObj.chapters.length > 0)
           ? courseObj.chapters
-          : (chaptersRes.status === 'fulfilled' ? chaptersRes.value : []);
+          : (cData && Array.isArray((cData as any).chapters) && (cData as any).chapters.length > 0)
+            ? (cData as any).chapters
+            : (chaptersRes.status === 'fulfilled' ? chaptersRes.value : []);
         const rawLe = lessonsRes.status === 'fulfilled' ? lessonsRes.value : [];
         const chArray = Array.isArray(rawCh) ? rawCh : (rawCh?.message?.data || rawCh?.data || rawCh?.message || []);
         const leArray = Array.isArray(rawLe) ? rawLe : (rawLe?.message?.data || rawLe?.data || rawLe?.message || []);
 
-        const mapped = chArray.map((c: any) => {
+        const sortedChArray = [...chArray].sort((a: any, b: any) => {
+          const aIdx = (a.idx !== undefined && a.idx !== null && !isNaN(Number(a.idx))) ? Number(a.idx) : null;
+          const bIdx = (b.idx !== undefined && b.idx !== null && !isNaN(Number(b.idx))) ? Number(b.idx) : null;
+          if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
+            return aIdx - bIdx;
+          }
+          return 0;
+        });
+
+        const mapped = sortedChArray.map((c: any) => {
           let chLessons: any[] = Array.isArray(c.lessons) ? c.lessons : [];
           if (chLessons.length === 0 && leArray.length > 0) {
-            chLessons = leArray.filter((l: any) => l.chapter === c.name);
+            chLessons = leArray.filter((l: any) => l.chapter === c.name || l.chapter === c.title || l.chapter === c.chapter_name);
           }
+
+          const sortedChLessons = [...chLessons].sort((a: any, b: any) => {
+            const aIdx = (a.idx !== undefined && a.idx !== null && !isNaN(Number(a.idx))) ? Number(a.idx) : null;
+            const bIdx = (b.idx !== undefined && b.idx !== null && !isNaN(Number(b.idx))) ? Number(b.idx) : null;
+            if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
+              return aIdx - bIdx;
+            }
+            return 0;
+          });
 
           return {
             ...c,
-            lessons: chLessons.map((l: any) => {
+            lessons: sortedChLessons.map((l: any) => {
               const fromEnroll = enrollLessonsMap.get(l.name);
               const isLessonLocked = instructorUser
                 ? false

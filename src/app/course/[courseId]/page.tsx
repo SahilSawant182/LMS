@@ -10,6 +10,7 @@ import {
 } from '@/services/lms.services';
 import { getCourseWithEnrollment } from '@/services/payment.services';
 import { getImageUrl, getCurrentUserEmail } from '@/services/api.services';
+import { isAuthorizedInstructor } from '@/services/auth.services';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { navigateBack } from '@/utils/navigation';
@@ -122,13 +123,8 @@ export default function CourseDetailPage() {
     if (!courseId) return;
     const checkRoles = () => {
       try {
-        const rolesStr = localStorage.getItem("roles") || "";
-        const roles = rolesStr.startsWith('[') ? JSON.parse(rolesStr) : rolesStr;
-        const hasInstructorRole = Array.isArray(roles)
-          ? roles.some((r: string) => ["Instructor", "Administrator", "System Manager"].includes(r))
-          : (rolesStr.includes("Instructor") || rolesStr.includes("Administrator") || rolesStr.includes("System Manager"));
-        const flag = hasInstructorRole || localStorage.getItem("isInstructor") === "true";
-        setIsInstructor(Boolean(flag));
+        const isAuth = isAuthorizedInstructor();
+        setIsInstructor(isAuth);
         const email = localStorage.getItem("userEmail") || "";
         const name = localStorage.getItem("fullName") || "";
         setCurrentUserEmail(email);
@@ -162,15 +158,8 @@ export default function CourseDetailPage() {
         getCourseWithEnrollment(courseId)
       ]);
 
-      let currentIsInstructor = false;
-      const rolesStr = typeof window !== 'undefined' ? (localStorage.getItem("roles") || "") : "";
-      const roles = rolesStr.startsWith('[') ? JSON.parse(rolesStr) : rolesStr;
-      const hasInstructorRole = Array.isArray(roles)
-        ? roles.some((r: string) => ["Instructor", "Administrator", "System Manager", "Course Creator"].includes(r))
-        : (rolesStr.includes("Instructor") || rolesStr.includes("Administrator") || rolesStr.includes("System Manager"));
-      if (hasInstructorRole || (typeof window !== 'undefined' && localStorage.getItem("isInstructor") === "true")) {
-        currentIsInstructor = true;
-      }
+      const currentIsInstructor = isAuthorizedInstructor();
+      setIsInstructor(currentIsInstructor);
 
       if (enrollRes.status === 'fulfilled' && enrollRes.value) {
         const enrollData = enrollRes.value;
@@ -183,20 +172,14 @@ export default function CourseDetailPage() {
       if (detailsRes.status === 'fulfilled') {
         const d = detailsRes.value?.data || detailsRes.value?.message?.data || detailsRes.value?.message || detailsRes.value;
         setDetails(d);
-        const currentEmail = localStorage.getItem("userEmail") || "";
-        if (d?.instructors && Array.isArray(d.instructors) && currentEmail) {
-          const isAssignedInstructor = d.instructors.some((i: any) => 
-            i.instructor === currentEmail || i.owner === currentEmail || i.name === currentEmail || i.username === currentEmail
-          );
-          if (isAssignedInstructor) {
-            currentIsInstructor = true;
-            setIsInstructor(true);
-          }
-        }
-        if (d?.owner && (d.owner === currentEmail || d.owner === "Administrator")) {
-          currentIsInstructor = true;
+        
+        // Ensure student cannot receive instructor permissions
+        if (!currentIsInstructor) {
+          setIsInstructor(false);
+        } else {
           setIsInstructor(true);
         }
+
         if (enrollRes.status !== 'fulfilled' || !enrollRes.value) {
           if (d && d.membership) {
             setIsEnrolled(true);
@@ -235,26 +218,40 @@ export default function CourseDetailPage() {
         ? (detailsRes.value?.data || detailsRes.value?.message?.data || detailsRes.value?.message || detailsRes.value)
         : null;
 
-      // Prioritize chapters with nested lessons from get_course API
-      if (courseObj && Array.isArray(courseObj.chapters) && courseObj.chapters.length > 0) {
-        const sortedChapters = [...courseObj.chapters].sort((a: any, b: any) => {
-          if (a.idx !== undefined && b.idx !== undefined && a.idx !== b.idx) {
-            return a.idx - b.idx;
+      const rawCourseChapters = (courseObj && Array.isArray(courseObj.chapters) && courseObj.chapters.length > 0)
+        ? courseObj.chapters
+        : (enrollRes.status === 'fulfilled' && enrollRes.value && Array.isArray((enrollRes.value as any).chapters) && (enrollRes.value as any).chapters.length > 0)
+          ? (enrollRes.value as any).chapters
+          : null;
+
+      // Prioritize chapters with nested lessons from get_course / enrollment API
+      if (rawCourseChapters && rawCourseChapters.length > 0) {
+        const sortedChapters = [...rawCourseChapters].sort((a: any, b: any) => {
+          const aIdx = (a.idx !== undefined && a.idx !== null && !isNaN(Number(a.idx))) ? Number(a.idx) : null;
+          const bIdx = (b.idx !== undefined && b.idx !== null && !isNaN(Number(b.idx))) ? Number(b.idx) : null;
+          if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
+            return aIdx - bIdx;
           }
-          return String(a.name || a.title || '').localeCompare(String(b.name || b.title || ''), undefined, { numeric: true });
+          return 0;
         });
 
         const mergedOutline = sortedChapters.map(chapter => {
           let chLessons: any[] = Array.isArray(chapter.lessons) ? chapter.lessons : [];
           if (chLessons.length === 0 && lessonsArray.length > 0) {
-            chLessons = lessonsArray.filter((l: any) => l.chapter === chapter.name);
+            chLessons = lessonsArray.filter((l: any) => 
+              l.chapter === chapter.name || 
+              l.chapter === chapter.title || 
+              l.chapter === chapter.chapter_name
+            );
           }
 
           const sortedLessons = [...chLessons].sort((a: any, b: any) => {
-            if (a.idx !== undefined && b.idx !== undefined && a.idx !== b.idx) {
-              return a.idx - b.idx;
+            const aIdx = (a.idx !== undefined && a.idx !== null && !isNaN(Number(a.idx))) ? Number(a.idx) : null;
+            const bIdx = (b.idx !== undefined && b.idx !== null && !isNaN(Number(b.idx))) ? Number(b.idx) : null;
+            if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
+              return aIdx - bIdx;
             }
-            return String(a.name || a.title || '').localeCompare(String(b.name || b.title || ''), undefined, { numeric: true });
+            return 0;
           });
 
           return {
@@ -263,6 +260,7 @@ export default function CourseDetailPage() {
               const fromEnroll = enrollLessonsMap.get(lesson.name);
               return {
                 ...lesson,
+                chapter: lesson.chapter || chapter.name,
                 is_locked: currentIsInstructor ? false : (fromEnroll?.is_locked !== undefined ? fromEnroll.is_locked : lesson.is_locked),
                 include_in_preview: fromEnroll?.include_in_preview !== undefined ? fromEnroll.include_in_preview : lesson.include_in_preview,
               };
@@ -279,20 +277,44 @@ export default function CourseDetailPage() {
 
         const safeOutline = Array.isArray(outlineArray) ? outlineArray : [];
 
+        const sortedOutline = [...safeOutline].sort((a: any, b: any) => {
+          const aIdx = (a.idx !== undefined && a.idx !== null && !isNaN(Number(a.idx))) ? Number(a.idx) : null;
+          const bIdx = (b.idx !== undefined && b.idx !== null && !isNaN(Number(b.idx))) ? Number(b.idx) : null;
+          if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
+            return aIdx - bIdx;
+          }
+          return 0;
+        });
+
         // Merge lessons into their respective chapters
-        const mergedOutline = safeOutline.map(chapter => ({
-          ...chapter,
-          lessons: lessonsArray
-            .filter(lesson => lesson.chapter === chapter.name)
-            .map(lesson => {
+        const mergedOutline = sortedOutline.map(chapter => {
+          const chLessons = lessonsArray.filter(lesson => 
+            lesson.chapter === chapter.name || 
+            lesson.chapter === chapter.title || 
+            lesson.chapter === chapter.chapter_name
+          );
+          const sortedLessons = [...chLessons].sort((a: any, b: any) => {
+            const aIdx = (a.idx !== undefined && a.idx !== null && !isNaN(Number(a.idx))) ? Number(a.idx) : null;
+            const bIdx = (b.idx !== undefined && b.idx !== null && !isNaN(Number(b.idx))) ? Number(b.idx) : null;
+            if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
+              return aIdx - bIdx;
+            }
+            return 0;
+          });
+
+          return {
+            ...chapter,
+            lessons: sortedLessons.map(lesson => {
               const fromEnroll = enrollLessonsMap.get(lesson.name);
               return {
                 ...lesson,
+                chapter: lesson.chapter || chapter.name,
                 is_locked: currentIsInstructor ? false : (fromEnroll?.is_locked !== undefined ? fromEnroll.is_locked : lesson.is_locked),
                 include_in_preview: fromEnroll?.include_in_preview !== undefined ? fromEnroll.include_in_preview : lesson.include_in_preview,
               };
             })
-        }));
+          };
+        });
 
         setOutline(mergedOutline);
       } else {
@@ -668,9 +690,21 @@ export default function CourseDetailPage() {
   const normalizedProgress = progress?.message?.data || progress?.data || progress?.message || progress || {};
   const parsedPB = progressBarData !== null && progressBarData !== undefined ? parseProgressBarValue(progressBarData) : null;
   const allOutlineLessons = Array.isArray(outline) ? outline.flatMap((c: any) => Array.isArray(c?.lessons) ? c.lessons : []) : [];
-  const progressRecords = normalizedProgress.records || normalizedProgress.data?.records || [];
+  const progressRecords = Array.isArray(normalizedProgress)
+    ? normalizedProgress
+    : (Array.isArray(normalizedProgress?.records)
+        ? normalizedProgress.records
+        : (Array.isArray(normalizedProgress?.data?.records)
+            ? normalizedProgress.data.records
+            : (Array.isArray(progress?.data)
+                ? progress.data
+                : (Array.isArray(progress?.message) ? progress.message : []))));
 
   const checkOutlineLessonComplete = (l: any) => {
+    if (!l) return false;
+    if (l.is_complete === 1 || l.is_complete === true || l.completed === 1 || l.completed === true || l.status === 'Complete' || l.status === 'Completed') {
+      return true;
+    }
     const lName = (l.name || '').trim().toLowerCase();
     const lTitle = (l.title || l.lesson_name || '').trim().toLowerCase();
     if (!Array.isArray(progressRecords) || progressRecords.length === 0) return false;
@@ -685,6 +719,64 @@ export default function CourseDetailPage() {
         (lTitle && (rLesson === lTitle || rLessonName === lTitle || rTitle === lTitle))
       );
     });
+  };
+
+  // Helper to determine the appropriate starting point for "Continue Learning"
+  const getContinueLearningTarget = () => {
+    const chaptersSource = (outline && outline.length > 0)
+      ? outline
+      : (details && Array.isArray(details.chapters) && details.chapters.length > 0)
+        ? details.chapters
+        : (enrollmentData && Array.isArray((enrollmentData as any).chapters) && (enrollmentData as any).chapters.length > 0)
+          ? (enrollmentData as any).chapters
+          : [];
+
+    if (!chaptersSource || chaptersSource.length === 0) return null;
+
+    // Flatten all lessons across chapters in exact curriculum sequence
+    const flatOutline: { chapter: any; lesson: any }[] = [];
+    for (const chapter of chaptersSource) {
+      if (Array.isArray(chapter.lessons)) {
+        for (const lesson of chapter.lessons) {
+          flatOutline.push({ chapter, lesson });
+        }
+      }
+    }
+
+    if (flatOutline.length === 0) return null;
+
+    // 1. Check if backend explicitly indicates resume/current lesson in membership or progress
+    const backendLessonId = 
+      details?.membership?.current_lesson ||
+      enrollmentData?.current_lesson ||
+      normalizedProgress?.current_lesson ||
+      normalizedProgress?.next_lesson;
+
+    if (backendLessonId) {
+      const foundIdx = flatOutline.findIndex(item => 
+        item.lesson.name === backendLessonId || 
+        item.lesson.title === backendLessonId ||
+        item.lesson.lesson_name === backendLessonId
+      );
+      if (foundIdx !== -1) {
+        const foundItem = flatOutline[foundIdx];
+        if (!checkOutlineLessonComplete(foundItem.lesson)) {
+          return foundItem;
+        }
+        if (foundIdx < flatOutline.length - 1) {
+          return flatOutline[foundIdx + 1];
+        }
+      }
+    }
+
+    // 2. Find the FIRST uncompleted lesson in curriculum sequence (the appropriate starting point)
+    const firstUncompleted = flatOutline.find(item => !checkOutlineLessonComplete(item.lesson));
+    if (firstUncompleted) {
+      return firstUncompleted;
+    }
+
+    // 3. If all lessons are completed, start at the first lesson for review
+    return flatOutline[0];
   };
 
   const actualCompletedOutlineCount = allOutlineLessons.filter(l => checkOutlineLessonComplete(l)).length;
@@ -926,10 +1018,7 @@ export default function CourseDetailPage() {
                           {chapter.lessons.map((lesson: any, lIndex: number) => {
                             const isLocked = !isInstructor && !isUserEnrolled && isPaid && !isFree && (lesson.is_locked === true || (!lesson.include_in_preview && lesson.include_in_preview !== 1));
                             const isPreview = !isInstructor && !isUserEnrolled && Boolean(lesson.include_in_preview === 1 || lesson.include_in_preview === true);
-                            const isLessonCompleted = isUserEnrolled && (isCourseComplete || progressRecords.some((r: any) => 
-                              (r.lesson === lesson.name || r.lesson === lesson.title || r.lesson === lesson.lesson_name) && 
-                              (r.status === 'Complete' || r.status === 'Completed' || r.completed === 1)
-                            ));
+                            const isLessonCompleted = isUserEnrolled && (isCourseComplete || checkOutlineLessonComplete(lesson));
 
                             return (
                               <li key={lesson.name || lIndex} className="py-3 flex justify-between items-center group/lesson">
@@ -1565,10 +1654,15 @@ export default function CourseDetailPage() {
                     )}
                     <button
                       onClick={() => {
-                        const firstChapter = outline?.find(c => c.lessons && c.lessons.length > 0) || outline?.[0];
+                        const firstChapter = outline?.find(c => Array.isArray(c.lessons) && c.lessons.length > 0) || outline?.[0];
                         const firstLesson = firstChapter?.lessons?.[0];
                         if (firstChapter && firstLesson) {
-                          router.push(`/course/${courseId}/${encodeURIComponent(firstChapter.name)}/${encodeURIComponent(firstLesson.name)}`);
+                          const chapterParam = firstChapter.name || firstChapter.chapter || firstChapter.title;
+                          const lessonParam = firstLesson.name || firstLesson.lesson_name || firstLesson.title;
+                          router.push(`/course/${courseId}/${encodeURIComponent(chapterParam)}/${encodeURIComponent(lessonParam)}`);
+                        } else {
+                          const elem = document.getElementById("curriculum");
+                          if (elem) elem.scrollIntoView({ behavior: "smooth" });
                         }
                       }}
                       className="w-full font-semibold py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs transition-colors flex justify-center items-center gap-1.5 cursor-pointer"
@@ -1581,10 +1675,11 @@ export default function CourseDetailPage() {
                   <button
                     onClick={() => {
                       if (isUserEnrolled) {
-                        const firstChapter = outline?.find(c => c.lessons && c.lessons.length > 0) || outline?.[0];
-                        const firstLesson = firstChapter?.lessons?.[0];
-                        if (firstChapter && firstLesson) {
-                          router.push(`/course/${courseId}/${encodeURIComponent(firstChapter.name)}/${encodeURIComponent(firstLesson.name)}`);
+                        const target = getContinueLearningTarget();
+                        if (target && target.chapter && target.lesson) {
+                          const chapterParam = target.chapter.name || target.chapter.chapter || target.chapter.title;
+                          const lessonParam = target.lesson.name || target.lesson.lesson_name || target.lesson.title;
+                          router.push(`/course/${courseId}/${encodeURIComponent(chapterParam)}/${encodeURIComponent(lessonParam)}`);
                         } else {
                           const elem = document.getElementById("curriculum");
                           if (elem) elem.scrollIntoView({ behavior: "smooth" });

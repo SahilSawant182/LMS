@@ -2,11 +2,15 @@
 
 import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
+import Link from 'next/link';
 import { getEnrollments, getCourseProgressFiltered, getCourseProgressBar, parseProgressBarValue } from '@/services/lms.services';
+import { getCurrentUserEmail } from '@/services/api.services';
+import { isAuthorizedInstructor } from '@/services/auth.services';
 import { BookOpen, User, Users, Calendar, BookOpenCheck, ArrowRight, TrendingUp, ChevronDown, ChevronUp, CheckCircle, Clock } from 'lucide-react';
 import { formatDate } from '@/utils/formatters';
 
 export default function EnrollmentsPage() {
+  const [isInstructor, setIsInstructor] = useState(false);
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,10 +45,25 @@ export default function EnrollmentsPage() {
   };
 
   useEffect(() => {
+    const isInst = isAuthorizedInstructor();
+    setIsInstructor(isInst);
+
     const fetchEnrollments = async () => {
       try {
-        const res = await getEnrollments();
-        const data = Array.isArray(res) ? res : (res?.data || res?.message?.data || []);
+        const userEmail = getCurrentUserEmail().trim().toLowerCase();
+        const payload = isInst ? {} : (userEmail ? { member: userEmail } : {});
+        const res = await getEnrollments(payload);
+        const rawData = Array.isArray(res) ? res : (res?.data || res?.message?.data || []);
+        let data = Array.isArray(rawData) ? rawData : [];
+
+        // For students, strictly filter to only their own enrollments
+        if (!isInst && userEmail) {
+          data = data.filter((enr: any) => {
+            const member = String(enr.member || enr.owner || enr.user || '').trim().toLowerCase();
+            return member === userEmail || member.includes(userEmail) || userEmail.includes(member);
+          });
+        }
+
         if (data && Array.isArray(data)) {
           setEnrollments(data);
           try {
@@ -87,13 +106,15 @@ export default function EnrollmentsPage() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
           <span className="inline-block px-2.5 py-0.5 mb-2 text-[11px] font-semibold tracking-wide text-indigo-300 uppercase bg-indigo-900/50 border border-indigo-700/50 rounded-md backdrop-blur-sm">
-            Administration
+            {isInstructor ? "Administration" : "My Learning"}
           </span>
           <h1 className="text-2xl md:text-3xl font-extrabold mb-1.5 tracking-tight text-white">
-            Course Enrollments
+            {isInstructor ? "Course Enrollments" : "My Enrollments"}
           </h1>
           <p className="text-xs md:text-sm text-indigo-100/80 max-w-2xl mx-auto font-light">
-            Monitor and manage active student enrollments across all courses.
+            {isInstructor 
+              ? "Monitor and manage active student enrollments across all courses."
+              : "Track your course progress, continue learning, and review your enrolled courses."}
           </p>
         </div>
       </div>
@@ -183,16 +204,24 @@ export default function EnrollmentsPage() {
                     <Calendar className="w-3.5 h-3.5" />
                     Enrolled {formatDate(enrollment.creation.split(' ')[0])}
                   </div>
-                  <button 
-                    onClick={() => handleToggleDetails(enrollment)}
-                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-colors"
-                  >
-                    {expandedId === enrollment.name ? (
-                      <>Hide Details <ChevronUp className="w-3.5 h-3.5" /></>
-                    ) : (
-                      <>View Details <ChevronDown className="w-3.5 h-3.5" /></>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/course/${encodeURIComponent(enrollment.course)}`}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-colors bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs hover:border-indigo-200"
+                    >
+                      Continue <ArrowRight className="w-3 h-3" />
+                    </Link>
+                    <button 
+                      onClick={() => handleToggleDetails(enrollment)}
+                      className="text-xs font-semibold text-slate-600 hover:text-slate-800 flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      {expandedId === enrollment.name ? (
+                        <>Hide <ChevronUp className="w-3.5 h-3.5" /></>
+                      ) : (
+                        <>Details <ChevronDown className="w-3.5 h-3.5" /></>
+                      )}
+                    </button>
+                  </div>
                 </div>
                 
                 {/* Expanded Progress Section */}
