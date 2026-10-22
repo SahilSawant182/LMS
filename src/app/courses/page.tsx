@@ -6,9 +6,10 @@ import CourseCard from "@/components/CourseCard";
 import Pagination from "@/components/ui/Pagination";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getCourses, deleteCourse } from "@/services/lms.services";
+import { getCourses, deleteCourse, updateCourse } from "@/services/lms.services";
 import { getCoursesWithEnrollment } from "@/services/payment.services";
 import { getImageUrl } from "@/services/api.services";
+import { showToast } from "@/components/ui/Toast";
 import {
   Search,
   BookOpen,
@@ -142,6 +143,28 @@ export default function CoursesPage() {
 
   const handleEdit = (courseId: string) => {
     router.push(`/course/${courseId}/edit`);
+  };
+
+  const handlePublish = async (course: any) => {
+    const courseId = course.name || course.course;
+    if (!courseId) return;
+    try {
+      await updateCourse({
+        ...course,
+        name: courseId,
+        course: courseId,
+        course_name: courseId,
+        title: course.title || courseId,
+        published: 1,
+      });
+      showToast.success(`Course "${course.title || courseId}" published successfully!`);
+      setCourses(prev =>
+        prev.map(c => ((c.name || c.course) === courseId ? { ...c, published: 1 } : c))
+      );
+    } catch (err: any) {
+      console.error("Failed to publish course:", err);
+      showToast.error(err?.message || "Failed to publish course");
+    }
   };
 
   const handleDelete = async (courseId: string) => {
@@ -364,6 +387,8 @@ export default function CoursesPage() {
                             ).toLocaleString("en-IN")}`
                           : "Free"
                       }
+                      published={course.published}
+                      onPublish={isInstructor && !course.published ? () => handlePublish(course) : undefined}
                       onEdit={isInstructor ? () => handleEdit(course.name) : undefined}
                       onDelete={isInstructor ? () => handleDelete(course.name) : undefined}
                     />

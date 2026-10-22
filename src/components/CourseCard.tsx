@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star, Users, BookOpen, ArrowRight, Edit2, Trash2, CheckCircle } from 'lucide-react';
+import { Star, Users, BookOpen, ArrowRight, Edit2, Trash2, CheckCircle, Globe, Lock } from 'lucide-react';
 
 export interface CourseCardProps {
   image?: string;
@@ -15,8 +15,10 @@ export interface CourseCardProps {
   cardGradient?: string;
   description?: string;
   isEnrolled?: boolean;
+  published?: boolean | number;
   onEdit?: (e: React.MouseEvent) => void;
   onDelete?: (e: React.MouseEvent) => void;
+  onPublish?: (e: React.MouseEvent) => void;
 }
 
 export default function CourseCard({
@@ -33,8 +35,10 @@ export default function CourseCard({
   cardGradient,
   description,
   isEnrolled = false,
+  published,
   onEdit,
-  onDelete
+  onDelete,
+  onPublish
 }: CourseCardProps) {
 
   const enrolled = Boolean(isEnrolled || (price && price.trim().toLowerCase() === 'enrolled'));
@@ -79,9 +83,18 @@ export default function CourseCard({
           <div className="text-gray-400 font-medium bg-gray-200 w-full h-full flex items-center justify-center">No Image</div>
         )}
 
-        {/* Floating actions for Edit/Delete */}
-        {(onEdit || onDelete) && (
-          <div className="absolute top-3 left-3 flex gap-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        {/* Floating actions for Edit/Delete/Publish */}
+        {(onEdit || onDelete || onPublish) && (
+          <div className="absolute top-3 left-3 flex items-center gap-1.5 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            {onPublish && (
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPublish(e); }}
+                className="bg-emerald-600 p-1.5 rounded-full text-white hover:bg-emerald-700 shadow-md transition-colors"
+                title="Publish Course Directly"
+              >
+                <Globe className="w-4 h-4" />
+              </button>
+            )}
             {onEdit && (
               <button
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit(e); }}
@@ -103,8 +116,16 @@ export default function CourseCard({
           </div>
         )}
 
+        {/* Draft Badge over Image */}
+        {(published === false || published === 0) && (
+          <div className="absolute top-3 left-3 group-hover:opacity-0 transition-opacity bg-amber-500/90 text-white px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-md z-20 flex items-center gap-1 backdrop-blur-sm">
+            <Lock className="w-3 h-3" />
+            <span>Draft</span>
+          </div>
+        )}
+
         {/* Enrolled Badge over Image */}
-        {enrolled && !(onEdit || onDelete) && (
+        {enrolled && !(onEdit || onDelete || onPublish) && (published !== false && published !== 0) && (
           <div className="absolute top-3 left-3 bg-emerald-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md z-20 flex items-center gap-1 backdrop-blur-sm">
             <CheckCircle className="w-3.5 h-3.5" />
             <span>Enrolled</span>

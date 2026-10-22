@@ -7,7 +7,7 @@ import {
   BookOpen, Check, X, Loader2, Sparkles, Upload, 
   PlayCircle, DollarSign, Award, Layers, Eye, 
   Palette, Tag, ShieldCheck, Clock, Trash2, ArrowLeft,
-  CheckCircle2, Lock, Image as ImageIcon
+  CheckCircle2, Lock, Image as ImageIcon, Globe
 } from 'lucide-react';
 import { createCourse, updateCourse, deleteCourse, getMasterData, getCategoryList, CreateCoursePayload, normalizeCourseColor } from '@/services/lms.services';
 import { uploadFile, getImageUrl } from '@/services/api.services';
@@ -208,8 +208,10 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent, forcePublished?: boolean) => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
     if (!formData.title.trim()) {
       setError('Please provide a course title.');
       return;
@@ -227,6 +229,8 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
       const parsedUsd = isNaN(rawUsd) ? 0 : rawUsd;
       const isPaid = Boolean(formData.paid_course || parsedPrice > 0);
 
+      const isPublished = forcePublished !== undefined ? forcePublished : Boolean(formData.published);
+
       // Build clean JSON payload matching API specification
       const normalizedColor = normalizeCourseColor(formData.card_gradient || 'Blue');
       const payload: CreateCoursePayload = {
@@ -236,7 +240,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
         title: formData.title.trim(),
         short_introduction: formData.short_introduction.trim(),
         description: formData.description.trim(),
-        published: formData.published ? 1 : 0,
+        published: isPublished ? 1 : 0,
         video_link: formData.video_link.trim(),
         tags: formData.tags.trim(),
         category: formData.category.trim() || 'Business',
@@ -257,11 +261,16 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
 
       if (isEditing) {
         await updateCourse(payload);
-        setSuccess('Course updated successfully!');
+        setFormData(prev => ({ ...prev, published: isPublished }));
+        setSuccess(isPublished ? 'Course updated and published successfully!' : 'Course updated and saved as draft!');
       } else {
         const res = await createCourse(payload);
         const createdName = res?.data?.name || res?.message?.name || res?.data?.data?.name || res?.name;
-        setSuccess('Course created successfully!');
+        setSuccess(
+          isPublished 
+            ? 'Course created and published successfully!' 
+            : 'Course saved as draft! Redirecting to course studio...'
+        );
         setTimeout(() => {
           if (createdName) {
             router.push(`/course/${encodeURIComponent(createdName)}`);
@@ -955,7 +964,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
             )}
           </div>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => {
@@ -965,29 +974,38 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                   router.push('/courses');
                 }
               }}
-              className="flex-1 sm:flex-none px-6 py-3 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              className="px-5 py-3 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             >
               Cancel
             </button>
+
+            {/* Save as Draft Button */}
             <button
-              type="submit"
+              type="button"
+              onClick={(e) => handleSubmit(e, false)}
               disabled={loading || uploadingImage}
-              className="flex-1 sm:flex-none px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              className="flex-1 sm:flex-none px-5 py-3 border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs sm:text-sm rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+            >
+              <Lock className="w-4 h-4 text-amber-500" />
+              <span>{isEditing && !formData.published ? 'Save Draft Changes' : 'Save as Draft'}</span>
+            </button>
+
+            {/* Publish Course Button */}
+            <button
+              type="button"
+              onClick={(e) => handleSubmit(e, true)}
+              disabled={loading || uploadingImage}
+              className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Saving Course...</span>
-                </>
-              ) : isEditing ? (
-                <>
-                  <Check className="w-4 h-4" />
-                  <span>Save Changes</span>
+                  <span>Saving...</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>Create Course</span>
+                  <Globe className="w-4 h-4" />
+                  <span>{isEditing && formData.published ? 'Save & Keep Published' : 'Publish Course'}</span>
                 </>
               )}
             </button>

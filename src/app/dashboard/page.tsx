@@ -39,7 +39,8 @@ import {
   ClipboardCheck,
   Award,
   ExternalLink,
-  Loader2
+  Loader2,
+  Globe
 } from "lucide-react";
 import {
   getStudentDashboard,
@@ -50,7 +51,8 @@ import {
   InstructorDashboardData
 } from "@/services/payment.services";
 import { getInstructorSalesReport } from "@/services/billing.services";
-import { getCourseProgressBar, parseProgressBarValue } from "@/services/lms.services";
+import { getCourseProgressBar, parseProgressBarValue, updateCourse } from "@/services/lms.services";
+import { showToast } from "@/components/ui/Toast";
 import { MonthlyBreakdownItem } from "@/types/billing.types";
 import { getImageUrl } from "@/services/api.services";
 import { formatDate } from "@/utils/formatters";
@@ -85,6 +87,39 @@ export function DashboardContent() {
   const [adminLiveClasses, setAdminLiveClasses] = useState<LMSLiveClass[]>([]);
   const [loadingLiveClasses, setLoadingLiveClasses] = useState(false);
   const [joiningClassId, setJoiningClassId] = useState<string | null>(null);
+  const [publishingCourseId, setPublishingCourseId] = useState<string | null>(null);
+
+  const handlePublishDashboardCourse = async (course: any) => {
+    const courseId = course.name || course.course;
+    if (!courseId) return;
+    setPublishingCourseId(courseId);
+    try {
+      await updateCourse({
+        ...course,
+        name: courseId,
+        course: courseId,
+        course_name: courseId,
+        title: course.title || courseId,
+        published: 1,
+      });
+      setInstructorData((prev: any) => {
+        if (!prev) return prev;
+        const updatedCourses = (prev.courses || []).map((c: any) => {
+          if ((c.name || c.course) === courseId) {
+            return { ...c, published: 1 };
+          }
+          return c;
+        });
+        return { ...prev, courses: updatedCourses };
+      });
+      showToast.success(`Course "${course.title || courseId}" published successfully!`);
+    } catch (err: any) {
+      console.error("Failed to publish course from dashboard:", err);
+      showToast.error(err?.message || "Failed to publish course");
+    } finally {
+      setPublishingCourseId(null);
+    }
+  };
 
   const handleStudentJoinSession = async (cls: LMSLiveClass) => {
     setJoiningClassId(cls.name);
@@ -1346,7 +1381,7 @@ export function DashboardContent() {
 
                               {/* Title & Horizontal Fill Bar */}
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
                                   <Link
                                     href={`/course/${encodeURIComponent(c.name)}`}
                                     className="font-extrabold text-sm text-slate-900 hover:text-indigo-600 transition-colors truncate block"
@@ -1354,11 +1389,22 @@ export function DashboardContent() {
                                   >
                                     {c.title}
                                   </Link>
-                                  {c.category && (
-                                    <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 shrink-0">
-                                      {c.category}
-                                    </span>
-                                  )}
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {!c.published ? (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                        Draft
+                                      </span>
+                                    ) : (
+                                      <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        Published
+                                      </span>
+                                    )}
+                                    {c.category && (
+                                      <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
+                                        {c.category}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
 
                                 {/* Proportional Fill Bar */}
@@ -1399,7 +1445,23 @@ export function DashboardContent() {
                                 )}
                               </div>
 
-                              <div className="flex items-center gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                              <div className="flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
+                                {!c.published && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePublishDashboardCourse(c)}
+                                    disabled={publishingCourseId === c.name}
+                                    className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200 flex items-center gap-1 transition-all cursor-pointer disabled:opacity-50"
+                                    title="Publish this course directly"
+                                  >
+                                    {publishingCourseId === c.name ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                      <Globe className="w-3.5 h-3.5" />
+                                    )}
+                                    <span>Publish</span>
+                                  </button>
+                                )}
                                 <Link
                                   href={`/course/${encodeURIComponent(c.name)}/edit`}
                                   className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors"
