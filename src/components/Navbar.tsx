@@ -581,7 +581,9 @@ export default function Navbar() {
 
               {isAuthenticated ? (
                 <div className="flex items-center space-x-3 relative">
-                  <NotificationBell />
+                  <div className="whitespace-normal">
+                    <NotificationBell />
+                  </div>
 
                   <div className="relative" ref={dropdownRef}>
                     <button
