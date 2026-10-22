@@ -121,7 +121,26 @@ export default function CreateBadgePage() {
         res?.data?.name ||
         res?.message ||
         title;
-      setSuccessBadgeName(typeof badgeId === 'string' ? badgeId : title);
+      const finalBadgeId = typeof badgeId === 'string' ? badgeId : title;
+      setSuccessBadgeName(finalBadgeId);
+
+      if (typeof window !== 'undefined') {
+        const uEmail = (
+          localStorage.getItem('userEmail') ||
+          localStorage.getItem('email') ||
+          localStorage.getItem('user') ||
+          ''
+        ).toLowerCase().trim();
+        if (uEmail) {
+          const key = `lms_instructor_badges_${uEmail}`;
+          try {
+            const existing = JSON.parse(localStorage.getItem(key) || '[]');
+            existing.push(finalBadgeId);
+            existing.push(title.trim());
+            localStorage.setItem(key, JSON.stringify(existing));
+          } catch {}
+        }
+      }
     } catch (err: any) {
       console.error('Create badge failed:', err);
       setError(

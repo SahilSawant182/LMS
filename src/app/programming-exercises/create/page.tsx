@@ -27,12 +27,8 @@ import {
 const SUPPORTED_LANGUAGES = [
   'Python',
   'JavaScript',
-  'TypeScript',
-  'C++',
-  'Java',
-  'C',
-  'Go',
   'Rust',
+  'Go',
 ];
 
 const PREDEFINED_TEMPLATES = [
@@ -40,6 +36,16 @@ const PREDEFINED_TEMPLATES = [
     title: 'Python Addition',
     language: 'Python',
     problem_statement: '<p>Write a Python program to add two integers and print the result.</p>',
+    test_cases: [
+      { input: '2 3', output: '5' },
+      { input: '10 20', output: '30' },
+      { input: '7 8', output: '15' },
+    ],
+  },
+  {
+    title: 'JavaScript Addition',
+    language: 'JavaScript',
+    problem_statement: '<p>Write a JavaScript program that reads two numbers from input and prints their sum.</p>',
     test_cases: [
       { input: '2 3', output: '5' },
       { input: '10 20', output: '30' },
@@ -178,6 +184,10 @@ function CreateProgrammingExerciseForm() {
     const validTestCases = testCases.filter((tc) => tc.output.trim() !== '');
     if (validTestCases.length === 0) {
       setError('Please add at least one test case with an expected output.');
+      return;
+    }
+    if (!SUPPORTED_LANGUAGES.includes(language.trim())) {
+      setError(`Language must be one of: ${SUPPORTED_LANGUAGES.join(', ')}.`);
       return;
     }
 
@@ -358,6 +368,9 @@ function CreateProgrammingExerciseForm() {
                     </option>
                   ))}
                 </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Automated test-runner supports: {SUPPORTED_LANGUAGES.join(', ')}.
+                </p>
               </div>
             </div>
           </div>

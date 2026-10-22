@@ -43,7 +43,8 @@ import {
   deleteBadgeAssignment,
   LMSBadgeAssignment
 } from '@/services/lms.services';
-import { getImageUrl } from '@/services/api.services';
+import { getImageUrl, getCurrentUserEmail } from '@/services/api.services';
+import { getInstructorDashboard } from '@/services/payment.services';
 
 // Format date to DD-MM-YYYY
 const formatDateDDMMYYYY = (dateStr?: string | null): string => {
@@ -75,7 +76,9 @@ export default function BadgesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInstructor, setIsInstructor] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [instructorCourses, setInstructorCourses] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [eventFilter, setEventFilter] = useState<string>('all');
@@ -141,30 +144,33 @@ export default function BadgesPage() {
   };
 
   const isMatchUser = (member?: string, username?: string, currentEmail?: string) => {
-    if (!currentEmail) return true;
+    if (!currentEmail) return false;
     const cur = currentEmail.toLowerCase().trim();
     const m = (member || '').toLowerCase().trim();
     const u = (username || '').toLowerCase().trim();
     if (!m && !u) return false;
-    return (
-      m === cur ||
-      u === cur ||
-      (cur.includes('@') && m === cur) ||
-      (m.includes('@') && m.split('@')[0] === cur) ||
-      (cur.includes('@') && cur.split('@')[0] === u) ||
-      (cur.includes('@') && cur.split('@')[0] === m) ||
-      m.includes(cur) ||
-      cur.includes(m)
-    );
+
+    // Exact matches
+    if (m === cur || u === cur) return true;
+
+    // Email username portion match (e.g. "teena" matches "teena@erpdata.in")
+    const curPrefix = cur.includes('@') ? cur.split('@')[0] : cur;
+    const mPrefix = m.includes('@') ? m.split('@')[0] : m;
+    const uPrefix = u.includes('@') ? u.split('@')[0] : u;
+
+    if (mPrefix === curPrefix && curPrefix.length >= 3) return true;
+    if (uPrefix === curPrefix && curPrefix.length >= 3) return true;
+
+    return false;
   };
 
   const fetchAssignments = async () => {
     setLoadingAssignments(true);
     setAssignmentError(null);
     try {
-      const email = getStoredUserEmail();
+      const email = (getCurrentUserEmail() || getStoredUserEmail()).toLowerCase().trim();
       const roles = typeof window !== 'undefined' ? localStorage.getItem('roles') || '' : '';
-      const isInst = roles.includes('Instructor') || roles.includes('Administrator') || roles.includes('System Manager');
+      const isInst = roles.includes('Instructor') || roles.includes('Administrator') || roles.includes('System Manager') || roles.includes('Course Creator');
       
       let data: LMSBadgeAssignment[] = [];
       // If student view, first attempt with member filter
@@ -200,15 +206,30 @@ export default function BadgesPage() {
   };
 
   const checkAuthAndFetch = () => {
+    let instructorFlag = false;
+    let adminFlag = false;
+    let email = '';
     if (typeof window !== 'undefined') {
       const roles = localStorage.getItem('roles') || '';
-      const email = getStoredUserEmail();
-      const instructorFlag = roles.includes('Instructor') || roles.includes('Administrator') || roles.includes('System Manager');
+      email = (getCurrentUserEmail() || getStoredUserEmail()).toLowerCase().trim();
+      adminFlag = roles.includes('Administrator') || roles.includes('System Manager');
+      instructorFlag = adminFlag || roles.includes('Instructor') || roles.includes('Course Creator');
       setIsInstructor(instructorFlag);
+      setIsAdmin(adminFlag);
       setUserEmail(email);
     }
     fetchBadges();
     fetchAssignments();
+
+    if (instructorFlag && !adminFlag) {
+      getInstructorDashboard().then((iData) => {
+        if (iData && Array.isArray(iData.courses)) {
+          setInstructorCourses(iData.courses);
+        }
+      }).catch((e) => {
+        console.warn('Could not load instructor courses in badges page:', e);
+      });
+    }
   };
 
   useEffect(() => {
@@ -243,6 +264,111 @@ export default function BadgesPage() {
     return map;
   }, [badges]);
 
+  // Set of courses associated with this instructor
+  const instructorCourseNames = useMemo(() => {
+    const set = new Set<string>();
+    instructorCourses.forEach((c: any) => {
+      if (c.name) set.add(String(c.name).toLowerCase().trim());
+      if (c.title) set.add(String(c.title).toLowerCase().trim());
+    });
+    return set;
+  }, [instructorCourses]);
+
+  // Check if a badge belongs to or is associated with the relevant instructor
+  const isBadgeAssociatedWithInstructor = useMemo(() => {
+    return (b?: LMSBadge | string | null): boolean => {
+      if (!b) return false;
+      if (isAdmin) return true;
+      if (!isInstructor) return true;
+
+      const badgeObj = typeof b === 'string' ? badgeMap.get(b) : b;
+      const bName = typeof b === 'string' ? b : b.name || b.title;
+
+      // 1. Badge owner matches instructor email/username
+      if (badgeObj?.owner && isMatchUser(badgeObj.owner, undefined, userEmail)) {
+        return true;
+      }
+
+      // 2. Locally created badge in instructor's session
+      if (typeof window !== 'undefined' && userEmail) {
+        try {
+          const localBadges: string[] = JSON.parse(
+            localStorage.getItem(`lms_instructor_badges_${userEmail}`) || '[]'
+          );
+          if (
+            Array.isArray(localBadges) &&
+            ((bName && localBadges.includes(bName)) ||
+              (badgeObj?.title && localBadges.includes(badgeObj.title)))
+          ) {
+            return true;
+          }
+        } catch {}
+      }
+
+      // 3. Badge associated with instructor's courses
+      if (badgeObj && instructorCourseNames.size > 0) {
+        const cond = String(badgeObj.condition || '').toLowerCase();
+        const refName = String((badgeObj as any).reference_name || (badgeObj as any).course || '').toLowerCase();
+        for (const cName of instructorCourseNames) {
+          if (cName && (cond.includes(cName) || refName === cName)) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    };
+  }, [isAdmin, isInstructor, badgeMap, userEmail, instructorCourseNames]);
+
+  // Check if a badge assignment was awarded by or associated with the relevant instructor
+  const isAssignmentAssociatedWithInstructor = useMemo(() => {
+    return (item: LMSBadgeAssignment): boolean => {
+      if (isAdmin) return true;
+      if (!isInstructor) {
+        // Student view: only student's own earned badges
+        return isMatchUser(item.member, (item as any).member_username, userEmail);
+      }
+
+      // Instructor view: badges awarded by or associated with the relevant instructor
+
+      // 1. Assignment was awarded by this instructor (owner / awarded_by matches)
+      if (item.owner && isMatchUser(item.owner, (item as any).awarded_by, userEmail)) {
+        return true;
+      }
+      if ((item as any).awarded_by && isMatchUser((item as any).awarded_by, undefined, userEmail)) {
+        return true;
+      }
+
+      // 2. Assignment was awarded in this instructor's session (tracked in localStorage)
+      if (typeof window !== 'undefined' && userEmail) {
+        try {
+          const localAwards: string[] = JSON.parse(
+            localStorage.getItem(`lms_instructor_awarded_assignments_${userEmail}`) || '[]'
+          );
+          if (
+            Array.isArray(localAwards) &&
+            (localAwards.includes(item.name) ||
+              localAwards.includes(`${item.member?.toLowerCase().trim()}::${item.badge?.toLowerCase().trim()}`))
+          ) {
+            return true;
+          }
+        } catch {}
+      }
+
+      // 3. The badge itself is associated with or created by this instructor
+      if (isBadgeAssociatedWithInstructor(item.badge)) {
+        return true;
+      }
+
+      return false;
+    };
+  }, [isAdmin, isInstructor, userEmail, isBadgeAssociatedWithInstructor]);
+
+  // Relevant assignments for the current instructor/student
+  const instructorAssignments = useMemo(() => {
+    return assignments.filter(isAssignmentAssociatedWithInstructor);
+  }, [assignments, isAssignmentAssociatedWithInstructor]);
+
   // Filtered badges catalog
   const filteredBadges = useMemo(() => {
     return badges.filter((b) => {
@@ -265,16 +391,36 @@ export default function BadgesPage() {
     });
   }, [badges, searchTerm, statusFilter, eventFilter]);
 
-  // Filtered assignments
-  const filteredAssignments = useMemo(() => {
-    return assignments.filter((item) => {
-      // If student view, filter to student's email/username
-      if (!isInstructor && userEmail) {
-        if (!isMatchUser(item.member, (item as any).member_username, userEmail)) {
-          return false;
-        }
-      }
+  // Badges relevant to this instructor for filter dropdown in Awarded Badges tab
+  const instructorRelevantBadges = useMemo(() => {
+    if (isAdmin) return badges;
+    if (!isInstructor) return badges;
+    const awardedBadgeNames = new Set(
+      instructorAssignments.map((a) => a.badge).filter(Boolean)
+    );
+    const relevant = badges.filter((b) => {
+      return (
+        (b.name && awardedBadgeNames.has(b.name)) ||
+        (b.title && awardedBadgeNames.has(b.title)) ||
+        isBadgeAssociatedWithInstructor(b)
+      );
+    });
+    return relevant.length > 0 ? relevant : badges;
+  }, [badges, instructorAssignments, isBadgeAssociatedWithInstructor, isAdmin, isInstructor]);
 
+  // Badges that the instructor can select when clicking "Award Badge"
+  const assignableBadges = useMemo(() => {
+    if (isAdmin) return badges.filter((b) => Number(b.enabled) === 1);
+    const relevant = badges.filter(
+      (b) => isBadgeAssociatedWithInstructor(b) && Number(b.enabled) === 1
+    );
+    if (relevant.length > 0) return relevant;
+    return badges.filter((b) => Number(b.enabled) === 1);
+  }, [badges, isAdmin, isBadgeAssociatedWithInstructor]);
+
+  // Filtered assignments (displays only relevant instructor's awarded/associated badges)
+  const filteredAssignments = useMemo(() => {
+    return instructorAssignments.filter((item) => {
       const matchesSearch =
         !assignmentSearchTerm ||
         item.member?.toLowerCase().includes(assignmentSearchTerm.toLowerCase().trim()) ||
@@ -288,7 +434,7 @@ export default function BadgesPage() {
 
       return matchesSearch && matchesBadge;
     });
-  }, [assignments, isInstructor, userEmail, assignmentSearchTerm, assignmentBadgeFilter, badgeMap]);
+  }, [instructorAssignments, assignmentSearchTerm, assignmentBadgeFilter, badgeMap]);
 
   // Pagination for assignments
   const totalAssignmentPages = Math.max(1, Math.ceil(filteredAssignments.length / ASSIGNMENTS_PER_PAGE));
@@ -310,7 +456,14 @@ export default function BadgesPage() {
     setAssignmentModalMode('create');
     setAssignmentFormName('');
     setAssignmentMember('');
-    setAssignmentBadge(preselectedBadge || (badges.length > 0 ? (badges[0].name || '') : ''));
+    const defaultBadge =
+      preselectedBadge ||
+      (assignableBadges.length > 0
+        ? assignableBadges[0].name || assignableBadges[0].title || ''
+        : badges.length > 0
+        ? badges[0].name || ''
+        : '');
+    setAssignmentBadge(defaultBadge);
     setAssignmentIssuedOn(new Date().toISOString().split('T')[0]);
     setAssignmentModalError(null);
     setAssignmentModalOpen(true);
@@ -355,11 +508,25 @@ export default function BadgesPage() {
       setAssignmentModalError(null);
 
       if (assignmentModalMode === 'create') {
-        await createBadgeAssignment({
+        const createRes = await createBadgeAssignment({
           member,
           badge,
           issued_on: issuedOn,
         });
+        const createdName =
+          createRes?.name ||
+          createRes?.message?.name ||
+          createRes?.data?.name ||
+          createRes?.message;
+        if (typeof window !== 'undefined' && userEmail) {
+          const key = `lms_instructor_awarded_assignments_${userEmail}`;
+          try {
+            const existing: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+            if (createdName && typeof createdName === 'string') existing.push(createdName);
+            existing.push(`${member.toLowerCase().trim()}::${badge.toLowerCase().trim()}`);
+            localStorage.setItem(key, JSON.stringify(existing));
+          } catch {}
+        }
         setSuccessToast(`Badge "${badge}" successfully awarded to ${member}!`);
       } else {
         await updateBadgeAssignment({
@@ -413,6 +580,20 @@ export default function BadgesPage() {
     try {
       setDeleteSubmitting(true);
       await deleteBadgeAssignment(assignmentToDelete.name);
+
+      if (typeof window !== 'undefined' && userEmail) {
+        const key = `lms_instructor_awarded_assignments_${userEmail}`;
+        try {
+          const existing: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+          const updated = existing.filter(
+            (k) =>
+              k !== assignmentToDelete.name &&
+              k !== `${assignmentToDelete.member?.toLowerCase().trim()}::${assignmentToDelete.badge?.toLowerCase().trim()}`
+          );
+          localStorage.setItem(key, JSON.stringify(updated));
+        } catch {}
+      }
+
       setSuccessToast(`Badge "${assignmentToDelete.badge}" revoked from ${assignmentToDelete.member}.`);
       setDeleteModalOpen(false);
       setAssignmentToDelete(null);
@@ -450,12 +631,15 @@ export default function BadgesPage() {
 
   // Metrics for assignments
   const assignmentMetrics = useMemo(() => {
-    const totalAwards = assignments.length;
-    const uniqueStudents = new Set(assignments.map(a => a.member).filter(Boolean)).size;
-    const uniqueBadges = new Set(assignments.map(a => a.badge).filter(Boolean)).size;
-    const myAwardsCount = assignments.filter(a => isMatchUser(a.member, (a as any).member_username, userEmail)).length;
+    const list = isInstructor && !isAdmin ? instructorAssignments : assignments;
+    const totalAwards = list.length;
+    const uniqueStudents = new Set(list.map((a) => a.member).filter(Boolean)).size;
+    const uniqueBadges = new Set(list.map((a) => a.badge).filter(Boolean)).size;
+    const myAwardsCount = assignments.filter((a) =>
+      isMatchUser(a.member, (a as any).member_username, userEmail)
+    ).length;
     return { totalAwards, uniqueStudents, uniqueBadges, myAwardsCount };
-  }, [assignments, userEmail]);
+  }, [assignments, instructorAssignments, isInstructor, isAdmin, userEmail]);
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
@@ -541,7 +725,7 @@ export default function BadgesPage() {
               <Award className="w-4 h-4 text-orange-400" />
               <span>{isInstructor ? 'Awarded Badges' : 'My Earned Badges'}</span>
               <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-400/20 text-amber-300 font-bold border border-amber-400/30">
-                {isInstructor ? assignments.length : assignmentMetrics.myAwardsCount}
+                {isInstructor ? (isAdmin ? assignments.length : instructorAssignments.length) : assignmentMetrics.myAwardsCount}
               </span>
             </button>
           </div>
@@ -854,7 +1038,7 @@ export default function BadgesPage() {
                     className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
                   >
                     <option value="all">All Awarded Badges</option>
-                    {badges.map((b) => (
+                    {instructorRelevantBadges.map((b) => (
                       <option key={b.name} value={b.name}>
                         {b.title}
                       </option>
@@ -1118,7 +1302,7 @@ export default function BadgesPage() {
                   className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 >
                   <option value="">Choose a badge to award...</option>
-                  {badges.map((b) => (
+                  {assignableBadges.map((b) => (
                     <option key={b.name} value={b.name}>
                       {b.title} {b.name !== b.title ? `(${b.name})` : ''}
                     </option>

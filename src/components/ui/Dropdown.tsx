@@ -112,7 +112,11 @@ export default function Dropdown({
         search: searchTxt
       };
 
-      if (!queryParams.user) {
+      const isDropdownOptions = relEndpoint.includes("get_dropdown_options");
+      if (isDropdownOptions) {
+        delete queryParams.user;
+        queryParams.no_user = true;
+      } else if (!queryParams.user) {
         const currentUser = getCurrentUserEmail();
         if (currentUser) {
           queryParams.user = currentUser;
@@ -216,7 +220,7 @@ export default function Dropdown({
         setFetchError("No options available");
       }
     } catch (err: any) {
-      console.error(`Error fetching ${label || id}:`, err);
+      console.warn(`Error fetching ${label || id}:`, err);
       if (optionsProp && optionsProp.length > 0) {
         const fallbackMapped = optionsProp.map((opt: any) =>
           typeof opt === "string" ? { value: opt, label: opt } : opt

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { createBatch, updateBatch, getMasterData, getQuizzes } from '@/services/lms.services';
+import { createBatch, updateBatch, getMasterData, getQuizzes, getAssignments } from '@/services/lms.services';
 import { getCurrentUserEmail } from '@/services/api.services';
 import { getConferencingSettings } from '@/services/live_class.services';
 import { ConferencingSettings, ZoomSetting } from '@/types/live_class.types';
@@ -25,6 +25,7 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
   
   const [activeTab, setActiveTab] = useState<'details' | 'assessment' | 'timetable' | 'pricing'>('details');
   const [assessmentOptions, setAssessmentOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [assessmentTypeMap, setAssessmentTypeMap] = useState<Map<string, string>>(new Map());
   const [conferencingSettings, setConferencingSettings] = useState<ConferencingSettings>({
     zoom_accounts: [],
     google_meet_accounts: [],
@@ -36,6 +37,7 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
     const fetchAssessments = async () => {
       try {
         const optionMap = new Map<string, string>();
+        const typeMap = new Map<string, string>();
 
         // 1. Fetch from getMasterData('LMS Assessment')
         try {
@@ -44,7 +46,10 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
             lmsAssessments.forEach((item: any) => {
               const val = typeof item === 'string' ? item : item.name || item.value || item.title || '';
               const lbl = typeof item === 'string' ? item : item.title || item.name || item.label || val;
-              if (val) optionMap.set(val, lbl);
+              if (val) {
+                optionMap.set(val, lbl);
+                typeMap.set(val, 'LMS Quiz');
+              }
             });
           }
         } catch {}
@@ -56,7 +61,10 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
             lmsQuizzes.forEach((item: any) => {
               const val = typeof item === 'string' ? item : item.name || item.value || item.title || '';
               const lbl = typeof item === 'string' ? item : item.title || item.name || item.label || val;
-              if (val) optionMap.set(val, lbl);
+              if (val) {
+                optionMap.set(val, lbl);
+                typeMap.set(val, 'LMS Quiz');
+              }
             });
           }
         } catch {}
@@ -71,7 +79,28 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
             qList.forEach((q: any) => {
               const val = q.name || q.title || '';
               const lbl = q.title && q.title !== q.name ? `${q.title} (${q.name})` : val;
-              if (val) optionMap.set(val, lbl);
+              if (val) {
+                optionMap.set(val, lbl);
+                typeMap.set(val, 'LMS Quiz');
+              }
+            });
+          }
+        } catch {}
+
+        // 4. Fetch from getAssignments()
+        try {
+          const assignRes = await getAssignments();
+          const aList = Array.isArray(assignRes) 
+            ? assignRes 
+            : (assignRes?.data || assignRes?.message || []);
+          if (Array.isArray(aList)) {
+            aList.forEach((a: any) => {
+              const val = a.name || a.title || '';
+              const lbl = a.title && a.title !== a.name ? `${a.title} (${a.name})` : val;
+              if (val) {
+                optionMap.set(val, lbl);
+                typeMap.set(val, 'LMS Assignment');
+              }
             });
           }
         } catch {}
@@ -80,6 +109,7 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
           setAssessmentOptions(
             Array.from(optionMap.entries()).map(([value, label]) => ({ value, label }))
           );
+          setAssessmentTypeMap(typeMap);
         }
       } catch (err) {
         console.warn('Failed to load assessment options:', err);
@@ -137,11 +167,13 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
     }
   };
 
+  const currentUserEmail = getCurrentUserEmail();
+
   const [formData, setFormData] = useState<any>({
     title: '',
     name: '',
     batch: '',
-    published: 0,
+    published: 1, // Default to Published (1) so batch appears in student's Programs & Batches
     description: '',
     start_date: '',
     end_date: '',
@@ -157,7 +189,7 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
     conferencing_provider: '',
     show_live_class: 1,
     courses: [],
-    instructors: [],
+    instructors: currentUserEmail ? [{ instructor: currentUserEmail }] : [],
     zoom_account: '',
     google_meet_account: '',
     
@@ -180,14 +212,34 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
       setFormData({
         ...formData,
         ...initialData,
+        published: initialData.published !== undefined ? (Number(initialData.published) ? 1 : 0) : 1,
         courses: initialData.courses || [],
-        instructors: initialData.instructors || [],
-        assessment: initialData.assessment || [],
+        instructors: (initialData.instructors && initialData.instructors.length > 0)
+          ? initialData.instructors
+          : (currentUserEmail ? [{ instructor: currentUserEmail }] : []),
+        assessment: (initialData.assessment || []).map((ass: any) => {
+          const name = typeof ass === 'string' ? ass.trim() : (ass.assessment_name || ass.assessment || '').trim();
+          const type = (typeof ass === 'object' && ass.assessment_type)
+            ? ass.assessment_type
+            : (name.toLowerCase().includes('assignment') ? 'LMS Assignment' : 'LMS Quiz');
+          return {
+            ...(typeof ass === 'object' ? ass : {}),
+            assessment_type: type,
+            assessment_name: name,
+            assessment: name,
+          };
+        }),
         timetable: initialData.timetable || [],
         timetable_legends: initialData.timetable_legends || [],
       });
+    } else if (currentUserEmail) {
+      setFormData((prev: any) => ({
+        ...prev,
+        published: 1,
+        instructors: prev.instructors?.length > 0 ? prev.instructors : [{ instructor: currentUserEmail }]
+      }));
     }
-  }, [initialData]);
+  }, [initialData, currentUserEmail]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -228,21 +280,50 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
     setError(null);
     
     try {
-      // Filter out any blank or unselected assessment rows
+      // Filter out any blank or unselected assessment rows and format for Frappe LMS Assessment child table
       const validAssessments = (formData.assessment || [])
-        .filter((ass: any) => ass && (typeof ass === 'string' ? ass.trim() : (ass.assessment && ass.assessment.trim())))
-        .map((ass: any) => (typeof ass === 'string' ? { assessment: ass.trim() } : { ...ass, assessment: ass.assessment.trim() }));
+        .map((ass: any) => {
+          const name = typeof ass === 'string' ? ass.trim() : (ass.assessment_name || ass.assessment || '').trim();
+          if (!name) return null;
+          const type = (typeof ass === 'object' && ass.assessment_type)
+            ? ass.assessment_type
+            : (assessmentTypeMap.get(name) || (name.toLowerCase().includes('assignment') ? 'LMS Assignment' : 'LMS Quiz'));
+          return {
+            ...(typeof ass === 'object' ? ass : {}),
+            assessment_type: type,
+            assessment_name: name,
+            assessment: name,
+          };
+        })
+        .filter(Boolean);
+
+      // Clean slug name
+      const rawTitle = (formData.title || '').trim();
+      const cleanSlug = rawTitle
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || `batch-${Date.now()}`;
+
+      // Ensure instructors list contains current instructor if empty
+      const instructorsList = (formData.instructors || []).filter(
+        (inst: any) => (typeof inst === 'string' ? inst.trim() : (inst?.instructor && inst.instructor.trim()))
+      );
+      if (instructorsList.length === 0 && currentUserEmail) {
+        instructorsList.push({ instructor: currentUserEmail });
+      }
+
+      const isPub = formData.published === 1 || formData.published === '1' || formData.published === true;
 
       const payload = {
         ...formData,
+        published: isPub ? 1 : 0,
+        instructors: instructorsList,
         assessment: validAssessments,
-        name: formData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-        batch: formData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+        name: isEdit && initialData?.name ? initialData.name : cleanSlug,
+        batch: isEdit && (initialData?.batch || initialData?.name) ? (initialData.batch || initialData.name) : cleanSlug,
       };
 
       if (isEdit) {
-        payload.name = initialData.name;
-        payload.batch = initialData.batch || initialData.name;
         await updateBatch(payload);
       } else {
         await createBatch(payload);
@@ -259,7 +340,6 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
   const primaryInstructor = formData.instructors
     ?.map((inst: any) => (typeof inst === 'string' ? inst : inst?.instructor)?.trim())
     ?.filter(Boolean)[0] || '';
-  const currentUserEmail = getCurrentUserEmail();
   const instructorForCourseDropdown = primaryInstructor || currentUserEmail;
 
   const tabs = [
@@ -483,20 +563,23 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
                   <textarea name="batch_details" value={formData.batch_details} onChange={handleChange} rows={3} className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors font-mono resize-none"></textarea>
                 </div>
 
-                <div className="col-span-2 flex flex-wrap gap-4 mt-1">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" name="published" checked={formData.published === 1} onChange={handleChange} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" />
-                    <span className="text-xs font-medium text-slate-600">Published</span>
+                <div className="col-span-2 flex flex-wrap gap-4 mt-1 bg-slate-50/80 p-3 rounded-lg border border-slate-200/60">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" name="published" checked={formData.published === 1} onChange={handleChange} className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" />
+                    <div>
+                      <span className="text-xs font-semibold text-slate-800">Published</span>
+                      <span className="text-[11px] text-slate-500 ml-1.5">(Visible to students in Programs & Batches)</span>
+                    </div>
                   </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
                     <input type="checkbox" name="allow_self_enrollment" checked={formData.allow_self_enrollment === 1} onChange={handleChange} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" />
                     <span className="text-xs font-medium text-slate-600">Self Enrollment</span>
                   </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
                     <input type="checkbox" name="allow_future" checked={formData.allow_future === 1} onChange={handleChange} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" />
                     <span className="text-xs font-medium text-slate-600">Future Enrollment</span>
                   </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
                     <input type="checkbox" name="show_live_class" checked={formData.show_live_class === 1} onChange={handleChange} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" />
                     <span className="text-xs font-medium text-slate-600">Show Live Classes Tab to Students</span>
                   </label>
@@ -560,32 +643,61 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
                       <h3 className="text-sm font-semibold text-slate-700">Assessments</h3>
                       <p className="text-xs text-slate-500 mt-0.5">Select existing assessments from the assessment &amp; quiz bank.</p>
                     </div>
-                    <button type="button" onClick={() => handleArrayAdd('assessment', { assessment: '' })} className="text-xs text-indigo-600 font-medium flex items-center gap-1 hover:text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md"><Plus className="w-3 h-3" /> Add Assessment</button>
+                    <button type="button" onClick={() => handleArrayAdd('assessment', { assessment_type: 'LMS Quiz', assessment_name: '', assessment: '' })} className="text-xs text-indigo-600 font-medium flex items-center gap-1 hover:text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md"><Plus className="w-3 h-3" /> Add Assessment</button>
                   </div>
                   
                   <div className="flex flex-col gap-3">
                     {formData.assessment.map((ass: any, idx: number) => (
-                      <div key={idx} className="flex items-start gap-2">
+                      <div key={idx} className="flex flex-col sm:flex-row items-stretch sm:items-start gap-2 bg-white p-2.5 rounded-md border border-slate-200">
+                        <div className="w-full sm:w-44">
+                          <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Type</label>
+                          <select
+                            value={ass.assessment_type || 'LMS Quiz'}
+                            onChange={(e) => {
+                              const newType = e.target.value;
+                              handleArrayChange('assessment', idx, 'assessment_type', newType);
+                            }}
+                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs font-medium text-slate-700 focus:ring-1 focus:ring-indigo-500 outline-none"
+                          >
+                            <option value="LMS Quiz">Quiz</option>
+                            <option value="LMS Assignment">Assignment</option>
+                          </select>
+                        </div>
                         <div className="flex-1">
+                          <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Assessment / Quiz</label>
                           <Dropdown
                             id={`assessment-${idx}`}
-                            value={ass.assessment || ''}
-                            onChange={(value: string) => handleArrayChange('assessment', idx, 'assessment', value)}
+                            value={ass.assessment_name || ass.assessment || ''}
+                            onChange={(value: string) => {
+                              const detectedType = assessmentTypeMap.get(value) || ass.assessment_type || (value.toLowerCase().includes('assignment') ? 'LMS Assignment' : 'LMS Quiz');
+                              setFormData((prev: any) => {
+                                const arr = [...(prev.assessment || [])];
+                                arr[idx] = {
+                                  ...(arr[idx] || {}),
+                                  assessment: value,
+                                  assessment_name: value,
+                                  assessment_type: detectedType,
+                                };
+                                return { ...prev, assessment: arr };
+                              });
+                            }}
                             endpoint="https://devlms.stridenex.ai/api/method/lms.lms.master.get_dropdown_options"
-                            params={{ doctype: "LMS Assessment" }}
-                            placeholder="Select Assessment"
+                            params={{ doctype: ass.assessment_type || "LMS Quiz" }}
+                            placeholder="Select Assessment or Quiz"
                             options={assessmentOptions.length > 0 ? assessmentOptions : undefined}
                             searchable
                           />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleArrayRemove('assessment', idx)}
-                          className="text-red-400 hover:text-red-600 p-2 mt-0.5 rounded-md hover:bg-red-50 transition-colors"
-                          title="Remove assessment"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="sm:pt-5">
+                          <button
+                            type="button"
+                            onClick={() => handleArrayRemove('assessment', idx)}
+                            className="text-red-400 hover:text-red-600 p-2 rounded-md hover:bg-red-50 transition-colors"
+                            title="Remove assessment"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                     {formData.assessment.length === 0 && (

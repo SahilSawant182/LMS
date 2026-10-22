@@ -175,13 +175,20 @@ export const getCourseWithEnrollment = async (name: string, payload?: any): Prom
 };
 
 export const getBatchWithEnrollment = async (name: string, payload?: any): Promise<BatchWithEnrollment> => {
+  const isInstructor = isAuthorizedInstructor();
   const currentUser = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
+  const params: Record<string, any> = {
+    name,
+    ...(payload || {})
+  };
+  if (isInstructor && currentUser) {
+    params.user = currentUser;
+  } else {
+    delete params.user;
+    params.no_user = true;
+  }
   const res = await apiService.get(`${METHOD_PREFIX}.get_batch_with_enrollment`, {
-    params: {
-      name,
-      ...(currentUser ? { user: currentUser } : {}),
-      ...(payload || {})
-    },
+    params,
     headers: authHeaders(),
   });
   return extractData<BatchWithEnrollment>(res);
@@ -192,11 +199,14 @@ export const getCoursesWithEnrollment = async (payload?: any): Promise<CourseWit
   const currentUser = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
   const params: Record<string, any> = { ...(payload || {}) };
 
-  if (params.all || params.user === "" || params.user === null) {
+  if (params.all || params.user === "" || params.user === null || params.no_user) {
     delete params.all;
     delete params.user;
+    params.no_user = true;
   } else if (!params.user && isInstructor && currentUser) {
     params.user = currentUser;
+  } else if (!isInstructor && !params.user) {
+    params.no_user = true;
   }
 
   const res = await apiService.get(`${METHOD_PREFIX}.get_courses_with_enrollment`, {
@@ -218,10 +228,14 @@ export const getBatchesWithEnrollment = async (payload?: any): Promise<BatchWith
   const currentUser = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
   const params: Record<string, any> = { ...(payload || {}) };
 
-  if (params.all || params.user === "" || params.user === null) {
+  if (!isInstructor) {
+    delete params.user;
+    params.no_user = true;
+  } else if (params.all || params.user === "" || params.user === null || params.no_user) {
     delete params.all;
     delete params.user;
-  } else if (!params.user && isInstructor && currentUser) {
+    params.no_user = true;
+  } else if (!params.user && currentUser) {
     params.user = currentUser;
   }
 

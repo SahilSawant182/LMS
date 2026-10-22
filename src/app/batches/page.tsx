@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { Users, Calendar, Clock, ArrowRight, Search, Trash2, Plus, Edit } from 'lucide-react';
 import { getBatches, deleteBatch } from '@/services/lms.services';
 import { getBatchesWithEnrollment } from '@/services/payment.services';
+import { isAuthorizedInstructor } from '@/services/auth.services';
 import { formatDate } from '@/utils/formatters';
 
 export default function BatchesPage() {
@@ -13,43 +14,69 @@ export default function BatchesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInstructor, setIsInstructor] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const fetchBatches = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [enrollRes, catalogRes] = await Promise.allSettled([
+        getBatchesWithEnrollment({ all: 1 }),
+        getBatches({ all: 1 }),
+      ]);
+
+      const enrollList = enrollRes.status === "fulfilled" && Array.isArray(enrollRes.value) ? enrollRes.value : [];
+      const rawCatalog = catalogRes.status === "fulfilled" ? catalogRes.value : [];
+      const catalogList = Array.isArray(rawCatalog)
+        ? rawCatalog
+        : (rawCatalog?.message?.data || rawCatalog?.data?.message || rawCatalog?.data || rawCatalog?.message || []);
+
+      const batchMap = new Map<string, any>();
+
+      // 1. Index all catalog batches
+      if (Array.isArray(catalogList)) {
+        catalogList.forEach((b: any) => {
+          const id = b.name || b.batch || b.batch_name;
+          if (id) batchMap.set(id, { ...b });
+        });
+      }
+
+      // 2. Augment with enrollment data
+      if (Array.isArray(enrollList)) {
+        enrollList.forEach((e: any) => {
+          const id = e.name || e.batch || e.batch_name;
+          if (id) {
+            const existing = batchMap.get(id);
+            if (existing) {
+              batchMap.set(id, {
+                ...existing,
+                ...e,
+                title: existing.title || e.title || existing.batch_title || e.batch_title,
+                published: existing.published !== undefined ? existing.published : e.published,
+                is_enrolled: Boolean(e.is_enrolled || existing.is_enrolled),
+              });
+            } else {
+              batchMap.set(id, { ...e });
+            }
+          }
+        });
+      }
+
+      const mergedList = Array.from(batchMap.values());
+      const data = mergedList.length > 0 ? mergedList : (enrollList.length > 0 ? enrollList : (Array.isArray(catalogList) ? catalogList : []));
+      setBatches(data);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to fetch batches');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchBatches = async () => {
-      setLoading(true);
-      try {
-        let batchesArray: any[] = [];
-        try {
-          const enrollList = await getBatchesWithEnrollment();
-          if (Array.isArray(enrollList) && enrollList.length > 0) {
-            batchesArray = enrollList;
-          }
-        } catch (e) {}
-
-        if (batchesArray.length === 0) {
-          const rawResponse = await getBatches();
-          batchesArray = Array.isArray(rawResponse) 
-            ? rawResponse 
-            : (rawResponse?.message?.data || rawResponse?.data?.message || rawResponse?.data || rawResponse?.message || []);
-        }
-        
-        const data = Array.isArray(batchesArray) ? batchesArray : [];
-        setBatches(data);
-      } catch (err: any) {
-        setError(err.message || 'Failed to fetch batches');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchBatches();
     const checkRoles = () => {
       try {
-        const rolesStr = localStorage.getItem("roles");
-        if (rolesStr) {
-          const roles = JSON.parse(rolesStr);
-          setIsInstructor(roles.includes("Instructor"));
-        }
+        setIsInstructor(isAuthorizedInstructor());
       } catch (e) {}
     };
     checkRoles();
@@ -60,22 +87,31 @@ export default function BatchesPage() {
       try {
         await deleteBatch(batchName);
         alert('Batch deleted successfully!');
-        // Re-fetch batches to update the list
-        setLoading(true);
-        const rawResponse = await getBatches();
-        const batchesArray = Array.isArray(rawResponse) 
-          ? rawResponse 
-          : (rawResponse?.message?.data || rawResponse?.data?.message || rawResponse?.data || rawResponse?.message || []);
-        
-        const data = Array.isArray(batchesArray) ? batchesArray : [];
-        setBatches(data);
+        await fetchBatches();
       } catch (err: any) {
         alert(err.message || 'Failed to delete batch');
-      } finally {
-        setLoading(false);
       }
     }
   };
+
+  const visibleBatches = useMemo(() => {
+    return batches.filter((b) => {
+      // Hide unpublished draft batches from students (non-instructors)
+      if (!isInstructor && (b.published === 0 || b.published === false || b.published === '0')) {
+        return false;
+      }
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const titleMatch = (b.title || b.batch_title || b.name || '').toLowerCase().includes(q);
+        const descMatch = (b.description || b.batch_details || '').toLowerCase().includes(q);
+        const catMatch = (b.category || '').toLowerCase().includes(q);
+        return titleMatch || descMatch || catMatch;
+      }
+
+      return true;
+    });
+  }, [batches, isInstructor, searchQuery]);
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
@@ -106,7 +142,13 @@ export default function BatchesPage() {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-                <input type="text" placeholder="Search batches..." className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-full sm:w-64" />
+                <input 
+                  type="text" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search batches..." 
+                  className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-full sm:w-64" 
+                />
               </div>
               {isInstructor && (
                 <div className="flex items-center gap-2">
@@ -129,9 +171,9 @@ export default function BatchesPage() {
             <div className="text-center py-12 bg-red-50 text-red-600 rounded-lg border border-red-100">
               <p>{error}</p>
             </div>
-          ) : batches.length > 0 ? (
+          ) : visibleBatches.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {batches.map((batch: any, idx: number) => {
+              {visibleBatches.map((batch: any, idx: number) => {
                 const seatsLeft = batch.seats_left !== undefined && batch.seats_left !== null
                   ? Number(batch.seats_left)
                   : (batch.seat_count !== undefined && batch.seat_count !== null

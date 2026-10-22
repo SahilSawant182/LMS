@@ -51,6 +51,66 @@ export const getCurrentUserEmail = (): string => {
   return "";
 };
 
+// Helper to determine if user is in student role (not an authorized instructor)
+export const isStudentUser = (): boolean => {
+  if (typeof window === "undefined") return true;
+  try {
+    const isInst = localStorage.getItem("isInstructor");
+    if (isInst === "true") return false;
+
+    const rolesStr = localStorage.getItem("roles");
+    if (!rolesStr) return true;
+
+    const roles = rolesStr.startsWith("[") ? JSON.parse(rolesStr) : rolesStr;
+    const authorizedRoles = ["Instructor", "Course Creator", "Moderator", "Administrator", "System Manager"];
+
+    if (Array.isArray(roles)) {
+      return !roles.some((r: string) => authorizedRoles.includes(r));
+    }
+    return !authorizedRoles.some((r: string) => rolesStr.includes(r));
+  } catch {
+    return true;
+  }
+};
+
+// Helper to determine if a URL points to any batch-related GET API
+export const isBatchApi = (url?: string): boolean => {
+  if (typeof url !== "string") return false;
+  return (
+    url.includes("get_batches") ||
+    url.includes("get_batch") ||
+    url.includes("resource/LMS Batch") ||
+    url.includes("LMS Batch")
+  );
+};
+
+// Helper to check whether user param should NOT be automatically attached
+const shouldBypassUserParam = (url?: string, params?: any): boolean => {
+  if (
+    typeof url === "string" &&
+    (url.includes("resource/") ||
+      url.includes("get_dropdown_options") ||
+      url.includes("master.get_dropdown_options"))
+  ) {
+    return true;
+  }
+  // For student role, remove user from query params on batch APIs
+  if (isBatchApi(url) && isStudentUser()) {
+    return true;
+  }
+  if (!params) return false;
+  if (
+    params.all ||
+    params.no_user ||
+    params.user === "" ||
+    params.user === null ||
+    params.user === false
+  ) {
+    return true;
+  }
+  return false;
+};
+
 // Global interceptor to automatically attach user query param on all GET requests
 api.interceptors.request.use((reqConfig) => {
   if (typeof FormData !== "undefined" && reqConfig.data instanceof FormData) {
@@ -60,6 +120,42 @@ api.interceptors.request.use((reqConfig) => {
   }
   const method = (reqConfig.method || "GET").toUpperCase();
   if (method === "GET") {
+    const isDropdownOrResource =
+      typeof reqConfig.url === "string" &&
+      (reqConfig.url.includes("resource/") ||
+        reqConfig.url.includes("get_dropdown_options") ||
+        reqConfig.url.includes("master.get_dropdown_options"));
+
+    const isBatchForStudent = isBatchApi(reqConfig.url) && isStudentUser();
+    const shouldStripUser = isDropdownOrResource || isBatchForStudent;
+
+    if (shouldStripUser && typeof reqConfig.url === "string" && reqConfig.url.includes("user=")) {
+      reqConfig.url = reqConfig.url.replace(/([?&])user=[^&]*(&|$)/, (_, p1, p2) => (p2 === "&" ? p1 : "")).replace(/[?&]$/, "");
+    }
+
+    if (shouldBypassUserParam(reqConfig.url, reqConfig.params)) {
+      if (typeof reqConfig.params === "object" && reqConfig.params !== null) {
+        if ("no_user" in reqConfig.params) delete reqConfig.params.no_user;
+        if ("all" in reqConfig.params) delete reqConfig.params.all;
+        if (
+          "user" in reqConfig.params &&
+          (shouldStripUser ||
+            reqConfig.params.user === "" ||
+            reqConfig.params.user === null ||
+            reqConfig.params.user === false)
+        ) {
+          delete reqConfig.params.user;
+        }
+      } else if (reqConfig.params instanceof URLSearchParams) {
+        if (shouldStripUser || reqConfig.params.get("user") === "" || reqConfig.params.get("user") === "null") {
+          reqConfig.params.delete("user");
+        }
+        reqConfig.params.delete("no_user");
+        reqConfig.params.delete("all");
+      }
+      return reqConfig;
+    }
+
     const userEmail = getCurrentUserEmail();
     if (userEmail) {
       const urlHasUser = typeof reqConfig.url === "string" && (reqConfig.url.includes("?user=") || reqConfig.url.includes("&user="));
@@ -107,24 +203,59 @@ const apiRequest = async (config: AxiosRequestConfig) => {
     headers.Authorization = `token ${apiKey}:${apiSecret}`;
   }
 
-  // Ensure user=emailid is appended to all GET APIs query parameters
+  // Ensure user=emailid is appended to GET APIs query parameters unless bypassed
   const method = (config.method || "GET").toUpperCase();
   let params = config.params;
   if (method === "GET") {
-    const userEmail = getCurrentUserEmail();
-    if (userEmail) {
-      const urlHasUser = typeof config.url === "string" && (config.url.includes("?user=") || config.url.includes("&user="));
-      if (!urlHasUser) {
-        if (params instanceof URLSearchParams) {
-          if (!params.has("user")) {
-            params.append("user", userEmail);
+    const isDropdownOrResource =
+      typeof config.url === "string" &&
+      (config.url.includes("resource/") ||
+        config.url.includes("get_dropdown_options") ||
+        config.url.includes("master.get_dropdown_options"));
+
+    const isBatchForStudent = isBatchApi(config.url) && isStudentUser();
+    const shouldStripUser = isDropdownOrResource || isBatchForStudent;
+
+    if (shouldStripUser && typeof config.url === "string" && config.url.includes("user=")) {
+      config.url = config.url.replace(/([?&])user=[^&]*(&|$)/, (_, p1, p2) => (p2 === "&" ? p1 : "")).replace(/[?&]$/, "");
+    }
+
+    if (shouldBypassUserParam(config.url, params)) {
+      if (typeof params === "object" && params !== null) {
+        if ("no_user" in params) delete params.no_user;
+        if ("all" in params) delete params.all;
+        if (
+          "user" in params &&
+          (shouldStripUser ||
+            params.user === "" ||
+            params.user === null ||
+            params.user === false)
+        ) {
+          delete params.user;
+        }
+      } else if (params instanceof URLSearchParams) {
+        if (shouldStripUser || params.get("user") === "" || params.get("user") === "null") {
+          params.delete("user");
+        }
+        params.delete("no_user");
+        params.delete("all");
+      }
+    } else {
+      const userEmail = getCurrentUserEmail();
+      if (userEmail) {
+        const urlHasUser = typeof config.url === "string" && (config.url.includes("?user=") || config.url.includes("&user="));
+        if (!urlHasUser) {
+          if (params instanceof URLSearchParams) {
+            if (!params.has("user")) {
+              params.append("user", userEmail);
+            }
+          } else if (typeof params === "object" && params !== null) {
+            if (!("user" in params) || !(params as any).user) {
+              params = { ...params, user: userEmail };
+            }
+          } else {
+            params = { user: userEmail };
           }
-        } else if (typeof params === "object" && params !== null) {
-          if (!("user" in params) || !(params as any).user) {
-            params = { ...params, user: userEmail };
-          }
-        } else {
-          params = { user: userEmail };
         }
       }
     }

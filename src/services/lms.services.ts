@@ -74,15 +74,19 @@ const getInstructorFilterParams = (payload?: any) => {
   const params: Record<string, any> = { ...(payload || {}) };
 
   // If caller specifically requested all items or bypassed instructor filter (e.g. global search)
-  if (params.all || params.user === "" || params.user === null) {
+  if (params.all || params.user === "" || params.user === null || params.no_user) {
     delete params.all;
     delete params.user;
+    params.no_user = true;
     return params;
   }
 
   // Only filter by user/instructor if user is an authorized instructor AND caller hasn't passed a custom user
   if (!params.user && isInstructor && currentUser) {
     params.user = currentUser;
+  } else if (!isInstructor && !params.user) {
+    // Non-instructor students should NOT have user filter attached
+    params.no_user = true;
   }
 
   return params;
@@ -129,14 +133,23 @@ export const getCourses = async (payload?: any): Promise<Course[]> => {
 
 export const getMasterData = async (doctype: string, additionalPayload: any = {}) => {
   try {
-    const payload = getInstructorFilterParams({
+    const payload: Record<string, any> = {
       doctype,
+      no_user: true,
       ...additionalPayload
-    });
-    const response = await apiService.get(
-      "method/lms.lms.master.get_dropdown_options",
-      { params: payload }
-    );
+    };
+    delete payload.user;
+
+    let response: any = null;
+    try {
+      response = await apiService.get(
+        "method/lms.lms.master.get_dropdown_options",
+        { params: payload }
+      );
+    } catch (err) {
+      console.warn(`Master dropdown endpoint failed for ${doctype}, trying fallback:`, err);
+    }
+
     let arr: any[] = [];
     if (response?.data && response?.data?.data && Array.isArray(response?.data?.data)) {
       arr = response.data.data;
@@ -149,12 +162,26 @@ export const getMasterData = async (doctype: string, additionalPayload: any = {}
     } else if (Array.isArray(response)) {
       arr = response;
     }
+
+    // Fallback: If master endpoint returned empty array or failed, query resource directly
+    if (arr.length === 0) {
+      try {
+        const resourceRes = await apiService.get(`resource/${encodeURIComponent(doctype)}`, {
+          params: { limit_page_length: 100, no_user: true }
+        });
+        const resList = resourceRes?.data || resourceRes?.message || resourceRes || [];
+        if (Array.isArray(resList) && resList.length > 0) {
+          arr = resList;
+        }
+      } catch {}
+    }
+
     return arr.map((item: any) => {
       if (typeof item === "string") return item;
       return item.value || item.label || item.name || item.id || item.title || item.course || item.category || "";
     }).filter(Boolean);
   } catch (error) {
-    console.error(`Error fetching master data for ${doctype}:`, error);
+    console.warn(`Error fetching master data for ${doctype}:`, error);
     return [];
   }
 };
@@ -167,14 +194,23 @@ export interface DropdownOptionItem {
 
 export const getMasterDropdownItems = async (doctype: string, additionalPayload: any = {}): Promise<DropdownOptionItem[]> => {
   try {
-    const payload = getInstructorFilterParams({
+    const payload: Record<string, any> = {
       doctype,
+      no_user: true,
       ...additionalPayload
-    });
-    const response = await apiService.get(
-      "method/lms.lms.master.get_dropdown_options",
-      { params: payload }
-    );
+    };
+    delete payload.user;
+
+    let response: any = null;
+    try {
+      response = await apiService.get(
+        "method/lms.lms.master.get_dropdown_options",
+        { params: payload }
+      );
+    } catch (err) {
+      console.warn(`Master dropdown options failed for ${doctype}, trying fallback:`, err);
+    }
+
     let arr: any[] = [];
     if (response?.data && response?.data?.data && Array.isArray(response?.data?.data)) {
       arr = response.data.data;
@@ -186,6 +222,19 @@ export const getMasterDropdownItems = async (doctype: string, additionalPayload:
       arr = response.message;
     } else if (Array.isArray(response)) {
       arr = response;
+    }
+
+    // Fallback: If master endpoint returned empty array or failed, query resource directly
+    if (arr.length === 0) {
+      try {
+        const resourceRes = await apiService.get(`resource/${encodeURIComponent(doctype)}`, {
+          params: { limit_page_length: 100, no_user: true }
+        });
+        const resList = resourceRes?.data || resourceRes?.message || resourceRes || [];
+        if (Array.isArray(resList) && resList.length > 0) {
+          arr = resList;
+        }
+      } catch {}
     }
 
     return arr.map((item: any) => {
@@ -202,7 +251,7 @@ export const getMasterDropdownItems = async (doctype: string, additionalPayload:
       };
     }).filter(it => it.label || it.value);
   } catch (error) {
-    console.error(`Error fetching master dropdown options for ${doctype}:`, error);
+    console.warn(`Error fetching master dropdown options for ${doctype}:`, error);
     return [];
   }
 };
@@ -297,64 +346,210 @@ export const getReviews = async (payload: GetReviewsPayload) => {
 };
 
 export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
+  const isInstructor = isAuthorizedInstructor();
   const nameParam = payload.batch || payload.name;
   const params = getInstructorFilterParams({
     batch: nameParam,
     ...payload
   });
+  if (!isInstructor) {
+    delete params.user;
+    params.no_user = true;
+  }
+  const headers = getQuestionAuthHeaders("application/json");
   return apiService.get(`method/lms.lms.stride_lms.get_batch_details`, {
     params,
-    headers: {
-      'Authorization': `token ${API_TOKEN}`
-    }
+    headers
   });
 };
 
 export const getBatchCourses = async (payload: GetBatchCoursesPayload) => {
+  const isInstructor = isAuthorizedInstructor();
   const params = getInstructorFilterParams(payload);
+  if (!isInstructor) {
+    delete params.user;
+    params.no_user = true;
+  }
+  const headers = getQuestionAuthHeaders("application/json");
   return apiService.get(`method/${API_METHOD_PREFIX}.get_batch_courses`, {
     params,
-    headers: {
-      'Authorization': `token ${API_TOKEN}`
-    }
+    headers
   });
 };
 
-export const getBatches = async (payload?: any) => {
+export const getBatches = async (payload?: any): Promise<any> => {
+  const isInstructor = isAuthorizedInstructor();
   const params = getInstructorFilterParams(payload);
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_batches`, {
-    params,
-    headers: { 'Authorization': `token ${API_TOKEN}` }
-  });
+  if (!isInstructor) {
+    delete params.user;
+    params.no_user = true;
+  }
+  const headers = getQuestionAuthHeaders("application/json");
+
+  try {
+    const res = await apiService.get(`method/${API_METHOD_PREFIX}.get_batches`, {
+      params,
+      headers
+    });
+    const data = res?.message?.data || res?.data?.message || res?.data || res?.message || res;
+    if (Array.isArray(data) && data.length > 0) {
+      return data;
+    }
+    if (Array.isArray(res) && res.length > 0) {
+      return res;
+    }
+  } catch (err) {
+    console.warn("get_batches primary method failed, falling back to resource/LMS Batch:", err);
+  }
+
+  // Fallback: Query resource/LMS Batch directly
+  try {
+    const isInstructor = isAuthorizedInstructor();
+    const resourceParams: Record<string, any> = {
+      fields: JSON.stringify([
+        "name", "title", "batch_title", "description", "start_date", "end_date",
+        "start_time", "end_time", "timezone", "category", "medium", "seat_count",
+        "allow_self_enrollment", "allow_future", "published", "show_live_class",
+        "paid_batch", "amount", "currency", "amount_usd", "batch_details"
+      ]),
+      limit_page_length: 100,
+      order_by: "creation desc",
+      no_user: true
+    };
+    if (!isInstructor) {
+      resourceParams.filters = JSON.stringify({ published: 1 });
+    }
+    const resourceRes = await apiService.get("resource/LMS Batch", {
+      params: resourceParams,
+      headers
+    });
+    const items = resourceRes?.data || resourceRes?.message || resourceRes;
+    if (Array.isArray(items)) {
+      return items;
+    }
+  } catch (resourceErr) {
+    console.warn("resource/LMS Batch fallback failed:", resourceErr);
+  }
+
+  return [];
+};
+
+const normalizeBatchAssessments = (assessments: any[]) => {
+  if (!Array.isArray(assessments)) return [];
+  return assessments
+    .map((ass: any) => {
+      const name = typeof ass === 'string' ? ass.trim() : (ass.assessment_name || ass.assessment || '').trim();
+      if (!name) return null;
+      const type = (typeof ass === 'object' && ass.assessment_type)
+        ? ass.assessment_type
+        : (name.toLowerCase().includes('assignment') ? 'LMS Assignment' : 'LMS Quiz');
+      return {
+        ...(typeof ass === 'object' ? ass : {}),
+        assessment_type: type,
+        assessment_name: name,
+        assessment: name,
+      };
+    })
+    .filter(Boolean);
 };
 
 export const createBatch = async (payload: any) => {
   const headers = getQuestionAuthHeaders("application/json");
+  const isPub = payload.published === 1 || payload.published === '1' || payload.published === true || payload.published === 'true';
+  const cleanPayload = {
+    ...payload,
+    published: isPub ? 1 : 0,
+    allow_self_enrollment: payload.allow_self_enrollment !== undefined ? (payload.allow_self_enrollment ? 1 : 0) : 1,
+    allow_future: payload.allow_future !== undefined ? (payload.allow_future ? 1 : 0) : 1,
+    assessment: normalizeBatchAssessments(payload.assessment),
+  };
+
+  let rpcResult: any = null;
+  let rpcError: any = null;
+
   try {
-    return await apiService.post(`method/lms.lms.stride_lms.create_batch`, payload, {
+    rpcResult = await apiService.post(`method/lms.lms.stride_lms.create_batch`, cleanPayload, {
       headers
     });
   } catch (err: any) {
+    rpcError = err;
     console.warn("create_batch method failed, falling back to resource/LMS Batch:", err);
-    return await apiService.post("resource/LMS Batch", payload, {
-      headers
-    });
+    try {
+      rpcResult = await apiService.post("resource/LMS Batch", cleanPayload, {
+        headers
+      });
+    } catch (fallbackErr) {
+      console.warn("resource/LMS Batch create fallback failed:", fallbackErr);
+    }
   }
+
+  // Direct persistence sync to resource/LMS Batch to guarantee published: 1 and enrollment flags are stored in DB
+  const batchName = cleanPayload.name || cleanPayload.batch || rpcResult?.data?.name || rpcResult?.message?.name || rpcResult?.name;
+  if (batchName) {
+    try {
+      await apiService.put(`resource/LMS Batch/${encodeURIComponent(batchName)}`, {
+        published: isPub ? 1 : 0,
+        allow_self_enrollment: cleanPayload.allow_self_enrollment,
+        allow_future: cleanPayload.allow_future,
+      }, { headers });
+    } catch (syncErr) {
+      console.warn("Direct resource/LMS Batch sync failed:", syncErr);
+    }
+  }
+
+  if (rpcError && !rpcResult) {
+    throw rpcError;
+  }
+
+  return rpcResult;
 };
 
 export const updateBatch = async (payload: any) => {
   const headers = getQuestionAuthHeaders("application/json");
   const batchName = payload.name || payload.batch;
+  const isPub = payload.published === 1 || payload.published === '1' || payload.published === true || payload.published === 'true';
+  const cleanPayload = {
+    ...payload,
+    published: isPub ? 1 : 0,
+    assessment: normalizeBatchAssessments(payload.assessment),
+  };
+
+  let rpcResult: any = null;
+  let rpcError: any = null;
+
   try {
-    return await apiService.post(`method/lms.lms.stride_lms.update_batch`, payload, {
+    rpcResult = await apiService.post(`method/lms.lms.stride_lms.update_batch`, cleanPayload, {
       headers
     });
   } catch (err: any) {
+    rpcError = err;
     console.warn("update_batch method failed, falling back to resource/LMS Batch:", err);
-    return await apiService.put(`resource/LMS Batch/${encodeURIComponent(batchName)}`, payload, {
-      headers
-    });
+    try {
+      rpcResult = await apiService.put(`resource/LMS Batch/${encodeURIComponent(batchName)}`, cleanPayload, {
+        headers
+      });
+    } catch (fallbackErr) {
+      console.warn("resource/LMS Batch update fallback failed:", fallbackErr);
+    }
   }
+
+  if (batchName) {
+    try {
+      await apiService.put(`resource/LMS Batch/${encodeURIComponent(batchName)}`, {
+        published: isPub ? 1 : 0,
+        allow_self_enrollment: cleanPayload.allow_self_enrollment !== undefined ? cleanPayload.allow_self_enrollment : 1,
+        allow_future: cleanPayload.allow_future !== undefined ? cleanPayload.allow_future : 1,
+      }, { headers });
+    } catch (syncErr) {
+      console.warn("Direct resource/LMS Batch update sync failed:", syncErr);
+    }
+  }
+
+  if (rpcError && !rpcResult) {
+    throw rpcError;
+  }
+
+  return rpcResult;
 };
 
 export const getCertificates = async () => {
@@ -2342,29 +2537,91 @@ export const createBadge = async (payload: CreateBadgePayload) => {
 };
 
 export const getBadgeList = async (filters?: Record<string, any>): Promise<LMSBadge[]> => {
-  const response = await apiService.get(
-    "method/lms.lms.doctype.lms_badge.lms_badge.get_badge_list",
-    {
-      params: filters,
-      headers: {
-        Authorization: `token ${API_TOKEN}`,
-      },
+  const headers: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
     }
-  );
-  if (Array.isArray(response)) return response;
-  if (response?.data && Array.isArray(response.data)) return response.data;
-  if (response?.message && Array.isArray(response.message)) return response.message;
-  return [];
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+
+  let list: LMSBadge[] = [];
+  try {
+    const response = await apiService.get(
+      "method/lms.lms.doctype.lms_badge.lms_badge.get_badge_list",
+      {
+        params: filters,
+        headers,
+      }
+    );
+    if (Array.isArray(response)) list = response;
+    else if (response?.data && Array.isArray(response.data)) list = response.data;
+    else if (response?.message && Array.isArray(response.message)) list = response.message;
+  } catch (err) {
+    console.warn("get_badge_list method call failed, checking resource fallback", err);
+  }
+
+  // Fallback or enrich with resource/LMS Badge to ensure 'owner' and all fields are present
+  try {
+    const resourceParams: Record<string, any> = {
+      fields: JSON.stringify([
+        "name", "title", "enabled", "description", "reference_doctype",
+        "event", "image", "grant_only_once", "user_field", "field_to_check",
+        "condition", "owner", "creation", "modified"
+      ]),
+      limit_page_length: 500,
+      order_by: "creation desc",
+    };
+    if (filters?.owner) {
+      resourceParams.filters = JSON.stringify([["LMS Badge", "owner", "=", filters.owner]]);
+    }
+    const fallbackRes = await apiService.get("resource/LMS Badge", {
+      params: resourceParams,
+      headers,
+    });
+    const resourceData = Array.isArray(fallbackRes?.data) ? fallbackRes.data : (Array.isArray(fallbackRes) ? fallbackRes : []);
+    if (resourceData.length > 0) {
+      if (list.length > 0) {
+        const ownerMap = new Map<string, string>();
+        resourceData.forEach((r: any) => {
+          if (r.name && r.owner) ownerMap.set(r.name, r.owner);
+        });
+        return list.map(item => ({
+          ...item,
+          owner: item.owner || (item.name ? ownerMap.get(item.name) : undefined)
+        }));
+      }
+      return resourceData;
+    }
+  } catch (fallbackErr) {
+    console.warn("Resource fallback for LMS Badge:", fallbackErr);
+  }
+
+  return list;
 };
 
 export const getBadge = async (badge_name: string): Promise<LMSBadge> => {
+  const headers: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+
   return apiService.get(
     "method/lms.lms.doctype.lms_badge.lms_badge.get_badge",
     {
       params: { name: badge_name },
-      headers: {
-        Authorization: `token ${API_TOKEN}`,
-      },
+      headers,
     }
   );
 };
@@ -2382,6 +2639,8 @@ export interface LMSBadgeAssignment {
   badge_image?: string | null;
   creation?: string;
   modified?: string;
+  owner?: string;
+  awarded_by?: string;
 }
 
 export interface CreateBadgeAssignmentPayload {
@@ -2397,7 +2656,7 @@ export interface UpdateBadgeAssignmentPayload {
   issued_on: string;
 }
 
-export const getBadgeAssignmentList = async (filters?: { member?: string; badge?: string }): Promise<LMSBadgeAssignment[]> => {
+export const getBadgeAssignmentList = async (filters?: { member?: string; badge?: string; owner?: string }): Promise<LMSBadgeAssignment[]> => {
   const headers: Record<string, string> = {};
   if (typeof window !== "undefined") {
     const apiKey = localStorage.getItem("apiKey");
@@ -2410,6 +2669,8 @@ export const getBadgeAssignmentList = async (filters?: { member?: string; badge?
     headers["Authorization"] = `token ${API_TOKEN}`;
   }
 
+  let list: LMSBadgeAssignment[] = [];
+
   // 1. Primary call: whitelisted RPC method
   try {
     const res = await apiService.get(
@@ -2419,7 +2680,6 @@ export const getBadgeAssignmentList = async (filters?: { member?: string; badge?
         headers,
       }
     );
-    let list: LMSBadgeAssignment[] = [];
     if (Array.isArray(res)) {
       list = res;
     } else if (res && typeof res === "object") {
@@ -2428,13 +2688,12 @@ export const getBadgeAssignmentList = async (filters?: { member?: string; badge?
       else if (res.message && typeof res.message === "object" && Array.isArray(res.message.data)) list = res.message.data;
       else if (res.data && typeof res.data === "object" && Array.isArray(res.data.data)) list = res.data.data;
     }
-    if (list.length > 0) return list;
   } catch (err) {
     console.warn("get_badge_assignment_list primary call failed", err);
   }
 
   // 1b. If custom token header failed or returned 0, retry without custom token header (allowing cookie session)
-  if (headers["Authorization"]) {
+  if (list.length === 0 && headers["Authorization"]) {
     try {
       const res = await apiService.get(
         "method/lms.lms.doctype.lms_badge_assignment.lms_badge_assignment.get_badge_assignment_list",
@@ -2442,7 +2701,6 @@ export const getBadgeAssignmentList = async (filters?: { member?: string; badge?
           params: filters,
         }
       );
-      let list: LMSBadgeAssignment[] = [];
       if (Array.isArray(res)) {
         list = res;
       } else if (res && typeof res === "object") {
@@ -2450,33 +2708,56 @@ export const getBadgeAssignmentList = async (filters?: { member?: string; badge?
         else if (Array.isArray(res.message)) list = res.message;
         else if (res.message && typeof res.message === "object" && Array.isArray(res.message.data)) list = res.message.data;
       }
-      if (list.length > 0) return list;
     } catch (cookieErr) {
       console.warn("get_badge_assignment_list cookie fallback failed", cookieErr);
     }
   }
 
-  // 2. Fallback to Frappe standard resource API
+  // 2. Fetch or enrich with Frappe standard resource API to ensure 'owner' field is present
   try {
     const resourceParams: Record<string, any> = {
-      fields: JSON.stringify(["name", "member", "badge", "issued_on", "creation", "modified"]),
-      limit_page_length: 100,
+      fields: JSON.stringify(["name", "member", "badge", "issued_on", "creation", "modified", "owner"]),
+      limit_page_length: 500,
       order_by: "creation desc",
     };
+    const frappeFilters: any[] = [];
     if (filters?.member) {
-      resourceParams.filters = JSON.stringify([["LMS Badge Assignment", "member", "=", filters.member]]);
+      frappeFilters.push(["LMS Badge Assignment", "member", "=", filters.member]);
     }
+    if (filters?.badge) {
+      frappeFilters.push(["LMS Badge Assignment", "badge", "=", filters.badge]);
+    }
+    if (filters?.owner) {
+      frappeFilters.push(["LMS Badge Assignment", "owner", "=", filters.owner]);
+    }
+    if (frappeFilters.length > 0) {
+      resourceParams.filters = JSON.stringify(frappeFilters);
+    }
+
     const fallbackRes = await apiService.get("resource/LMS Badge Assignment", {
       params: resourceParams,
       headers,
     });
-    if (Array.isArray(fallbackRes?.data)) return fallbackRes.data;
-    if (Array.isArray(fallbackRes)) return fallbackRes;
+    const resourceData = Array.isArray(fallbackRes?.data) ? fallbackRes.data : (Array.isArray(fallbackRes) ? fallbackRes : []);
+    
+    if (resourceData.length > 0) {
+      if (list.length > 0) {
+        const ownerMap = new Map<string, string>();
+        resourceData.forEach((r: any) => {
+          if (r.name && r.owner) ownerMap.set(r.name, r.owner);
+        });
+        return list.map(item => ({
+          ...item,
+          owner: item.owner || (item.name ? ownerMap.get(item.name) : undefined) || (item as any).awarded_by
+        }));
+      }
+      return resourceData;
+    }
   } catch (fallbackErr) {
-    console.error("Failed to load badge assignments via resource", fallbackErr);
+    console.warn("Failed to load badge assignments via resource", fallbackErr);
   }
 
-  return [];
+  return list;
 };
 
 export const getBadgeAssignment = async (name: string): Promise<LMSBadgeAssignment | null> => {

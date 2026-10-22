@@ -42,6 +42,8 @@ import {
   Check
 } from 'lucide-react';
 
+const SUPPORTED_PROGRAMMING_LANGUAGES = ['Python', 'JavaScript', 'Rust', 'Go'];
+
 export default function ProgrammingExercisesPage() {
   const router = useRouter();
 
@@ -138,7 +140,7 @@ export default function ProgrammingExercisesPage() {
 
   // Languages present
   const availableLanguages = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(SUPPORTED_PROGRAMMING_LANGUAGES);
     exercises.forEach((e) => {
       if (e.language) set.add(e.language);
     });
@@ -331,9 +333,14 @@ export default function ProgrammingExercisesPage() {
             </div>
             <div className="bg-slate-800/60 backdrop-blur-sm border border-slate-700/60 rounded-xl p-3.5">
               <p className="text-xs text-slate-400 font-medium">Supported Languages</p>
-              <p className="text-xl sm:text-2xl font-bold text-violet-300 mt-1">
-                {Math.max(1, availableLanguages.length - 1)}
-              </p>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <p className="text-xl sm:text-2xl font-bold text-violet-300">
+                  {SUPPORTED_PROGRAMMING_LANGUAGES.length}
+                </p>
+                <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
+                  (Python, JS, Rust, Go)
+                </span>
+              </div>
             </div>
             <div className="bg-slate-800/60 backdrop-blur-sm border border-slate-700/60 rounded-xl p-3.5">
               <p className="text-xs text-slate-400 font-medium">
