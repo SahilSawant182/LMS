@@ -8,12 +8,25 @@ import {
   LiveClassStatus,
   LiveClassAttendanceData,
   RecordJoinResponse,
+  ZoomSetting,
+  SaveZoomSettingPayload,
+  TestZoomCredentialsPayload,
+  GoogleMeetStatus,
+  GoogleMeetSetting,
+  GoogleMeetAuthUrlResponse,
 } from "@/types/live_class.types";
 
 export const getConferencingSettings = async (): Promise<ConferencingSettings> => {
   const res = await apiService.get("method/lms.lms.stride_lms.get_conferencing_settings");
-  const data = (res as any)?.data || res;
-  return data || { zoom_accounts: [], google_meet_accounts: [], providers: [] };
+  const raw = (res as any)?.data || res;
+  const zoomAccounts = raw?.zoom_accounts || raw?.zoom || [];
+  const googleMeetAccounts = raw?.google_meet_accounts || raw?.google_meet || [];
+  const providers = raw?.providers || ["Zoom", "Google Meet"];
+  return {
+    zoom_accounts: Array.isArray(zoomAccounts) ? zoomAccounts : [],
+    google_meet_accounts: Array.isArray(googleMeetAccounts) ? googleMeetAccounts : [],
+    providers: Array.isArray(providers) ? providers : [],
+  };
 };
 
 export const getBatchLiveClasses = async (
@@ -164,3 +177,103 @@ export const getAdminLiveClasses = async (limit = 10): Promise<LMSLiveClass[]> =
   const data = (res as any)?.data || res;
   return Array.isArray(data) ? data : [];
 };
+
+// ==================== ZOOM ACCOUNT MANAGEMENT ====================
+
+// Test credentials before saving
+export const testZoomCredentials = async (
+  payload: TestZoomCredentialsPayload
+): Promise<{ status: number; message: string; data?: any }> => {
+  const res = await apiService.post("method/lms.lms.stride_lms.test_zoom_credentials", payload);
+  const data = (res as any)?.message || res;
+  return data;
+};
+
+// Save (create or update) Zoom account
+export const saveZoomSetting = async (
+  payload: SaveZoomSettingPayload
+): Promise<{ status: number; message: string; data?: ZoomSetting }> => {
+  const res = await apiService.post("method/lms.lms.stride_lms.save_zoom_setting", payload);
+  const data = (res as any)?.message || res;
+  return data;
+};
+
+// Get instructor's connected Zoom accounts
+export const getMyZoomSettings = async (): Promise<ZoomSetting[]> => {
+  const res = await apiService.get("method/lms.lms.stride_lms.get_my_zoom_settings");
+  const raw = (res as any)?.message || res;
+  const accounts = raw?.data || raw || [];
+  return Array.isArray(accounts) ? accounts : [];
+};
+
+// Delete Zoom account
+export const deleteZoomSetting = async (
+  name: string
+): Promise<{ status: number; message: string }> => {
+  const res = await apiService.post("method/lms.lms.stride_lms.delete_zoom_setting", { name });
+  const data = (res as any)?.message || res;
+  return data;
+};
+
+// ==================== GOOGLE MEET & CALENDAR MANAGEMENT ====================
+
+// Check server Google OAuth credentials status
+export const getGoogleMeetStatus = async (): Promise<GoogleMeetStatus> => {
+  const res = await apiService.get("method/lms.lms.stride_lms.get_google_meet_status");
+  const data = (res as any)?.message?.data || (res as any)?.data || res;
+  return data;
+};
+
+// Admin only: Configure Google OAuth credentials
+export const configureGoogleOAuth = async (payload: {
+  client_id: string;
+  client_secret?: string;
+  enabled?: number;
+}): Promise<{ status: number; message: string; data?: any }> => {
+  const res = await apiService.post("method/lms.lms.stride_lms.configure_google_oauth", payload);
+  const data = (res as any)?.message || res;
+  return data;
+};
+
+// Get instructor's connected Google Meet accounts
+export const getMyGoogleMeetSettings = async (): Promise<GoogleMeetSetting[]> => {
+  const res = await apiService.get("method/lms.lms.stride_lms.get_my_google_meet_settings");
+  const raw = (res as any)?.message || res;
+  const accounts = raw?.data || raw || [];
+  return Array.isArray(accounts) ? accounts : [];
+};
+
+// Generate Google OAuth authorization URL for offline calendar access
+export const getGoogleMeetAuthUrl = async (
+  accountName: string,
+  redirectUri?: string
+): Promise<GoogleMeetAuthUrlResponse> => {
+  const currentUrl = typeof window !== "undefined" ? window.location.href : undefined;
+  const res = await apiService.post("method/lms.lms.stride_lms.get_google_meet_auth_url", {
+    account_name: accountName,
+    redirect_uri: redirectUri || currentUrl,
+  });
+  const data = (res as any)?.message?.data || (res as any)?.data || res;
+  return data;
+};
+
+// Update Google Meet account (rename / toggle enabled)
+export const saveGoogleMeetSetting = async (payload: {
+  name?: string;
+  account_name: string;
+  enabled?: number;
+}): Promise<{ status: number; message: string; data?: GoogleMeetSetting }> => {
+  const res = await apiService.post("method/lms.lms.stride_lms.save_google_meet_setting", payload);
+  const data = (res as any)?.message || res;
+  return data;
+};
+
+// Delete Google Meet account (unlinks from batches automatically on backend)
+export const deleteGoogleMeetSetting = async (
+  name: string
+): Promise<{ status: number; message: string }> => {
+  const res = await apiService.post("method/lms.lms.stride_lms.delete_google_meet_setting", { name });
+  const data = (res as any)?.message || res;
+  return data;
+};
+

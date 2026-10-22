@@ -3,12 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { createBatch, updateBatch, getMasterData, getQuizzes } from '@/services/lms.services';
 import { getConferencingSettings } from '@/services/live_class.services';
-import { ConferencingSettings } from '@/types/live_class.types';
+import { ConferencingSettings, ZoomSetting } from '@/types/live_class.types';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, Plus, Trash2, Calendar as CalendarIcon, Clock, Users, BookOpen, Tag, Video } from 'lucide-react';
 import Link from 'next/link';
 import { navigateBack } from '@/utils/navigation';
 import Dropdown from '@/components/ui/Dropdown';
+import ConnectZoomModal from '@/components/live-class/ConnectZoomModal';
+import ConnectGoogleMeetModal from '@/components/live-class/ConnectGoogleMeetModal';
 
 interface BatchFormProps {
   initialData?: any;
@@ -86,12 +88,53 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
     fetchAssessments();
   }, []);
 
+  const [zoomModalOpen, setZoomModalOpen] = useState(false);
+  const [googleModalOpen, setGoogleModalOpen] = useState(false);
+
   // Fetch conferencing settings
+  const fetchConferencing = async () => {
+    try {
+      const s = await getConferencingSettings();
+      setConferencingSettings(s);
+      return s;
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
-    getConferencingSettings()
-      .then(setConferencingSettings)
-      .catch(() => {});
+    fetchConferencing().then(() => {
+      if (typeof window !== "undefined") {
+        const sp = new URLSearchParams(window.location.search);
+        if (sp.get("google_meet") === "connected") {
+          const acc = sp.get("account");
+          if (acc) {
+            setFormData((prev: any) => ({
+              ...prev,
+              conferencing_provider: "Google Meet",
+              google_meet_account: acc,
+            }));
+          }
+        }
+      }
+    });
   }, []);
+
+  const handleZoomSuccess = async (savedAccount?: ZoomSetting) => {
+    const updated = await fetchConferencing();
+    if (savedAccount?.name || savedAccount?.account_name) {
+      setFormData((prev: any) => ({
+        ...prev,
+        zoom_account: savedAccount.name || savedAccount.account_name,
+      }));
+    } else if (updated?.zoom_accounts && updated.zoom_accounts.length > 0) {
+      const last = updated.zoom_accounts[updated.zoom_accounts.length - 1];
+      setFormData((prev: any) => ({
+        ...prev,
+        zoom_account: last.name,
+      }));
+    }
+  };
 
   const [formData, setFormData] = useState<any>({
     title: '',
@@ -334,7 +377,7 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Conferencing Provider</label>
                   <select name="conferencing_provider" value={formData.conferencing_provider} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors">
-                    <option value="">None / Manual</option>
+                    <option value="">Custom (Manual URL)</option>
                     <option value="Zoom">Zoom</option>
                     <option value="Google Meet">Google Meet</option>
                   </select>
@@ -342,25 +385,70 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
 
                 {/* Zoom Account selector */}
                 {formData.conferencing_provider === 'Zoom' && (
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Zoom Account</label>
-                    {conferencingSettings.zoom_accounts.length > 0 ? (
-                      <select name="zoom_account" value={formData.zoom_account || ''} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors">
-                        <option value="">Select Zoom Account</option>
-                        {conferencingSettings.zoom_accounts.map((a) => (
-                          <option key={a.name} value={a.name}>{a.account_name}</option>
-                        ))}
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-slate-600">Zoom Account</label>
+                        <button
+                          type="button"
+                          onClick={() => setZoomModalOpen(true)}
+                          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 hover:underline cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>+ Connect Zoom</span>
+                        </button>
+                      </div>
+                      {conferencingSettings.zoom_accounts.length > 0 ? (
+                        <select name="zoom_account" value={formData.zoom_account || ''} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors">
+                          <option value="">Select Zoom Account</option>
+                          {conferencingSettings.zoom_accounts.map((a) => (
+                            <option key={a.name} value={a.name}>{a.account_name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <input type="text" name="zoom_account" value={formData.zoom_account || ''} onChange={handleChange} className="flex-1 px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors" placeholder="Zoom Account ID or Name" />
+                          <button
+                            type="button"
+                            onClick={() => setZoomModalOpen(true)}
+                            className="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-md hover:bg-indigo-100 transition-colors shrink-0 cursor-pointer"
+                          >
+                            + Connect Zoom
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Auto Recording</label>
+                      <select
+                        name="auto_recording"
+                        value={formData.auto_recording || ''}
+                        onChange={handleChange}
+                        className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors"
+                      >
+                        <option value="">No Recording</option>
+                        <option value="Local">Local Recording (Host computer)</option>
+                        <option value="Cloud">Cloud Recording (Zoom Cloud)</option>
                       </select>
-                    ) : (
-                      <input type="text" name="zoom_account" value={formData.zoom_account || ''} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors" placeholder="Zoom Account ID" />
-                    )}
+                    </div>
                   </div>
                 )}
 
                 {/* Google Meet Account selector */}
                 {formData.conferencing_provider === 'Google Meet' && (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Google Meet Account</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-slate-600">Google Meet Account</label>
+                      <button
+                        type="button"
+                        onClick={() => setGoogleModalOpen(true)}
+                        className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 hover:underline cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>+ Connect Google Meet</span>
+                      </button>
+                    </div>
                     {conferencingSettings.google_meet_accounts.length > 0 ? (
                       <select name="google_meet_account" value={formData.google_meet_account || ''} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors">
                         <option value="">Select Google Meet Account</option>
@@ -369,7 +457,16 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
                         ))}
                       </select>
                     ) : (
-                      <input type="text" name="google_meet_account" value={formData.google_meet_account || ''} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors" placeholder="Google Meet Account ID" />
+                      <div className="flex items-center gap-2">
+                        <input type="text" name="google_meet_account" value={formData.google_meet_account || ''} onChange={handleChange} className="flex-1 px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors" placeholder="Google Meet Account ID or Name" />
+                        <button
+                          type="button"
+                          onClick={() => setGoogleModalOpen(true)}
+                          className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-md hover:bg-emerald-100 transition-colors shrink-0 cursor-pointer"
+                        >
+                          + Connect Google Meet
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
@@ -593,6 +690,22 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
           </div>
         </div>
       </div>
+
+      {/* Connect Zoom Modal Shortcut */}
+      <ConnectZoomModal
+        isOpen={zoomModalOpen}
+        onClose={() => setZoomModalOpen(false)}
+        onSuccess={handleZoomSuccess}
+      />
+
+      {/* Connect Google Meet Modal Shortcut */}
+      <ConnectGoogleMeetModal
+        isOpen={googleModalOpen}
+        onClose={() => {
+          setGoogleModalOpen(false);
+          fetchConferencing();
+        }}
+      />
     </div>
   );
 }

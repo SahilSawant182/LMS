@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Navbar from "@/components/Navbar";
 import {
   SlidersHorizontal,
@@ -15,10 +15,12 @@ import {
   Loader2,
   Clock,
   Bell,
+  Video,
 } from "lucide-react";
 import { getLmsSettings, updateLmsSettings } from "@/services/lms.services";
+import ZoomIntegrationsTab from "@/components/live-class/ZoomIntegrationsTab";
 
-type SettingsTab = "general" | "progress" | "sidebar" | "payments" | "emails";
+type SettingsTab = "general" | "progress" | "sidebar" | "payments" | "emails" | "conferencing";
 
 export interface LMSSettingsState {
   // General Tab
@@ -224,6 +226,12 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchSettings();
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search).get("tab");
+      if (p === "conferencing" || p === "zoom" || p === "integrations") {
+        setActiveTab("conferencing");
+      }
+    }
   }, []);
 
   // Synchronize dirty state
@@ -378,6 +386,7 @@ export default function SettingsPage() {
     { id: "sidebar", label: "Sidebar", icon: PanelLeft },
     { id: "payments", label: "Payment Settings", icon: CreditCard },
     { id: "emails", label: "Email Templates", icon: Mail },
+    { id: "conferencing", label: "Conferencing & Zoom", icon: Video },
   ];
 
   // Helper modern sleek toggle button component in place of checkbox
@@ -861,6 +870,22 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* 6. CONFERENCING & ZOOM TAB */}
+            {activeTab === "conferencing" && (
+              <div className="animate-fade-in-up">
+                <Suspense
+                  fallback={
+                    <div className="py-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
+                      <Loader2 className="w-6 h-6 animate-spin text-indigo-600 mx-auto mb-2" />
+                      <p className="text-xs font-semibold text-slate-600">Loading integrations...</p>
+                    </div>
+                  }
+                >
+                  <ZoomIntegrationsTab />
+                </Suspense>
               </div>
             )}
           </div>

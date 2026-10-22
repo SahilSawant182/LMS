@@ -116,7 +116,7 @@ export interface CreateLiveClassPayload {
   conferencing_provider?: 'Zoom' | 'Google Meet' | 'Custom';
   zoom_account?: string;
   google_meet_account?: string;
-  auto_recording?: 'No Recording' | 'Local' | 'Cloud';
+  auto_recording?: 'No Recording' | 'Local' | 'Cloud' | '' | string;
   join_url?: string;
 }
 
@@ -131,3 +131,5 @@ export interface UpdateLiveClassPayload {
   auto_recording?: string;
   join_url?: string;
 }
+
+export * from "./conferencing";

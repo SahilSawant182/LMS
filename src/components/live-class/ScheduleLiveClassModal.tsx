@@ -12,18 +12,22 @@ import {
   Link as LinkIcon,
   FileText,
   ChevronDown,
+  Plus,
 } from "lucide-react";
 import {
   LMSLiveClass,
   ConferencingSettings,
   CreateLiveClassPayload,
   UpdateLiveClassPayload,
+  ZoomSetting,
 } from "@/types/live_class.types";
 import {
   getConferencingSettings,
   createLiveClass,
   updateLiveClass,
 } from "@/services/live_class.services";
+import ConnectZoomModal from "./ConnectZoomModal";
+import ConnectGoogleMeetModal from "./ConnectGoogleMeetModal";
 
 const TIMEZONES = [
   "Asia/Kolkata",
@@ -116,35 +120,71 @@ export default function ScheduleLiveClassModal({
     duration: editClass?.duration || 60,
     timezone: editClass?.timezone || defaultTz,
     description: editClass?.description || "",
-    conferencing_provider: editClass?.conferencing_provider || ("Zoom" as "Zoom" | "Google Meet" | "Custom"),
+    conferencing_provider: editClass?.conferencing_provider || ("Custom" as "Custom" | "Zoom" | "Google Meet"),
     zoom_account: editClass?.zoom_account || "",
     google_meet_account: editClass?.google_meet_account || "",
-    auto_recording: editClass?.auto_recording || ("No Recording" as "No Recording" | "Local" | "Cloud"),
+    auto_recording: editClass?.auto_recording || "",
     join_url: editClass?.join_url || "",
   });
 
+  const [zoomModalOpen, setZoomModalOpen] = useState(false);
+  const [googleModalOpen, setGoogleModalOpen] = useState(false);
+
+  const fetchSettings = async () => {
+    setLoadingSettings(true);
+    try {
+      const s = await getConferencingSettings();
+      setSettings(s);
+      return s;
+    } catch {
+      // silently ignore
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchSettings = async () => {
-      setLoadingSettings(true);
-      try {
-        const s = await getConferencingSettings();
-        setSettings(s);
-        // Auto-select first accounts
-        if (!form.zoom_account && s.zoom_accounts.length > 0) {
-          setForm((p) => ({ ...p, zoom_account: s.zoom_accounts[0].name }));
+    fetchSettings().then((s) => {
+      if (!s) return;
+      if (typeof window !== "undefined") {
+        const sp = new URLSearchParams(window.location.search);
+        if (sp.get("google_meet") === "connected") {
+          const acc = sp.get("account");
+          if (acc) {
+            setForm((p) => ({
+              ...p,
+              conferencing_provider: "Google Meet",
+              google_meet_account: acc,
+            }));
+            return;
+          }
         }
-        if (!form.google_meet_account && s.google_meet_accounts.length > 0) {
-          setForm((p) => ({ ...p, google_meet_account: s.google_meet_accounts[0].name }));
-        }
-      } catch {
-        // silently ignore
-      } finally {
-        setLoadingSettings(false);
       }
-    };
-    fetchSettings();
+      // Auto-select first accounts
+      if (!form.zoom_account && s.zoom_accounts.length > 0) {
+        setForm((p) => ({ ...p, zoom_account: s.zoom_accounts[0].name }));
+      }
+      if (!form.google_meet_account && s.google_meet_accounts.length > 0) {
+        setForm((p) => ({ ...p, google_meet_account: s.google_meet_accounts[0].name }));
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleZoomSuccess = async (savedAccount?: ZoomSetting) => {
+    const s = await fetchSettings();
+    if (savedAccount?.name || savedAccount?.account_name) {
+      setForm((p) => ({
+        ...p,
+        zoom_account: savedAccount.name || savedAccount.account_name,
+      }));
+    } else if (s?.zoom_accounts && s.zoom_accounts.length > 0) {
+      setForm((p) => ({
+        ...p,
+        zoom_account: s.zoom_accounts[s.zoom_accounts.length - 1].name,
+      }));
+    }
+  };
 
   // Esc key dismiss
   useEffect(() => {
@@ -162,7 +202,7 @@ export default function ScheduleLiveClassModal({
     setForm((p) => ({ ...p, [name]: value }));
   };
 
-  const handleProviderChange = (provider: "Zoom" | "Google Meet" | "Custom") => {
+  const handleProviderChange = (provider: "Custom" | "Zoom" | "Google Meet") => {
     setForm((p) => ({ ...p, conferencing_provider: provider }));
   };
 
@@ -371,7 +411,7 @@ export default function ScheduleLiveClassModal({
                   Conferencing Provider
                 </label>
                 <div className="flex gap-2 flex-wrap mt-1">
-                  {(["Zoom", "Google Meet", "Custom"] as const).map((p) => (
+                  {(["Custom", "Zoom", "Google Meet"] as const).map((p) => (
                     <button
                       key={p}
                       type="button"
@@ -387,11 +427,43 @@ export default function ScheduleLiveClassModal({
                   ))}
                 </div>
 
+                {/* Custom URL options (Default) */}
+                {form.conferencing_provider === "Custom" && (
+                  <div className="mt-3 p-3.5 bg-purple-50/50 border border-purple-100 rounded-xl space-y-2">
+                    <div>
+                      <label className={labelClass}>
+                        <LinkIcon className="w-3 h-3 inline mr-1" />
+                        Meeting Join URL *
+                      </label>
+                      <input
+                        name="join_url"
+                        value={form.join_url}
+                        onChange={handleChange}
+                        placeholder="https://meet.google.com/xyz or https://zoom.us/j/... or Teams link"
+                        className={inputClass}
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Paste any meeting link directly (Google Meet, Zoom, MS Teams, YouTube Live, etc.). No API integration required.
+                    </p>
+                  </div>
+                )}
+
                 {/* Zoom options */}
                 {form.conferencing_provider === "Zoom" && (
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-blue-50/50 border border-blue-100 rounded-xl">
                     <div>
-                      <label className={labelClass}>Zoom Account</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-600">Zoom Account</label>
+                        <button
+                          type="button"
+                          onClick={() => setZoomModalOpen(true)}
+                          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 hover:underline cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>+ Connect Zoom</span>
+                        </button>
+                      </div>
                       {loadingSettings ? (
                         <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
                           <Loader2 className="w-3 h-3 animate-spin" /> Loading accounts…
@@ -414,9 +486,19 @@ export default function ScheduleLiveClassModal({
                           <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-400 py-2">
-                          No Zoom accounts configured.
-                        </p>
+                        <div className="py-1">
+                          <p className="text-xs text-slate-400 mb-1">
+                            No Zoom accounts configured.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setZoomModalOpen(true)}
+                            className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Connect your Zoom account</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                     <div>
@@ -428,9 +510,9 @@ export default function ScheduleLiveClassModal({
                           onChange={handleChange}
                           className={`${inputClass} appearance-none pr-8`}
                         >
-                          <option value="No Recording">No Recording</option>
-                          <option value="Local">Local</option>
-                          <option value="Cloud">Cloud</option>
+                          <option value="">No Recording</option>
+                          <option value="Local">Local Recording (Host computer)</option>
+                          <option value="Cloud">Cloud Recording (Zoom Cloud)</option>
                         </select>
                         <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                       </div>
@@ -441,7 +523,17 @@ export default function ScheduleLiveClassModal({
                 {/* Google Meet options */}
                 {form.conferencing_provider === "Google Meet" && (
                   <div className="mt-3 p-3 bg-green-50/50 border border-green-100 rounded-xl">
-                    <label className={labelClass}>Google Meet Account</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-semibold text-slate-600">Google Meet Account</label>
+                      <button
+                        type="button"
+                        onClick={() => setGoogleModalOpen(true)}
+                        className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 hover:underline cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>+ Connect Google Meet</span>
+                      </button>
+                    </div>
                     {loadingSettings ? (
                       <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
                         <Loader2 className="w-3 h-3 animate-spin" /> Loading accounts…
@@ -464,27 +556,20 @@ export default function ScheduleLiveClassModal({
                         <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-400 py-2">
-                        No Google Meet accounts configured.
-                      </p>
+                      <div className="py-1">
+                        <p className="text-xs text-slate-400 mb-1">
+                          No Google Meet accounts configured.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setGoogleModalOpen(true)}
+                          className="text-xs font-bold text-emerald-700 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Connect your Google account</span>
+                        </button>
+                      </div>
                     )}
-                  </div>
-                )}
-
-                {/* Custom URL */}
-                {form.conferencing_provider === "Custom" && (
-                  <div className="mt-3 p-3 bg-purple-50/50 border border-purple-100 rounded-xl">
-                    <label className={labelClass}>
-                      <LinkIcon className="w-3 h-3 inline mr-1" />
-                      Meeting Join URL *
-                    </label>
-                    <input
-                      name="join_url"
-                      value={form.join_url}
-                      onChange={handleChange}
-                      placeholder="https://meet.google.com/xyz or https://zoom.us/j/..."
-                      className={inputClass}
-                    />
                   </div>
                 )}
               </div>
@@ -559,6 +644,22 @@ export default function ScheduleLiveClassModal({
           </button>
         </div>
       </div>
+
+      {/* Connect Zoom Modal Shortcut */}
+      <ConnectZoomModal
+        isOpen={zoomModalOpen}
+        onClose={() => setZoomModalOpen(false)}
+        onSuccess={handleZoomSuccess}
+      />
+
+      {/* Connect Google Meet Modal Shortcut */}
+      <ConnectGoogleMeetModal
+        isOpen={googleModalOpen}
+        onClose={() => {
+          setGoogleModalOpen(false);
+          fetchSettings();
+        }}
+      />
     </div>,
     document.body
   );
