@@ -117,10 +117,12 @@ export default function AssignmentDetailPage() {
       // Fetch submissions for this assignment
       let submissionsList: any[] = [];
       try {
+        const rolesStr = typeof window !== "undefined" ? (localStorage.getItem("roles") || "[]") : "[]";
+        const isInstRole = rolesStr.includes("Instructor") || rolesStr.includes("System Manager") || rolesStr.includes("Administrator");
         const subRes = await getAssignmentSubmissions({
           assignment: assignmentsData?.name || assignmentName,
-          member: currentUserEmail,
-          user: currentUserEmail
+          user: currentUserEmail,
+          ...(isInstRole ? {} : { member: currentUserEmail })
         });
         const subRaw: any = (subRes as any)?.data || subRes;
         

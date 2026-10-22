@@ -1860,9 +1860,10 @@ export const getAssignmentSubmissions = async (filters?: {
     if (typeof res === 'object') {
       if (Array.isArray(res.submissions)) return res.submissions;
       if (res.data && Array.isArray(res.data.submissions)) return res.data.submissions;
-      if (res.message && Array.isArray(res.message.data)) return res.message.data;
-      if (res.message && Array.isArray(res.message.submissions)) return res.message.submissions;
+      if (res.data?.data && Array.isArray(res.data.data.submissions)) return res.data.data.submissions;
       if (res.message && Array.isArray(res.message.data?.submissions)) return res.message.data.submissions;
+      if (res.message && Array.isArray(res.message.submissions)) return res.message.submissions;
+      if (res.message?.data && Array.isArray(res.message.data)) return res.message.data;
       if (res.data && Array.isArray(res.data.data)) return res.data.data;
       if (Array.isArray(res.data)) return res.data;
       if (Array.isArray(res.message)) return res.message;
@@ -1884,7 +1885,7 @@ export const getAssignmentSubmissions = async (filters?: {
       { params }
     );
     const list = extractList(res);
-    if (list !== null && list.length > 0) return list;
+    if (list !== null) return list;
   } catch (err) {
     console.warn("get_assignment_submissions call with full params failed:", err);
   }
@@ -1897,7 +1898,7 @@ export const getAssignmentSubmissions = async (filters?: {
         { params: { assignment: filters.assignment } }
       );
       const list = extractList(res);
-      if (list !== null && list.length > 0) return list;
+      if (list !== null) return list;
     } catch (e) {}
   }
 
@@ -1907,7 +1908,7 @@ export const getAssignmentSubmissions = async (filters?: {
       `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignment_submissions`
     );
     const list = extractList(res);
-    if (list !== null && list.length > 0) return list;
+    if (list !== null) return list;
   } catch (e) {}
 
   // 4. Resource fallback to 'resource/LMS Assignment Submission'
