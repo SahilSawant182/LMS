@@ -37,7 +37,9 @@ import {
   Flame,
   Info,
   ClipboardCheck,
-  Award
+  Award,
+  ExternalLink,
+  Loader2
 } from "lucide-react";
 import {
   getStudentDashboard,
@@ -52,6 +54,8 @@ import { getCourseProgressBar, parseProgressBarValue } from "@/services/lms.serv
 import { MonthlyBreakdownItem } from "@/types/billing.types";
 import { getImageUrl } from "@/services/api.services";
 import { formatDate } from "@/utils/formatters";
+import { getMyLiveClasses, getAdminLiveClasses, recordLiveClassJoin } from "@/services/live_class.services";
+import { LMSLiveClass } from "@/types/live_class.types";
 
 type StudentTab = "courses" | "batches" | "programs";
 
@@ -77,6 +81,28 @@ export function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string>("");
+  const [myLiveClasses, setMyLiveClasses] = useState<LMSLiveClass[]>([]);
+  const [adminLiveClasses, setAdminLiveClasses] = useState<LMSLiveClass[]>([]);
+  const [loadingLiveClasses, setLoadingLiveClasses] = useState(false);
+  const [joiningClassId, setJoiningClassId] = useState<string | null>(null);
+
+  const handleStudentJoinSession = async (cls: LMSLiveClass) => {
+    setJoiningClassId(cls.name);
+    let targetUrl = cls.join_url;
+    try {
+      const res = await recordLiveClassJoin(cls.name);
+      if (res?.join_url) {
+        targetUrl = res.join_url;
+      }
+    } catch (e: any) {
+      console.warn("Check-in record error, falling back to join_url:", e);
+    } finally {
+      setJoiningClassId(null);
+      if (targetUrl) {
+        window.open(targetUrl, "_blank", "noopener,noreferrer");
+      }
+    }
+  };
 
   // Sync active tab redirects from URL query params (e.g., /dashboard?tab=payouts)
   useEffect(() => {
@@ -265,6 +291,25 @@ export function DashboardContent() {
           }
         } catch (rErr: any) {
           console.warn("Instructor sales report fetch error:", rErr);
+        }
+
+        // Fetch live classes for students and instructors
+        try {
+          setLoadingLiveClasses(true);
+          const [myClassesRes, adminClassesRes] = await Promise.allSettled([
+            getMyLiveClasses(4),
+            getAdminLiveClasses(4),
+          ]);
+          if (myClassesRes.status === "fulfilled" && Array.isArray(myClassesRes.value)) {
+            setMyLiveClasses(myClassesRes.value);
+          }
+          if (adminClassesRes.status === "fulfilled" && Array.isArray(adminClassesRes.value)) {
+            setAdminLiveClasses(adminClassesRes.value);
+          }
+        } catch (lcErr) {
+          console.warn("Live classes fetch error:", lcErr);
+        } finally {
+          setLoadingLiveClasses(false);
         }
 
       } catch (err: any) {
@@ -775,6 +820,117 @@ export function DashboardContent() {
                 <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>
+
+            {/* ── SECTION: UPCOMING COHORT SESSIONS TO HOST (INSTRUCTOR VIEW) ── */}
+            {adminLiveClasses.length > 0 && (
+              <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 sm:p-7 mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm">
+                      <Video className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                          Upcoming Cohort Sessions to Host
+                        </h2>
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                          {adminLiveClasses.length} Scheduled
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Manage and launch your scheduled live classes across your cohorts.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {adminLiveClasses.map((cls) => {
+                    const isLive = cls.status === "live" || cls.is_live;
+                    const providerBg =
+                      cls.conferencing_provider === "Zoom"
+                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                        : cls.conferencing_provider === "Google Meet"
+                        ? "bg-green-50 text-green-700 border-green-200"
+                        : "bg-purple-50 text-purple-700 border-purple-200";
+
+                    return (
+                      <div
+                        key={cls.name}
+                        className="bg-slate-50/60 rounded-2xl border border-slate-200/90 p-4.5 flex flex-col justify-between hover:border-indigo-300 hover:bg-white hover:shadow-sm transition-all"
+                      >
+                        <div>
+                          {/* Badges */}
+                          <div className="flex items-center justify-between gap-2 mb-2.5">
+                            {isLive ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-50 text-red-700 border border-red-200 animate-pulse">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                                LIVE NOW
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                UPCOMING
+                              </span>
+                            )}
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${providerBg}`}
+                            >
+                              {cls.conferencing_provider}
+                            </span>
+                          </div>
+
+                          {/* Batch Title */}
+                          <p className="text-[11px] font-semibold text-indigo-600 uppercase tracking-wider line-clamp-1 mb-1">
+                            {cls.batch_title || cls.batch_name}
+                          </p>
+
+                          {/* Class Title */}
+                          <h3 className="text-sm font-bold text-slate-900 line-clamp-2 mb-3 leading-snug">
+                            {cls.title}
+                          </h3>
+
+                          {/* Date & Time */}
+                          <div className="space-y-1.5 text-xs text-slate-600 mb-4 bg-white/80 rounded-xl p-2.5 border border-slate-100">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span className="font-medium text-slate-700">
+                                {cls.formatted_date || cls.date}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span>
+                                {cls.formatted_time || cls.time}{" "}
+                                <span className="text-slate-400">({cls.duration} mins)</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="space-y-2 pt-1 border-t border-slate-100">
+                          <button
+                            onClick={() => window.open(cls.start_url || cls.join_url, "_blank")}
+                            className="w-full py-2 px-3 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                          >
+                            <PlayCircle className="w-4 h-4" />
+                            <span>Start Class</span>
+                          </button>
+                          <Link
+                            href={`/batch/${encodeURIComponent(cls.batch_name)}#classes`}
+                            className="w-full py-1.5 px-3 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center gap-1 transition-all"
+                          >
+                            <span>Manage in Batch</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* ── SECTION 2: MONTHLY REVENUE BREAKDOWN GRAPH ── */}
             <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden mb-8">
@@ -1534,6 +1690,138 @@ export function DashboardContent() {
                 </div>
               </div>
             </div>
+
+            {/* ── UPCOMING LIVE CLASSES WIDGET (STUDENT VIEW) ── */}
+            {myLiveClasses.length > 0 && (
+              <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 sm:p-7 mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center text-red-600 shadow-sm">
+                      <Video className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                          Upcoming Live Classes
+                        </h2>
+                        {myLiveClasses.some((c) => c.status === "live" || c.is_live) && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 animate-pulse">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-600" />
+                            Live In Progress
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Interactive cohort sessions, workshops, and mentor Q&A calls for your enrolled batches.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {myLiveClasses.map((cls) => {
+                    const isLive = cls.status === "live" || cls.is_live;
+                    const canJoin = cls.can_join || isLive;
+                    const providerBg =
+                      cls.conferencing_provider === "Zoom"
+                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                        : cls.conferencing_provider === "Google Meet"
+                        ? "bg-green-50 text-green-700 border-green-200"
+                        : "bg-purple-50 text-purple-700 border-purple-200";
+
+                    return (
+                      <div
+                        key={cls.name}
+                        className={`bg-slate-50/60 rounded-2xl border p-4.5 flex flex-col justify-between transition-all hover:bg-white hover:shadow-sm ${
+                          isLive
+                            ? "border-red-200 bg-red-50/20"
+                            : "border-slate-200/90 hover:border-indigo-300"
+                        }`}
+                      >
+                        <div>
+                          {/* Badges */}
+                          <div className="flex items-center justify-between gap-2 mb-2.5">
+                            {isLive ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping" />
+                                LIVE NOW
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                UPCOMING
+                              </span>
+                            )}
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${providerBg}`}
+                            >
+                              {cls.conferencing_provider}
+                            </span>
+                          </div>
+
+                          {/* Batch Title */}
+                          <p className="text-[11px] font-semibold text-indigo-600 uppercase tracking-wider line-clamp-1 mb-1">
+                            {cls.batch_title || cls.batch_name}
+                          </p>
+
+                          {/* Class Title */}
+                          <h3 className="text-sm font-bold text-slate-900 line-clamp-2 mb-3 leading-snug">
+                            {cls.title}
+                          </h3>
+
+                          {/* Date & Time */}
+                          <div className="space-y-1.5 text-xs text-slate-600 mb-4 bg-white/80 rounded-xl p-2.5 border border-slate-100">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span className="font-medium text-slate-700">
+                                {cls.formatted_date || cls.date}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span>
+                                {cls.formatted_time || cls.time}{" "}
+                                <span className="text-slate-400">({cls.duration} mins)</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Button */}
+                        <div className="space-y-2 pt-1 border-t border-slate-100">
+                          {canJoin ? (
+                            <button
+                              onClick={() => handleStudentJoinSession(cls)}
+                              disabled={joiningClassId === cls.name}
+                              className="w-full py-2 px-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-75"
+                            >
+                              {joiningClassId === cls.name ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <span>Joining...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Video className="w-4 h-4 animate-pulse" />
+                                  <span>Join Session</span>
+                                </>
+                              )}
+                            </button>
+                          ) : (
+                            <Link
+                              href={`/batch/${encodeURIComponent(cls.batch_name)}#classes`}
+                              className="w-full py-2 px-3 rounded-xl text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 flex items-center justify-center gap-1.5 transition-all"
+                            >
+                              <span>View in Batch</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Student Tabs Navigation */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-1 mb-6 flex gap-1 max-w-xl">

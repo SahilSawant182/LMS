@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { createBatch, updateBatch, getMasterData, getQuizzes } from '@/services/lms.services';
+import { getConferencingSettings } from '@/services/live_class.services';
+import { ConferencingSettings } from '@/types/live_class.types';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, Plus, Trash2, Calendar as CalendarIcon, Clock, Users, BookOpen, Tag, Video } from 'lucide-react';
 import Link from 'next/link';
@@ -20,6 +22,11 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
   
   const [activeTab, setActiveTab] = useState<'details' | 'assessment' | 'timetable' | 'pricing'>('details');
   const [assessmentOptions, setAssessmentOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [conferencingSettings, setConferencingSettings] = useState<ConferencingSettings>({
+    zoom_accounts: [],
+    google_meet_accounts: [],
+    providers: [],
+  });
 
   // Fetch available assessments and quizzes for the dropdown
   useEffect(() => {
@@ -79,6 +86,13 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
     fetchAssessments();
   }, []);
 
+  // Fetch conferencing settings
+  useEffect(() => {
+    getConferencingSettings()
+      .then(setConferencingSettings)
+      .catch(() => {});
+  }, []);
+
   const [formData, setFormData] = useState<any>({
     title: '',
     name: '',
@@ -100,6 +114,8 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
     show_live_class: 1,
     courses: [],
     instructors: [],
+    zoom_account: '',
+    google_meet_account: '',
     
     evaluation: 0,
     evaluation_end_date: '',
@@ -317,8 +333,46 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Conferencing Provider</label>
-                  <input type="text" name="conferencing_provider" value={formData.conferencing_provider} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors" placeholder="e.g. Zoom" />
+                  <select name="conferencing_provider" value={formData.conferencing_provider} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors">
+                    <option value="">None / Manual</option>
+                    <option value="Zoom">Zoom</option>
+                    <option value="Google Meet">Google Meet</option>
+                  </select>
                 </div>
+
+                {/* Zoom Account selector */}
+                {formData.conferencing_provider === 'Zoom' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Zoom Account</label>
+                    {conferencingSettings.zoom_accounts.length > 0 ? (
+                      <select name="zoom_account" value={formData.zoom_account || ''} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors">
+                        <option value="">Select Zoom Account</option>
+                        {conferencingSettings.zoom_accounts.map((a) => (
+                          <option key={a.name} value={a.name}>{a.account_name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input type="text" name="zoom_account" value={formData.zoom_account || ''} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors" placeholder="Zoom Account ID" />
+                    )}
+                  </div>
+                )}
+
+                {/* Google Meet Account selector */}
+                {formData.conferencing_provider === 'Google Meet' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Google Meet Account</label>
+                    {conferencingSettings.google_meet_accounts.length > 0 ? (
+                      <select name="google_meet_account" value={formData.google_meet_account || ''} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors">
+                        <option value="">Select Google Meet Account</option>
+                        {conferencingSettings.google_meet_accounts.map((a) => (
+                          <option key={a.name} value={a.name}>{a.account_name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input type="text" name="google_meet_account" value={formData.google_meet_account || ''} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors" placeholder="Google Meet Account ID" />
+                    )}
+                  </div>
+                )}
                 
                 <div className="col-span-2">
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Detailed HTML Description</label>
@@ -340,7 +394,7 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
                   </label>
                   <label className="flex items-center gap-1.5 cursor-pointer">
                     <input type="checkbox" name="show_live_class" checked={formData.show_live_class === 1} onChange={handleChange} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" />
-                    <span className="text-xs font-medium text-slate-600">Show Live Class</span>
+                    <span className="text-xs font-medium text-slate-600">Show Live Classes Tab to Students</span>
                   </label>
                 </div>
                 
