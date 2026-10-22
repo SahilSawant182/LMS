@@ -2104,25 +2104,63 @@ export const getAssignmentSubmissions = async (filters?: {
   return [];
 };
 
-export const getAssignmentResult = async (submission: string) => {
+export const getAssignmentResult = async (submission: string, user?: string) => {
   if (!submission) return null;
+
+  const params: Record<string, any> = { submission };
+  if (user) {
+    params.user = user;
+  }
+
+  const authHeaders: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      authHeaders["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!authHeaders["Authorization"] && API_TOKEN) {
+    authHeaders["Authorization"] = `token ${API_TOKEN}`;
+  }
+
+  const normalizeResult = (raw: any) => {
+    if (!raw || typeof raw !== "object") return raw;
+    const answerVal =
+      raw.answer !== undefined ? raw.answer :
+      raw.anwer !== undefined ? raw.anwer :
+      raw.content !== undefined ? raw.content :
+      raw.submission_content !== undefined ? raw.submission_content :
+      raw.solution !== undefined ? raw.solution :
+      raw.text !== undefined ? raw.text : '';
+
+    return {
+      ...raw,
+      answer: answerVal,
+      anwer: answerVal,
+      content: answerVal || raw.content || '',
+      submission_url: raw.submission_url || raw.url || raw.project_url || '',
+      attachment: raw.attachment || raw.submission_attachment || raw.document || '',
+    };
+  };
+
   // 1. Primary method: lms.lms.doctype.lms_course.lms_course.get_assignment_result
   try {
     const res = await apiService.get(
       "method/lms.lms.doctype.lms_course.lms_course.get_assignment_result",
-      { params: { submission } }
+      { params, headers: authHeaders }
     );
     const data = res?.message?.data || res?.data || res?.message || res;
-    if (data) return data;
+    if (data) return normalizeResult(data);
   } catch (err) {
     // Fallback if configured with 'octype'
     try {
       const res = await apiService.get(
         "method/lms.lms.octype.lms_course.lms_course.get_assignment_result",
-        { params: { submission } }
+        { params, headers: authHeaders }
       );
       const data = res?.message?.data || res?.data || res?.message || res;
-      if (data) return data;
+      if (data) return normalizeResult(data);
     } catch (e) {
       console.warn("get_assignment_result primary and octype calls failed:", err);
     }
@@ -2130,8 +2168,12 @@ export const getAssignmentResult = async (submission: string) => {
 
   // 2. Resource fallback
   try {
-    const res = await apiService.get(`resource/LMS Assignment Submission/${encodeURIComponent(submission)}`);
-    return res?.data || res?.message || res;
+    const res = await apiService.get(
+      `resource/LMS Assignment Submission/${encodeURIComponent(submission)}`,
+      { headers: authHeaders }
+    );
+    const data = res?.data || res?.message || res;
+    return normalizeResult(data);
   } catch (e) {
     return null;
   }

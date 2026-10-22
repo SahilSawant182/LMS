@@ -215,15 +215,24 @@ function AssignmentsContent() {
   const handleOpenSubmissionModal = async (sub: any) => {
     setSelectedSubmission(sub);
     setViewModalOpen(true);
-    if (sub.name && !sub.content && !sub.answer) {
+    if (sub.name) {
       setLoadingModalDetail(true);
       try {
-        const full = await getAssignmentResult(sub.name);
+        const studentUser = sub.member || sub.owner || sub.user || '';
+        const full = await getAssignmentResult(sub.name, studentUser);
         if (full) {
+          const resolvedAnswer =
+            full.answer !== undefined ? full.answer :
+            full.anwer !== undefined ? full.anwer :
+            full.content !== undefined ? full.content :
+            sub.answer || sub.anwer || sub.content || '';
+
           setSelectedSubmission((prev: any) => ({
             ...prev,
             ...full,
-            content: full.content || full.answer || full.text || prev?.content,
+            answer: resolvedAnswer,
+            anwer: resolvedAnswer,
+            content: resolvedAnswer,
             submission_url: full.submission_url || full.url || prev?.submission_url,
             attachment: full.attachment || full.submission_attachment || prev?.attachment,
           }));
@@ -758,19 +767,24 @@ function AssignmentsContent() {
 
               {/* Submission Content / Student Work */}
               <div>
-                <h4 className="font-bold text-slate-900 text-xs mb-2 flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-indigo-600" />
-                  Student Response / Content
+                <h4 className="font-bold text-slate-900 text-xs mb-2 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                    Student Submitted Answer
+                  </span>
+                  <span className="text-[10px] font-mono font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                    Answer Field
+                  </span>
                 </h4>
 
                 {loadingModalDetail ? (
                   <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-slate-400">
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600 mx-auto mb-2"></div>
-                    Fetching full answer...
+                    Fetching full answer from server...
                   </div>
-                ) : selectedSubmission.content || selectedSubmission.answer ? (
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 whitespace-pre-wrap max-h-56 overflow-y-auto leading-relaxed">
-                    {selectedSubmission.content || selectedSubmission.answer}
+                ) : (selectedSubmission.answer || selectedSubmission.anwer || selectedSubmission.content) ? (
+                  <div className="p-4 bg-slate-900 text-slate-100 border border-slate-800 rounded-xl font-mono text-xs whitespace-pre-wrap max-h-60 overflow-y-auto leading-relaxed selection:bg-indigo-600 selection:text-white">
+                    {String(selectedSubmission.answer || selectedSubmission.anwer || selectedSubmission.content)}
                   </div>
                 ) : selectedSubmission.submission_url ? (
                   <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl">

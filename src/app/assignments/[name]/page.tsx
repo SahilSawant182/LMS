@@ -241,12 +241,12 @@ export default function AssignmentDetailPage() {
     }
   };
 
-  const handleViewAssignmentResult = async (submissionId: string) => {
+  const handleViewAssignmentResult = async (submissionId: string, studentUser?: string) => {
     if (!submissionId) return;
     setLoadingResult(true);
     setResultModalOpen(true);
     try {
-      const res = await getAssignmentResult(submissionId);
+      const res = await getAssignmentResult(submissionId, studentUser);
       setSelectedResult(res || { submission: submissionId, name: submissionId });
     } catch (e) {
       console.warn("Failed to fetch assignment result:", e);
@@ -647,7 +647,7 @@ export default function AssignmentDetailPage() {
                               </span>
                               <button
                                 type="button"
-                                onClick={() => handleViewAssignmentResult(sub.name || sub.submission)}
+                                onClick={() => handleViewAssignmentResult(sub.name || sub.submission, sub.member || sub.owner || sub.user)}
                                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition-colors cursor-pointer border border-indigo-200"
                               >
                                 <Eye className="w-3.5 h-3.5" />
@@ -657,9 +657,12 @@ export default function AssignmentDetailPage() {
                           </div>
                           
                           {/* Answer rendering based on type */}
-                          {(!assignment?.type || assignment.type === 'Text') && sub.content && (
+                          {(!assignment?.type || assignment.type === 'Text') && (sub.answer || sub.anwer || sub.content) && (
                             <div className="mt-3 p-3 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">
-                              {sub.content}
+                              <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                                Submitted Answer:
+                              </span>
+                              {sub.answer || sub.anwer || sub.content}
                             </div>
                           )}
                           
@@ -781,15 +784,54 @@ export default function AssignmentDetailPage() {
                     </div>
                   )}
 
-                  {/* Submitted Content Preview */}
-                  {selectedResult.content && (
+                  {/* Submitted Answer Preview */}
+                  {(selectedResult.answer || selectedResult.anwer || selectedResult.content || selectedResult.submission_content) ? (
                     <div>
-                      <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                        Submitted Answer Content
+                      <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center justify-between">
+                        <span>Submitted Student Answer</span>
+                        <span className="text-[10px] font-mono font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                          Answer Field
+                        </span>
                       </h5>
-                      <div className="bg-slate-900 text-slate-200 p-4 rounded-xl font-mono text-xs max-h-48 overflow-y-auto whitespace-pre-wrap">
-                        {selectedResult.content}
+                      <div className="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs max-h-56 overflow-y-auto whitespace-pre-wrap leading-relaxed border border-slate-800 selection:bg-indigo-600 selection:text-white">
+                        {String(selectedResult.answer || selectedResult.anwer || selectedResult.content || selectedResult.submission_content)}
                       </div>
+                    </div>
+                  ) : null}
+
+                  {/* Submitted Project URL */}
+                  {(selectedResult.submission_url || selectedResult.url) && (
+                    <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl">
+                      <span className="text-[10px] font-bold text-indigo-600 uppercase block mb-1">
+                        Submitted Project URL
+                      </span>
+                      <a
+                        href={selectedResult.submission_url || selectedResult.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs text-indigo-700 font-semibold hover:underline break-all"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                        {selectedResult.submission_url || selectedResult.url}
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Submitted Document / Attachment */}
+                  {(selectedResult.attachment || selectedResult.submission_attachment) && (
+                    <div className="p-3 bg-violet-50/70 border border-violet-100 rounded-xl">
+                      <span className="text-[10px] font-bold text-violet-600 uppercase block mb-1">
+                        Submitted Attachment / Document
+                      </span>
+                      <a
+                        href={selectedResult.attachment || selectedResult.submission_attachment}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs text-violet-700 font-semibold hover:underline"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                        View Attached File
+                      </a>
                     </div>
                   )}
                 </>
