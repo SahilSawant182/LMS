@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import {
   getQuiz,
   getQuestions,
+  getQuestion,
   getQuizSubmissions,
   getQuizResult,
   createQuizSubmission,
@@ -136,6 +137,43 @@ export default function QuizDetailsPage() {
   const [lastSubmissionId, setLastSubmissionId] = useState<string | null>(null);
   const [lastSubmissionResult, setLastSubmissionResult] = useState<any | null>(null);
 
+  const bankMapRef = useRef<Map<string, any>>(new Map());
+
+  const resolveQuestionId = (q: any): string => {
+    if (!q) return "";
+    if (typeof q.qts_id === "string" && q.qts_id.startsWith("QTS-")) return q.qts_id.trim();
+    if (typeof q.question === "string" && q.question.startsWith("QTS-")) return q.question.trim();
+    if (typeof q.question_id === "string" && q.question_id.startsWith("QTS-")) return q.question_id.trim();
+    if (typeof q.name === "string" && q.name.startsWith("QTS-")) return q.name.trim();
+
+    const textCandidates = [
+      q.question_detail,
+      q.question_title,
+      q.question_text,
+      q.title,
+      typeof q.question === "string" && !q.question.startsWith("QTS-") ? q.question : null,
+      q.name
+    ].filter(Boolean);
+
+    for (const c of textCandidates) {
+      const matched = bankMapRef.current.get(String(c).toLowerCase().trim());
+      if (matched) {
+        if (typeof matched.question === "string" && matched.question.startsWith("QTS-")) return matched.question.trim();
+        if (typeof matched.name === "string" && matched.name.startsWith("QTS-")) return matched.name.trim();
+        if (typeof matched.question_id === "string" && matched.question_id.startsWith("QTS-")) return matched.question_id.trim();
+        if (typeof matched.qts_id === "string" && matched.qts_id.startsWith("QTS-")) return matched.qts_id.trim();
+      }
+    }
+
+    const allStrings = [q.question, q.question_id, q.qts_id, q.name, q.question_detail].filter(Boolean);
+    for (const s of allStrings) {
+      const rx = String(s).match(/QTS-\d{4}-\d+/i);
+      if (rx) return rx[0];
+    }
+
+    return (q.question && !q.question.includes(" ") ? q.question : (q.question_id || q.name || ""));
+  };
+
   useEffect(() => {
     const isInst = isAuthorizedInstructor();
     setIsInstructor(isInst);
@@ -195,88 +233,181 @@ export default function QuizDetailsPage() {
         // Extract data property properly across various API response wrappers
         const data: any = res?.data?.data || res?.message?.data || res?.data || res?.message || res;
         
-        if (data && (data.name || data.title)) {
-          const rawQuestions = Array.isArray(data.questions) ? data.questions : [];
+        if (data && (data.name || data.title || data.questions)) {
+          const rawQuestions = Array.isArray(data.questions)
+            ? data.questions
+            : Array.isArray(data.quiz_questions)
+            ? data.quiz_questions
+            : Array.isArray(data.question_list)
+            ? data.question_list
+            : Array.isArray(data.data?.questions)
+            ? data.data.questions
+            : [];
+
+          // Helper to parse question options
+          const parseOptions = (q: any, match?: any): QuizOption[] => {
+            let rawOpts: any[] = [];
+            if (typeof q?.options === 'string') {
+              try { rawOpts = JSON.parse(q.options); } catch {}
+            } else if (Array.isArray(q?.options) && q.options.length > 0) {
+              rawOpts = q.options;
+            }
+
+            if (!Array.isArray(rawOpts) || rawOpts.length === 0) {
+              const flatOnQ = [1, 2, 3, 4, 5, 6].map((num) => {
+                const val = q?.[`option_${num}`];
+                if (!val) return null;
+                return {
+                  key: `option_${num}`,
+                  option: val,
+                  is_correct: q[`is_correct_${num}`] === 1 || q[`is_correct_${num}`] === true,
+                  explanation: q[`explanation_${num}`] || ''
+                };
+              }).filter(Boolean);
+              if (flatOnQ.length > 0) rawOpts = flatOnQ;
+            }
+
+            if ((!Array.isArray(rawOpts) || rawOpts.length === 0) && match) {
+              if (Array.isArray(match.options) && match.options.length > 0) {
+                rawOpts = match.options;
+              } else if (typeof match.options === 'string') {
+                try { rawOpts = JSON.parse(match.options); } catch {}
+              } else {
+                rawOpts = [1, 2, 3, 4, 5, 6].map((num) => {
+                  const val = match[`option_${num}`];
+                  if (!val) return null;
+                  return {
+                    key: `option_${num}`,
+                    option: val,
+                    is_correct: match[`is_correct_${num}`] === 1 || match[`is_correct_${num}`] === true,
+                    explanation: match[`explanation_${num}`] || ''
+                  };
+                }).filter(Boolean);
+              }
+            }
+
+            return (rawOpts || []).map((opt: any, optIdx: number) => {
+              const optKey = opt.key || `option_${optIdx + 1}`;
+              const optText = typeof opt === 'string'
+                ? opt
+                : (opt.option || opt.title || opt.text || opt.value || opt.label || '');
+              return {
+                ...opt,
+                key: optKey,
+                option: optText
+              };
+            });
+          };
 
           // Enrich questions with question bank data if available
-          if (rawQuestions.length > 0) {
-            try {
-              const bankRes = await getQuestions();
-              const list = Array.isArray(bankRes)
-                ? bankRes
-                : (bankRes?.data?.questions || bankRes?.message?.data?.questions || bankRes?.questions || []);
-              if (Array.isArray(list) && list.length > 0) {
-                const bankMap = new Map<string, any>();
-                list.forEach((item: any) => {
-                  const k1 = String(item.question || item.name || '').toLowerCase();
-                  const k2 = String(item.name || '').toLowerCase();
-                  if (k1) bankMap.set(k1, item);
-                  if (k2) bankMap.set(k2, item);
-                });
-                data.questions = rawQuestions.map((q: any) => {
-                  const rawRef = q.question || q.name || '';
-                  const match = bankMap.get(String(rawRef).toLowerCase()) || bankMap.get(String(q.name || '').toLowerCase());
-                  
-                  // Extract options from either array or flat columns
-                  let opts: any[] = [];
-                  if (Array.isArray(q.options) && q.options.length > 0) {
-                    opts = q.options;
-                  } else if (match && Array.isArray(match.options) && match.options.length > 0) {
-                    opts = match.options;
-                  } else if (match) {
-                    opts = [1, 2, 3, 4].map((num) => {
-                      const val = match[`option_${num}`];
-                      if (!val) return null;
-                      return {
-                        key: `option_${num}`,
-                        option: val,
-                        is_correct: match[`is_correct_${num}`] === 1 || match[`is_correct_${num}`] === true,
-                        explanation: match[`explanation_${num}`] || ''
-                      };
-                    }).filter(Boolean);
-                  }
+          const indexBankItem = (item: any) => {
+            if (!item || typeof item !== 'object') return;
+            const qtsId =
+              (item.question && String(item.question).startsWith('QTS-'))
+                ? String(item.question).trim()
+                : (item.name && String(item.name).startsWith('QTS-'))
+                ? String(item.name).trim()
+                : (item.question_id && String(item.question_id).startsWith('QTS-'))
+                ? String(item.question_id).trim()
+                : null;
 
-                  const normalizedOptions = opts.map((opt: any, optIdx: number) => {
-                    const optKey = opt.key || `option_${optIdx + 1}`;
-                    const optText = typeof opt === 'string' ? opt : (opt.option || opt.title || opt.name || opt.value || '');
-                    return {
-                      ...opt,
-                      key: optKey,
-                      option: optText
-                    };
-                  });
+            if (item.name) bankMapRef.current.set(String(item.name).toLowerCase().trim(), item);
+            if (item.question) bankMapRef.current.set(String(item.question).toLowerCase().trim(), item);
+            if (item.question_id) bankMapRef.current.set(String(item.question_id).toLowerCase().trim(), item);
+            if (qtsId) bankMapRef.current.set(qtsId.toLowerCase(), item);
 
-                  const questionId = match?.name || (q.question && q.question.startsWith('QTS-') ? q.question : (q.question || q.name));
+            const textValues = [
+              item.question_detail,
+              item.question_title,
+              item.question_text,
+              item.title,
+              typeof item.question === 'string' && !item.question.startsWith('QTS-') ? item.question : null
+            ].filter(Boolean);
 
-                  return {
-                    ...q,
-                    question_id: questionId,
-                    question_detail: q.question_detail || match?.question_detail || match?.question_title || q.question || rawRef,
-                    marks: Number(q.marks) || Number(match?.marks) || 1,
-                    type: q.type || match?.type || 'Choices',
-                    options: normalizedOptions,
-                  };
-                });
-              } else {
-                data.questions = rawQuestions.map((q: any) => ({
-                  ...q,
-                  question_id: q.question || q.name,
-                  options: Array.isArray(q.options) ? q.options.map((opt: any, optIdx: number) => ({
-                    ...opt,
-                    key: opt.key || `option_${optIdx + 1}`,
-                    option: typeof opt === 'string' ? opt : (opt.option || opt.title || opt.name || opt.value || '')
-                  })) : []
-                }));
-              }
-            } catch (enrichErr) {
-              console.warn("Could not enrich quiz questions:", enrichErr);
-              data.questions = rawQuestions;
+            textValues.forEach((txt: string) => {
+              bankMapRef.current.set(String(txt).toLowerCase().trim(), item);
+            });
+          };
+
+          try {
+            const bankRes = await getQuestions();
+            const list = Array.isArray(bankRes)
+              ? bankRes
+              : (bankRes?.data?.questions || bankRes?.message?.data?.questions || bankRes?.questions || []);
+            if (Array.isArray(list) && list.length > 0) {
+              list.forEach(indexBankItem);
             }
-          } else {
-            data.questions = [];
+          } catch (enrichErr) {
+            console.warn("Could not enrich quiz questions with bank:", enrichErr);
           }
 
-          setQuiz(data);
+          // Fetch individual question details in parallel if missing from bankMapRef
+          const missingQuestionIds = rawQuestions
+            .map((q: any) => q.question || q.name)
+            .filter((qId: string) => {
+              if (!qId) return false;
+              const low = String(qId).toLowerCase();
+              const match = bankMapRef.current.get(low);
+              return !match || (!match.options && !match.option_1);
+            });
+
+          if (missingQuestionIds.length > 0) {
+            try {
+              const uniqueMissingIds = Array.from(new Set(missingQuestionIds));
+              const indivRes = await Promise.all(
+                uniqueMissingIds.map((id: any) => getQuestion(id).catch(() => null))
+              );
+              indivRes.forEach(indexBankItem);
+            } catch (indivErr) {
+              console.warn("Could not fetch missing question details:", indivErr);
+            }
+          }
+
+          data.questions = rawQuestions.map((q: any) => {
+            const rawRef = q.question || q.name || '';
+            const textRef = q.question_detail || q.question_title || q.question_text || q.title || (typeof q.question === 'string' && !q.question.startsWith('QTS-') ? q.question : '') || '';
+            const match =
+              (textRef ? bankMapRef.current.get(String(textRef).toLowerCase().trim()) : null) ||
+              (q.question ? bankMapRef.current.get(String(q.question).toLowerCase().trim()) : null) ||
+              (q.name ? bankMapRef.current.get(String(q.name).toLowerCase().trim()) : null) ||
+              (typeof rawRef === 'string' ? bankMapRef.current.get(rawRef.toLowerCase().trim()) : null);
+
+            const normalizedOptions = parseOptions(q, match);
+            const resolvedQtsId = resolveQuestionId({ ...match, ...q });
+
+            const questionDetail =
+              q.question_detail ||
+              q.question_title ||
+              q.question_text ||
+              q.title ||
+              match?.question_detail ||
+              match?.question_title ||
+              match?.question_text ||
+              match?.title ||
+              (typeof q.question === 'string' && !q.question.startsWith('QTS-') ? q.question : '') ||
+              rawRef;
+
+            return {
+              ...q,
+              question: resolvedQtsId,
+              question_id: resolvedQtsId,
+              qts_id: resolvedQtsId,
+              question_detail: questionDetail,
+              marks: Number(q.marks) || Number(match?.marks) || 1,
+              type: q.type || match?.type || 'Choices',
+              options: normalizedOptions,
+            };
+          });
+
+          setQuiz({
+            ...data,
+            name: data.name || name,
+            title: data.title || data.name || name,
+            max_attempts: Number(data.max_attempts) || 3,
+            total_marks: Number(data.total_marks) || 0,
+            passing_percentage: Number(data.passing_percentage) || 100,
+            questions: data.questions,
+          });
         } else {
           setError("Assessment details could not be loaded.");
         }
@@ -357,12 +488,15 @@ export default function QuizDetailsPage() {
   };
 
   const handleAnswer = (question: QuizQuestion, answerValue: string) => {
-    const qKey = question.question_id || question.question || question.name;
+    const qKey = resolveQuestionId(question);
     setAnswers(prev => ({
       ...prev,
       [qKey]: answerValue,
       [question.name]: answerValue,
-      ...(question.question ? { [question.question]: answerValue } : {})
+      ...(question.question ? { [question.question]: answerValue } : {}),
+      ...(question.question_id ? { [question.question_id]: answerValue } : {}),
+      ...(question.question_detail ? { [question.question_detail]: answerValue } : {}),
+      ...((question as any).qts_id ? { [(question as any).qts_id]: answerValue } : {})
     }));
   };
 
@@ -384,21 +518,45 @@ export default function QuizDetailsPage() {
     setSubmissionError(null);
 
     try {
-      // Build answers payload: [ { question: "QTS-2026-00008", answer: "option_1" } ]
+      // Build answers payload matching exact requested format:
+      // {
+      //   "quiz": "dxfcgvhbn",
+      //   "answers": [
+      //     { "question": "QTS-2026-00008", "answer": "Project Management" },
+      //     { "question": "QTS-2026-00009", "answer": "Lessons" }
+      //   ]
+      // }
       const answersPayload: QuizSubmissionAnswer[] = (quiz.questions || [])
         .map((q: any) => {
-          const qId = q.question_id || (q.question && q.question.startsWith("QTS-") ? q.question : (q.question || q.name));
-          const userAns = answers[qId] ?? answers[q.name] ?? answers[q.question || ''] ?? "";
+          const qId = resolveQuestionId(q);
+
+          const userAns =
+            answers[qId] ??
+            (q.qts_id ? answers[q.qts_id] : undefined) ??
+            (q.question ? answers[q.question] : undefined) ??
+            (q.question_id ? answers[q.question_id] : undefined) ??
+            (q.question_detail ? answers[q.question_detail] : undefined) ??
+            answers[q.name] ??
+            "";
 
           let finalAnswer = String(userAns || "").trim();
           if (q.options && q.options.length > 0) {
-            const matchedIdx = q.options.findIndex((opt: any, oIdx: number) => {
+            const matchedOpt = q.options.find((opt: any, oIdx: number) => {
               const key = opt.key || `option_${oIdx + 1}`;
-              const label = opt.option || opt.value || opt;
-              return userAns === key || userAns === label;
+              const label = typeof opt === 'string' ? opt : (opt.option || opt.value || opt.text || opt.title || '');
+              return (
+                userAns === key ||
+                userAns === label ||
+                userAns.toLowerCase() === String(key).toLowerCase() ||
+                userAns.toLowerCase() === String(label).toLowerCase() ||
+                userAns === `option_${oIdx + 1}`
+              );
             });
-            if (matchedIdx !== -1) {
-              finalAnswer = `option_${matchedIdx + 1}`;
+            if (matchedOpt) {
+              const label = typeof matchedOpt === 'string' ? matchedOpt : (matchedOpt.option || matchedOpt.value || matchedOpt.text || matchedOpt.title || '');
+              if (label) {
+                finalAnswer = String(label).trim();
+              }
             }
           }
 
@@ -407,7 +565,7 @@ export default function QuizDetailsPage() {
             answer: finalAnswer
           };
         })
-        .filter((item) => Boolean(item.answer));
+        .filter((item) => Boolean(item.question && item.answer && item.answer.trim().length > 0));
 
       const payload: CreateQuizSubmissionPayload = {
         quiz: quiz.name || name,
@@ -512,7 +670,7 @@ export default function QuizDetailsPage() {
                 <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                   <span className="block text-xs text-gray-500 mb-1">Answered</span>
                   <span className="text-2xl font-bold text-gray-900">
-                    {Object.keys(answers).length}{" "}
+                    {(quiz.questions || []).filter((q: any) => Boolean(answers[q.question_id || q.question || q.name] || answers[q.name] || answers[q.question])).length}{" "}
                     <span className="text-sm font-medium text-gray-400">/ {quiz.questions.length}</span>
                   </span>
                 </div>
@@ -645,19 +803,20 @@ export default function QuizDetailsPage() {
                       </label>
                       {currentQuestion.options.map((opt, oIdx) => {
                         const optKey = opt.key || `option_${oIdx + 1}`;
-                        const optLabel = opt.option || (opt as any).value || opt;
-                        const qId = currentQuestion.question_id || currentQuestion.question || currentQuestion.name;
+                        const optLabel = typeof opt === 'string' ? opt : (opt.option || (opt as any).value || (opt as any).text || (opt as any).title || optKey);
+                        const qId = resolveQuestionId(currentQuestion);
                         const isSelected =
-                          answers[qId] === optKey ||
-                          answers[currentQuestion.name] === optKey ||
                           answers[qId] === optLabel ||
-                          answers[currentQuestion.name] === optLabel;
+                          answers[currentQuestion.name] === optLabel ||
+                          (currentQuestion.question_detail && answers[currentQuestion.question_detail] === optLabel) ||
+                          answers[qId] === optKey ||
+                          answers[currentQuestion.name] === optKey;
 
                         return (
                           <button
                             key={oIdx}
                             type="button"
-                            onClick={() => handleAnswer(currentQuestion, optKey)}
+                            onClick={() => handleAnswer(currentQuestion, String(optLabel).trim())}
                             className={`w-full text-left p-4 rounded-xl border transition-all flex items-center justify-between text-sm ${
                               isSelected
                                 ? 'border-indigo-600 bg-indigo-50/50 text-indigo-950 ring-2 ring-indigo-500/20 font-medium'
@@ -684,7 +843,9 @@ export default function QuizDetailsPage() {
                         className="w-full p-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow outline-none text-gray-900 min-h-[140px] text-sm resize-y placeholder:text-gray-400"
                         placeholder="Type your response here..."
                         value={
+                          answers[resolveQuestionId(currentQuestion)] ||
                           answers[currentQuestion.question_id || currentQuestion.question || currentQuestion.name] ||
+                          (currentQuestion.question_detail ? answers[currentQuestion.question_detail] : '') ||
                           answers[currentQuestion.name] ||
                           ""
                         }

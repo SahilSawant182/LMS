@@ -292,6 +292,7 @@ export default function Sidebar({
     },
     {
       title: 'Assessments',
+      instructorOnly: true,
       items: [
         {
           type: 'accordion',

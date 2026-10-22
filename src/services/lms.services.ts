@@ -584,13 +584,86 @@ export const getQuizzes = async () => {
   });
 };
 
-export const getQuiz = async (name: string) => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_quiz`, {
-    params: { name },
-    headers: {
-      'Authorization': `token ${API_TOKEN}`
+export const getQuiz = async (name: string | { name: string }) => {
+  const quizName = typeof name === 'string' ? name : (name as any)?.name;
+  if (!quizName) return null;
+
+  const extractQuizData = (rawRes: any) => {
+    if (!rawRes) return null;
+    const body = rawRes?.data || rawRes;
+
+    // Pattern 1: message.data (as in: { message: { status: 200, message: "...", data: { ... } } })
+    if (body?.message?.data && typeof body.message.data === 'object' && (body.message.data.name || body.message.data.title || body.message.data.questions)) {
+      return body.message.data;
     }
-  });
+    // Pattern 2: data.data
+    if (body?.data?.data && typeof body.data.data === 'object' && (body.data.data.name || body.data.data.title || body.data.data.questions)) {
+      return body.data.data;
+    }
+    // Pattern 3: message
+    if (body?.message && typeof body.message === 'object' && (body.message.name || body.message.title || body.message.questions)) {
+      return body.message;
+    }
+    // Pattern 4: data
+    if (body?.data && typeof body.data === 'object' && (body.data.name || body.data.title || body.data.questions)) {
+      return body.data;
+    }
+    // Pattern 5: root object
+    if (body && typeof body === 'object' && (body.name || body.title || body.questions)) {
+      return body;
+    }
+    return null;
+  };
+
+  const wrapResult = (quizData: any) => {
+    if (!quizData) return null;
+    return {
+      ...quizData,
+      data: quizData,
+      message: {
+        status: 200,
+        message: "Quiz fetched successfully",
+        data: quizData
+      }
+    };
+  };
+
+  // 1. Primary requested endpoint: POST https://devlms.stridenex.ai/api/method/lms.lms.stride_lms.get_quiz with { "name": quizName }
+  try {
+    const res = await apiService.post("method/lms.lms.stride_lms.get_quiz", { name: quizName });
+    const quizData = extractQuizData(res);
+    if (quizData) {
+      return wrapResult(quizData);
+    }
+  } catch (postErr) {
+    console.warn("get_quiz POST failed, trying GET fallback:", postErr);
+  }
+
+  // 2. Fallback: GET method/lms.lms.stride_lms.get_quiz with params: { name: quizName }
+  try {
+    const res = await apiService.get("method/lms.lms.stride_lms.get_quiz", {
+      params: { name: quizName }
+    });
+    const quizData = extractQuizData(res);
+    if (quizData) {
+      return wrapResult(quizData);
+    }
+  } catch (getErr) {
+    console.warn("get_quiz GET fallback failed:", getErr);
+  }
+
+  // 3. Fallback: resource/LMS Quiz/<name>
+  try {
+    const res = await apiService.get(`resource/LMS Quiz/${encodeURIComponent(quizName)}`);
+    const quizData = extractQuizData(res);
+    if (quizData) {
+      return wrapResult(quizData);
+    }
+  } catch (resErr) {
+    console.warn("LMS Quiz resource fallback failed:", resErr);
+  }
+
+  return null;
 };
 
 export const getQuizSubmissions = async (filters?: {
@@ -674,11 +747,19 @@ export interface CreateQuizSubmissionPayload {
 }
 
 export const createQuizSubmission = async (payload: CreateQuizSubmissionPayload) => {
+  const cleanPayload = {
+    quiz: String(payload.quiz || "").trim(),
+    answers: (payload.answers || []).map((item) => ({
+      question: String(item.question || "").trim(),
+      answer: String(item.answer || "").trim()
+    }))
+  };
+
   // 1. Primary method requested: lms.lms.doctype.lms_quiz_submission.lms_quiz_submission.create_quiz_submission
   try {
     const res = await apiService.post(
       "method/lms.lms.doctype.lms_quiz_submission.lms_quiz_submission.create_quiz_submission",
-      payload
+      cleanPayload
     );
     if (res) return res;
   } catch (err) {
@@ -687,8 +768,8 @@ export const createQuizSubmission = async (payload: CreateQuizSubmissionPayload)
       const res = await apiService.post(
         "method/lms.lms.doctype.lms_quiz_submission.lms_quiz_submission.create_quiz_submission",
         {
-          quiz: payload.quiz,
-          answers: typeof payload.answers === 'string' ? payload.answers : JSON.stringify(payload.answers)
+          quiz: cleanPayload.quiz,
+          answers: typeof cleanPayload.answers === 'string' ? cleanPayload.answers : JSON.stringify(cleanPayload.answers)
         }
       );
       if (res) return res;
@@ -972,13 +1053,21 @@ export const getQuestions = async (payload?: any): Promise<any> => {
   }
 
   const normalizedList = collectedQuestions.map((q: any) => {
-    const qId = q.question || q.name;
+    const qtsCode = (typeof q.question === 'string' && q.question.startsWith('QTS-'))
+      ? q.question
+      : (typeof q.name === 'string' && q.name.startsWith('QTS-'))
+      ? q.name
+      : (typeof q.question_id === 'string' && q.question_id.startsWith('QTS-'))
+      ? q.question_id
+      : null;
+
+    const qId = qtsCode || q.question || q.name;
     const qText = q.question_detail || q.question_title || q.question_text || q.title || (typeof q.question === 'string' && !q.question.startsWith('QTS-') ? q.question : '') || q.question || q.name;
     return {
       ...q,
-      name: q.name || qId,
+      name: qtsCode || q.name || qId,
       question_id: qId,
-      question: q.question || qId,
+      question: qtsCode || q.question || qId,
       question_detail: q.question_detail || qText,
       question_title: qText,
       question_text: qText,

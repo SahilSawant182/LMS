@@ -394,7 +394,7 @@ export default function AssignmentDetailPage() {
             <>
               <div className="flex flex-wrap items-center justify-between mb-3 gap-4">
                 <div className="flex flex-wrap items-center gap-3">
-                  {(() => {
+                  {!isInstructor && (() => {
                     const isSubmitted = Boolean(assignment._is_submitted);
                     return (
                       <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${

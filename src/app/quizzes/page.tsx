@@ -70,6 +70,15 @@ function QuizzesContent() {
   // Search for Quizzes tab
   const [quizSearch, setQuizSearch] = useState("");
 
+  const quizParam = searchParams.get("quiz") || searchParams.get("name");
+
+  // Redirect if quiz parameter is present
+  useEffect(() => {
+    if (quizParam) {
+      router.replace(`/quizzes/${encodeURIComponent(quizParam)}`);
+    }
+  }, [quizParam, router]);
+
   // Sync tab with URL
   useEffect(() => {
     if (tabParam === "questions") {

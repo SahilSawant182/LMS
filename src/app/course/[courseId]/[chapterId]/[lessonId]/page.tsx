@@ -383,7 +383,7 @@ function EditorBlockRenderer({ block, isInstructor }: { block: EditorBlock; isIn
             </div>
           </div>
           <Link
-            href={`/quizzes?quiz=${encodeURIComponent(quizId)}`}
+            href={`/quizzes/${encodeURIComponent(quizId)}`}
             className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-1.5 shrink-0"
           >
             <Award className="w-4 h-4" />

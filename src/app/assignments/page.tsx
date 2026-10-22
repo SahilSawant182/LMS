@@ -205,16 +205,18 @@ function AssignmentsContent() {
                     </div>
                     
                     <div className="flex items-center gap-4 sm:pl-4 sm:border-l border-slate-100">
-                      <div className="flex flex-col sm:items-end">
-                        <span className="text-xs text-slate-400 font-medium">Status</span>
-                        <span className={`text-sm font-medium flex items-center gap-1 ${assignment._is_submitted ? 'text-emerald-600' : 'text-amber-600'}`}>
-                          {assignment._is_submitted ? <CheckCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                          {assignment._is_submitted ? (assignment.status && assignment.status !== 'Pending' ? assignment.status : 'Submitted') : 'Pending'}
-                        </span>
-                      </div>
+                      {!isInstructor && (
+                        <div className="flex flex-col sm:items-end">
+                          <span className="text-xs text-slate-400 font-medium">Status</span>
+                          <span className={`text-sm font-medium flex items-center gap-1 ${assignment._is_submitted ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            {assignment._is_submitted ? <CheckCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                            {assignment._is_submitted ? (assignment.status && assignment.status !== 'Pending' ? assignment.status : 'Submitted') : 'Pending'}
+                          </span>
+                        </div>
+                      )}
                       
                       {isInstructor && (
-                        <div className="flex items-center gap-2 border-l border-slate-100 pl-4 ml-2">
+                        <div className="flex items-center gap-2">
                           <Link href={`/assignments/${assignment.name}/edit`} onClick={(e) => e.stopPropagation()} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
                             <Edit className="w-4 h-4" />
                           </Link>
