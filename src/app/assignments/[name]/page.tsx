@@ -73,46 +73,41 @@ export default function AssignmentDetailPage() {
       const targetTitle = String(assignmentsData?.title || assignmentsData?.assignment_title || '').trim().toLowerCase();
       const decodedName = decodeURIComponent(targetName);
 
-      // Check local storage backup first (checking all key permutations)
+      // Check local storage backup specifically for this student
       let localSub: any = null;
-      let localAnswer = '';
-      if (typeof window !== "undefined") {
+      let localDraftAnswer = '';
+      if (typeof window !== "undefined" && currentUserEmail) {
         try {
           const keysToTry = [
-            currentUserEmail ? `lms_submission_${currentUserEmail}_${assignmentName}` : '',
-            currentUserEmail ? `lms_submission_${currentUserEmail}_${decodedName}` : '',
-            currentUserEmail && assignmentsData?.name ? `lms_submission_${currentUserEmail}_${assignmentsData.name}` : '',
-            currentUserEmail && assignmentsData?.title ? `lms_submission_${currentUserEmail}_${assignmentsData.title}` : '',
-            `lms_submission_${assignmentName}`,
-            `lms_submission_${decodedName}`,
-            assignmentsData?.name ? `lms_submission_${assignmentsData.name}` : '',
-            assignmentsData?.title ? `lms_submission_${assignmentsData.title}` : '',
+            `lms_submission_${currentUserEmail}_${assignmentName}`,
+            `lms_submission_${currentUserEmail}_${decodedName}`,
+            assignmentsData?.name ? `lms_submission_${currentUserEmail}_${assignmentsData.name}` : '',
+            assignmentsData?.title ? `lms_submission_${currentUserEmail}_${assignmentsData.title}` : '',
           ].filter(Boolean);
 
           for (const key of keysToTry) {
             const stored = localStorage.getItem(key);
             if (stored) {
               try {
-                localSub = JSON.parse(stored);
-                if (localSub) break;
+                const parsed = JSON.parse(stored);
+                if (parsed && (parsed.status === 'Submitted' || parsed.status === 'Graded' || parsed.submitted_at || parsed._is_submitted)) {
+                  localSub = parsed;
+                  break;
+                }
               } catch (e) {}
             }
           }
 
-          // Also check explicit answer keys
+          // User draft answer if any
           const answerKeys = [
-            `lms_assignment_answer_${assignmentName}`,
-            `lms_assignment_answer_${decodedName}`,
-            assignmentsData?.name ? `lms_assignment_answer_${assignmentsData.name}` : '',
-            assignmentsData?.title ? `lms_assignment_answer_${assignmentsData.title}` : '',
-            currentUserEmail ? `lms_assignment_answer_${currentUserEmail}_${assignmentName}` : '',
-            currentUserEmail && assignmentsData?.name ? `lms_assignment_answer_${currentUserEmail}_${assignmentsData.name}` : '',
+            `lms_assignment_answer_${currentUserEmail}_${assignmentName}`,
+            assignmentsData?.name ? `lms_assignment_answer_${currentUserEmail}_${assignmentsData.name}` : '',
           ].filter(Boolean);
 
           for (const aKey of answerKeys) {
             const aVal = localStorage.getItem(aKey);
             if (aVal && aVal.trim()) {
-              localAnswer = aVal;
+              localDraftAnswer = aVal;
               break;
             }
           }
@@ -142,27 +137,24 @@ export default function AssignmentDetailPage() {
         console.warn("Failed to fetch assignment submissions:", subErr);
       }
 
-      // Also incorporate submissions embedded directly in assignment data
+      // Also incorporate submissions embedded directly in assignment data if they belong to this student
       if (assignmentsData?.my_submission && typeof assignmentsData.my_submission === 'object') {
         submissionsList.unshift(assignmentsData.my_submission);
-      }
-      if (assignmentsData?.submission && typeof assignmentsData.submission === 'object') {
-        submissionsList.unshift(assignmentsData.submission);
       }
       if (Array.isArray(assignmentsData?.submissions)) {
         submissionsList.push(...assignmentsData.submissions);
       }
 
-      // Find the user's submission
+      // Find the user's submission - strictly check that member/owner matches currentUserEmail
       let mySub = submissionsList.find((s: any) => {
         const sAssignment = String(s.assignment || '').trim().toLowerCase();
         const sTitle = String(s.assignment_title || '').trim().toLowerCase();
         const matchesAssignment = sAssignment === targetName || sAssignment === targetDataName || sAssignment === decodedName || (targetTitle && sTitle === targetTitle);
         if (!matchesAssignment) return false;
 
-        if (!currentUserEmail) return true;
-        const sMember = String(s.member || s.owner || s.member_name || '').trim().toLowerCase();
-        return !sMember || sMember.includes(currentUserEmail) || currentUserEmail.includes(sMember);
+        if (!currentUserEmail) return false;
+        const sMember = String(s.member || s.owner || s.member_name || s.user || '').trim().toLowerCase();
+        return Boolean(sMember && (sMember === currentUserEmail || sMember.includes(currentUserEmail) || currentUserEmail.includes(sMember)));
       }) || localSub;
 
       // If submission ID exists, fetch full result to ensure student answer and latest status are loaded
@@ -184,28 +176,30 @@ export default function AssignmentDetailPage() {
         }
       }
 
-      const hasSubmissionRecord = Boolean(mySub || localSub);
-      const isSub = Boolean(
-        hasSubmissionRecord ||
-        localAnswer ||
-        (assignmentsData?.status && assignmentsData.status !== 'Pending') ||
-        (assignmentsData?.submission_count && assignmentsData.submission_count > 0)
+      const hasSubmissionRecord = Boolean(
+        mySub &&
+        (mySub.name || mySub.status === 'Submitted' || mySub.status === 'Graded' || mySub.submitted_at || mySub.answer || mySub.content)
       );
+      const isSub = Boolean(hasSubmissionRecord);
 
       let resolvedStatus = 'Pending';
       if (isSub) {
-        const backendStatus = mySub?.status || localSub?.status;
+        const backendStatus = mySub?.status;
         if (backendStatus && backendStatus !== 'Pending') {
           resolvedStatus = backendStatus;
         } else {
           resolvedStatus = 'Submitted';
         }
       } else {
-        resolvedStatus = assignmentsData?.status || 'Pending';
+        resolvedStatus = 'Pending';
       }
 
-      const resolvedAnswer = mySub?.content || mySub?.answer || mySub?.text || localSub?.content || localSub?.answer || localAnswer || assignmentsData?.content || '';
-      const resolvedUrl = mySub?.submission_url || mySub?.url || localSub?.submission_url || assignmentsData?.submission_url || '';
+      const resolvedAnswer = isSub
+        ? (mySub?.content || mySub?.answer || mySub?.text || '')
+        : (localDraftAnswer || '');
+      const resolvedUrl = isSub
+        ? (mySub?.submission_url || mySub?.url || '')
+        : '';
 
       if (resolvedAnswer) setSubmissionAnswer(resolvedAnswer);
       if (resolvedUrl) setSubmissionUrl(resolvedUrl);
@@ -214,11 +208,11 @@ export default function AssignmentDetailPage() {
         ...assignmentsData,
         status: resolvedStatus,
         _is_submitted: isSub,
-        submission_name: mySub?.name || localSub?.submission_name,
+        submission_name: mySub?.name,
         submission_status: resolvedStatus,
         answer: resolvedAnswer,
         submission_url: resolvedUrl,
-        submission_attachment: mySub?.attachment || mySub?.submission_attachment || localSub?.attachment
+        submission_attachment: mySub?.attachment || mySub?.submission_attachment
       });
 
       // Filter submissions for instructors
@@ -401,13 +395,13 @@ export default function AssignmentDetailPage() {
               <div className="flex flex-wrap items-center justify-between mb-3 gap-4">
                 <div className="flex flex-wrap items-center gap-3">
                   {(() => {
-                    const isSubmitted = assignment._is_submitted || (assignment.status && assignment.status !== 'Pending') || assignment.submission_count > 0;
+                    const isSubmitted = Boolean(assignment._is_submitted);
                     return (
                       <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
                         isSubmitted ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                       }`}>
                         {isSubmitted ? <CheckCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                        {isSubmitted ? (assignment.status && assignment.status !== 'Pending' ? assignment.status : 'Submitted') : 'Pending'}
+                        {isSubmitted ? (assignment.submission_status && assignment.submission_status !== 'Pending' ? assignment.submission_status : 'Submitted') : 'Pending'}
                       </span>
                     );
                   })()}
@@ -475,7 +469,7 @@ export default function AssignmentDetailPage() {
               <div className="space-y-8">
                 <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-100">
                   {(() => {
-                    const isSubmitted = assignment._is_submitted || (assignment.status && assignment.status !== 'Pending') || assignment.submission_count > 0;
+                    const isSubmitted = Boolean(assignment._is_submitted);
                     return (
                       <>
                         <div className="flex items-center justify-between mb-6">
@@ -483,7 +477,7 @@ export default function AssignmentDetailPage() {
                           {isSubmitted && (
                             <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg flex items-center gap-1">
                               <CheckCircle className="w-3.5 h-3.5" />
-                              {assignment.status && assignment.status !== 'Pending' ? assignment.status : 'Submitted'}
+                              {assignment.submission_status && assignment.submission_status !== 'Pending' ? assignment.submission_status : 'Submitted'}
                             </span>
                           )}
                         </div>

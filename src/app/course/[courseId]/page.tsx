@@ -400,25 +400,25 @@ export default function CourseDetailPage() {
             const aTitle = String(a.title || a.assignment_title || '').trim().toLowerCase();
 
             let hasLocalSub = false;
-            if (typeof window !== "undefined") {
+            if (typeof window !== "undefined" && userEmail) {
               try {
-                const keysToCheck = [
-                  userEmail ? `lms_submission_${userEmail}_${a.name}` : '',
-                  userEmail ? `lms_submission_${userEmail}_${a.title}` : '',
-                  userEmail ? `lms_submission_${userEmail}_${aName}` : '',
-                  userEmail ? `lms_submission_${userEmail}_${aTitle}` : '',
-                  `lms_submission_${a.name}`,
-                  `lms_submission_${a.title}`,
-                  `lms_submission_${aName}`,
-                  `lms_submission_${aTitle}`,
-                  `lms_assignment_answer_${a.name}`,
-                  `lms_assignment_answer_${a.title}`,
-                  `lms_assignment_answer_${aName}`,
-                  `lms_assignment_answer_${aTitle}`,
-                  userEmail ? `lms_assignment_answer_${userEmail}_${a.name}` : '',
+                const userKeys = [
+                  `lms_submission_${userEmail}_${a.name}`,
+                  `lms_submission_${userEmail}_${a.title}`,
+                  `lms_submission_${userEmail}_${aName}`,
+                  `lms_submission_${userEmail}_${aTitle}`,
                 ].filter(Boolean);
 
-                hasLocalSub = keysToCheck.some(k => Boolean(localStorage.getItem(k)));
+                hasLocalSub = userKeys.some(k => {
+                  const raw = localStorage.getItem(k);
+                  if (!raw) return false;
+                  try {
+                    const parsed = JSON.parse(raw);
+                    return Boolean(parsed?.status === 'Submitted' || parsed?.status === 'Graded' || parsed?.submitted_at || parsed?._is_submitted);
+                  } catch {
+                    return false;
+                  }
+                });
               } catch (e) {}
             }
 
@@ -427,18 +427,19 @@ export default function CourseDetailPage() {
               const sTitle = String(s.assignment_title || '').trim().toLowerCase();
               const matches = sAss === aName || (aTitle && sTitle === aTitle);
               if (!matches) return false;
-              if (!userEmail) return true;
-              const sMember = String(s.member || s.owner || '').trim().toLowerCase();
-              return !sMember || sMember.includes(userEmail) || userEmail.includes(sMember);
+              if (!userEmail) return false;
+              const sMember = String(s.member || s.owner || s.member_name || s.user || '').trim().toLowerCase();
+              return Boolean(sMember && (sMember === userEmail || sMember.includes(userEmail) || userEmail.includes(sMember)));
             });
 
-            const isSub = Boolean(sub || hasLocalSub || (a.status && a.status !== 'Pending') || a.submission_count > 0);
-            const resolvedStatus = isSub ? ((sub?.status && sub.status !== 'Pending') ? sub.status : 'Submitted') : (a.status || 'Pending');
+            const isSub = Boolean(sub || hasLocalSub);
+            const resolvedStatus = isSub ? ((sub?.status && sub.status !== 'Pending') ? sub.status : 'Submitted') : 'Pending';
 
             return {
               ...a,
               status: resolvedStatus,
-              _is_submitted: isSub
+              _is_submitted: isSub,
+              submission_name: sub?.name
             };
           });
 
@@ -1389,7 +1390,7 @@ export default function CourseDetailPage() {
             {assignments.length > 0 ? (
               <div className="space-y-4">
                 {assignments.map((assignment: any) => {
-                  const isSubmitted = (assignment.status && assignment.status !== 'Pending') || assignment.submission_count > 0 || assignment._is_submitted;
+                  const isSubmitted = Boolean(assignment._is_submitted);
                   return (
                     <div
                       key={assignment.name}

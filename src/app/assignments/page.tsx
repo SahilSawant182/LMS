@@ -59,27 +59,27 @@ function AssignmentsContent() {
         const aName = String(a.name || '').trim().toLowerCase();
         const aTitle = String(a.title || a.assignment_title || '').trim().toLowerCase();
 
-        // Check local storage submission
+        // Check local storage submission specifically for this user
         let hasLocalSub = false;
-        if (typeof window !== "undefined") {
+        if (typeof window !== "undefined" && userEmail) {
           try {
-            const keysToCheck = [
-              userEmail ? `lms_submission_${userEmail}_${a.name}` : '',
-              userEmail ? `lms_submission_${userEmail}_${a.title}` : '',
-              userEmail ? `lms_submission_${userEmail}_${aName}` : '',
-              userEmail ? `lms_submission_${userEmail}_${aTitle}` : '',
-              `lms_submission_${a.name}`,
-              `lms_submission_${a.title}`,
-              `lms_submission_${aName}`,
-              `lms_submission_${aTitle}`,
-              `lms_assignment_answer_${a.name}`,
-              `lms_assignment_answer_${a.title}`,
-              `lms_assignment_answer_${aName}`,
-              `lms_assignment_answer_${aTitle}`,
-              userEmail ? `lms_assignment_answer_${userEmail}_${a.name}` : '',
+            const userKeys = [
+              `lms_submission_${userEmail}_${a.name}`,
+              `lms_submission_${userEmail}_${a.title}`,
+              `lms_submission_${userEmail}_${aName}`,
+              `lms_submission_${userEmail}_${aTitle}`,
             ].filter(Boolean);
 
-            hasLocalSub = keysToCheck.some(k => Boolean(localStorage.getItem(k)));
+            hasLocalSub = userKeys.some(k => {
+              const raw = localStorage.getItem(k);
+              if (!raw) return false;
+              try {
+                const parsed = JSON.parse(raw);
+                return Boolean(parsed?.status === 'Submitted' || parsed?.status === 'Graded' || parsed?.submitted_at || parsed?._is_submitted);
+              } catch {
+                return false;
+              }
+            });
           } catch (e) {}
         }
 
@@ -88,13 +88,13 @@ function AssignmentsContent() {
           const sTitle = String(s.assignment_title || '').trim().toLowerCase();
           const matches = sAss === aName || (aTitle && sTitle === aTitle);
           if (!matches) return false;
-          if (!userEmail) return true;
-          const sMember = String(s.member || s.owner || '').trim().toLowerCase();
-          return !sMember || sMember.includes(userEmail) || userEmail.includes(sMember);
+          if (!userEmail) return false;
+          const sMember = String(s.member || s.owner || s.member_name || s.user || '').trim().toLowerCase();
+          return Boolean(sMember && (sMember === userEmail || sMember.includes(userEmail) || userEmail.includes(sMember)));
         });
 
-        const isSub = Boolean(sub || hasLocalSub || (a.status && a.status !== 'Pending') || a.submission_count > 0);
-        const resolvedStatus = isSub ? ((sub?.status && sub.status !== 'Pending') ? sub.status : 'Submitted') : (a.status || 'Pending');
+        const isSub = Boolean(sub || hasLocalSub);
+        const resolvedStatus = isSub ? ((sub?.status && sub.status !== 'Pending') ? sub.status : 'Submitted') : 'Pending';
 
         return {
           ...a,
