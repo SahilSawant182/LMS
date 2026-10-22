@@ -90,20 +90,49 @@ const getInstructorFilterParams = (payload?: any) => {
 
 export const getCourses = async (payload?: any): Promise<Course[]> => {
   const params = getInstructorFilterParams(payload);
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_courses`, {
+  const response = await apiService.get(`method/${API_METHOD_PREFIX}.get_courses`, {
     params,
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }
   });
+
+  let rawList: any[] = [];
+  if (Array.isArray(response)) {
+    rawList = response;
+  } else if (response?.message && Array.isArray(response.message)) {
+    rawList = response.message;
+  } else if (response?.data && Array.isArray(response.data)) {
+    rawList = response.data;
+  }
+
+  const filterUser = params?.user || payload?.user;
+  if (filterUser && !params?.all) {
+    const target = String(filterUser).toLowerCase().trim();
+    rawList = rawList.filter((c: any) => {
+      if (Array.isArray(c.instructors) && c.instructors.length > 0) {
+        return c.instructors.some((inst: any) => {
+          const instName = String(inst?.name || '').toLowerCase().trim();
+          const instEmail = String(inst?.email || '').toLowerCase().trim();
+          const instUsername = String(inst?.username || '').toLowerCase().trim();
+          return instName === target || instEmail === target || (instUsername && instUsername === target);
+        });
+      }
+      if (c.instructor && String(c.instructor).toLowerCase().trim() === target) return true;
+      if (c.owner && String(c.owner).toLowerCase().trim() === target) return true;
+      return false;
+    });
+  }
+
+  return rawList;
 };
 
 export const getMasterData = async (doctype: string, additionalPayload: any = {}) => {
   try {
-    const payload = {
+    const payload = getInstructorFilterParams({
       doctype,
       ...additionalPayload
-    };
+    });
     const response = await apiService.get(
       "method/lms.lms.master.get_dropdown_options",
       { params: payload }
@@ -138,10 +167,10 @@ export interface DropdownOptionItem {
 
 export const getMasterDropdownItems = async (doctype: string, additionalPayload: any = {}): Promise<DropdownOptionItem[]> => {
   try {
-    const payload = {
+    const payload = getInstructorFilterParams({
       doctype,
       ...additionalPayload
-    };
+    });
     const response = await apiService.get(
       "method/lms.lms.master.get_dropdown_options",
       { params: payload }

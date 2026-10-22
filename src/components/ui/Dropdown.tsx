@@ -3,8 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, X, Check, Search, Loader2 } from "lucide-react";
-import axios from "axios";
-import { apiService } from "@/services/api.services";
+import { apiService, getCurrentUserEmail } from "@/services/api.services";
 
 interface DropdownProps {
   id: string;
@@ -107,12 +106,21 @@ export default function Dropdown({
     setFetchError("");
     try {
       const relEndpoint = endpoint.replace(/^https?:\/\/[^\/]+\/api\//, '');
-      const responseData = await apiService.get(relEndpoint, {
-        params: {
-          ...(params || {}),
-          page: pageNum,
-          search: searchTxt
+      const queryParams: Record<string, any> = {
+        ...(params || {}),
+        page: pageNum,
+        search: searchTxt
+      };
+
+      if (!queryParams.user) {
+        const currentUser = getCurrentUserEmail();
+        if (currentUser) {
+          queryParams.user = currentUser;
         }
+      }
+
+      const responseData = await apiService.get(relEndpoint, {
+        params: queryParams
       });
 
       let data = [];
@@ -159,6 +167,29 @@ export default function Dropdown({
         }
       }
 
+      // If user/instructor filter is present and items contain instructor info, filter to only matching instructor courses
+      if (queryParams.user && Array.isArray(data) && data.length > 0) {
+        const targetUser = String(queryParams.user).toLowerCase().trim();
+        const hasInstructorInfo = data.some((item: any) =>
+          (Array.isArray(item?.instructors) && item.instructors.length > 0) || item?.instructor || item?.owner
+        );
+        if (hasInstructorInfo) {
+          data = data.filter((item: any) => {
+            if (Array.isArray(item?.instructors) && item.instructors.length > 0) {
+              return item.instructors.some((inst: any) => {
+                const instName = String(inst?.name || '').toLowerCase().trim();
+                const instEmail = String(inst?.email || '').toLowerCase().trim();
+                const instUsername = String(inst?.username || '').toLowerCase().trim();
+                return instName === targetUser || instEmail === targetUser || (instUsername && instUsername === targetUser);
+              });
+            }
+            if (item?.instructor && String(item.instructor).toLowerCase().trim() === targetUser) return true;
+            if (item?.owner && String(item.owner).toLowerCase().trim() === targetUser) return true;
+            return false;
+          });
+        }
+      }
+
       let mappedOptions = mapOptions
         ? mapOptions(data)
         : (Array.isArray(data)
@@ -201,13 +232,27 @@ export default function Dropdown({
     }
   };
 
+  const paramsKey = JSON.stringify(params || {});
+  const prevParamsKeyRef = useRef(paramsKey);
+
+  useEffect(() => {
+    if (prevParamsKeyRef.current !== paramsKey) {
+      prevParamsKeyRef.current = paramsKey;
+      setFetched(false);
+      setOptions([]);
+      if (isOpen && endpoint) {
+        fetchOptions(1, searchTerm);
+      }
+    }
+  }, [paramsKey, isOpen, endpoint, searchTerm]);
+
   useEffect(() => {
     if (!endpoint || !isOpen) return;
     const delayDebounce = setTimeout(() => {
       fetchOptions(1, searchTerm);
     }, 400);
     return () => clearTimeout(delayDebounce);
-  }, [searchTerm, endpoint, isOpen]);
+  }, [searchTerm, endpoint, isOpen, paramsKey]);
 
   const handleClick = () => {
     if (disabled) return;

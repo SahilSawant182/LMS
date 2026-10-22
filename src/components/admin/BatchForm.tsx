@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createBatch, updateBatch, getMasterData, getQuizzes } from '@/services/lms.services';
+import { getCurrentUserEmail } from '@/services/api.services';
 import { getConferencingSettings } from '@/services/live_class.services';
 import { ConferencingSettings, ZoomSetting } from '@/types/live_class.types';
 import { useRouter } from 'next/navigation';
@@ -254,6 +255,12 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
       setLoading(false);
     }
   };
+
+  const primaryInstructor = formData.instructors
+    ?.map((inst: any) => (typeof inst === 'string' ? inst : inst?.instructor)?.trim())
+    ?.filter(Boolean)[0] || '';
+  const currentUserEmail = getCurrentUserEmail();
+  const instructorForCourseDropdown = primaryInstructor || currentUserEmail;
 
   const tabs = [
     { id: 'details', label: 'Details' },
@@ -515,8 +522,11 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
                     id="courses"
                     value={formData.courses.map((c: any) => c.course)}
                     onChange={(values: string[]) => setFormData((prev: any) => ({ ...prev, courses: values.map(v => ({ course: v })) }))}
-                    endpoint="https://devlms.stridenex.ai/api/method/lms.lms.master.get_dropdown_options"
-                    params={{ doctype: "LMS Course" }}
+                    endpoint="https://devlms.stridenex.ai/api/method/lms.lms.stride_lms.get_courses"
+                    params={{
+                      doctype: "LMS Course",
+                      ...(instructorForCourseDropdown ? { user: instructorForCourseDropdown } : {})
+                    }}
                     placeholder="Select Courses"
                     multiSelect
                     searchable
