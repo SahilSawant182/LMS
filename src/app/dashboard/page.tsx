@@ -94,6 +94,7 @@ export function DashboardContent() {
     if (!courseId) return;
     setPublishingCourseId(courseId);
     try {
+      const todayStr = new Date().toISOString().split('T')[0];
       await updateCourse({
         ...course,
         name: courseId,
@@ -101,12 +102,14 @@ export function DashboardContent() {
         course_name: courseId,
         title: course.title || courseId,
         published: 1,
+        status: "Approved",
+        published_on: course.published_on || todayStr,
       });
       setInstructorData((prev: any) => {
         if (!prev) return prev;
         const updatedCourses = (prev.courses || []).map((c: any) => {
           if ((c.name || c.course) === courseId) {
-            return { ...c, published: 1 };
+            return { ...c, published: 1, status: "Approved", published_on: todayStr };
           }
           return c;
         });

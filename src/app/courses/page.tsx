@@ -42,20 +42,46 @@ export default function CoursesPage() {
     setLoading(true);
     setError(null);
     try {
-      let data: any[] = [];
-      try {
-        const enrollList = await getCoursesWithEnrollment();
-        if (Array.isArray(enrollList) && enrollList.length > 0) {
-          data = enrollList;
-        }
-      } catch (e) {}
+      const [enrollRes, catalogRes] = await Promise.allSettled([
+        getCoursesWithEnrollment(),
+        getCourses({ all: 1 }),
+      ]);
 
-      if (data.length === 0) {
-        const response = await getCourses();
-        data = Array.isArray(response)
-          ? response
-          : (response as any)?.data || (response as any)?.message || [];
-      }
+      const enrollList = enrollRes.status === "fulfilled" && Array.isArray(enrollRes.value) ? enrollRes.value : [];
+      const catalogList = catalogRes.status === "fulfilled"
+        ? (Array.isArray(catalogRes.value) ? catalogRes.value : (catalogRes.value as any)?.data || (catalogRes.value as any)?.message || [])
+        : [];
+
+      // Combine both so that all courses in catalog are always visible, augmented with is_enrolled from enrollment list
+      const courseMap = new Map<string, any>();
+
+      // 1. Index all catalog courses
+      catalogList.forEach((c: any) => {
+        const id = c.name || c.course || c.course_name;
+        if (id) courseMap.set(id, { ...c });
+      });
+
+      // 2. Augment with enrollment data
+      enrollList.forEach((e: any) => {
+        const id = e.name || e.course || e.course_name;
+        if (id) {
+          const existing = courseMap.get(id);
+          if (existing) {
+            courseMap.set(id, {
+              ...existing,
+              ...e,
+              title: existing.title || e.title,
+              published: existing.published !== undefined ? existing.published : e.published,
+              is_enrolled: Boolean(e.is_enrolled || existing.is_enrolled),
+            });
+          } else {
+            courseMap.set(id, { ...e });
+          }
+        }
+      });
+
+      const mergedList = Array.from(courseMap.values());
+      const data = mergedList.length > 0 ? mergedList : (enrollList.length > 0 ? enrollList : catalogList);
       setCourses(data);
     } catch (err: any) {
       setError(err?.message || "Failed to fetch courses");
@@ -104,6 +130,11 @@ export default function CoursesPage() {
   // Filter courses by search, category, and type
   const filteredCourses = useMemo(() => {
     return courses.filter((c) => {
+      // Hide unpublished draft courses from students (non-instructors)
+      if (!isInstructor && (c.published === 0 || c.published === false)) {
+        return false;
+      }
+
       const q = searchQuery.toLowerCase().trim();
       const titleMatch = (c.title || c.name || "").toLowerCase().includes(q);
       const descMatch = (c.short_introduction || c.description || "")
@@ -126,7 +157,7 @@ export default function CoursesPage() {
 
       return matchesSearch && matchesCat && matchesType;
     });
-  }, [courses, searchQuery, selectedCategory, selectedFilter]);
+  }, [courses, isInstructor, searchQuery, selectedCategory, selectedFilter]);
 
   const totalPages = Math.max(
     1,
@@ -146,9 +177,10 @@ export default function CoursesPage() {
   };
 
   const handlePublish = async (course: any) => {
-    const courseId = course.name || course.course;
+    const courseId = course.name || course.course || course.course_name;
     if (!courseId) return;
     try {
+      const todayStr = new Date().toISOString().split('T')[0];
       await updateCourse({
         ...course,
         name: courseId,
@@ -156,11 +188,14 @@ export default function CoursesPage() {
         course_name: courseId,
         title: course.title || courseId,
         published: 1,
+        status: "Approved",
+        published_on: course.published_on || todayStr,
       });
       showToast.success(`Course "${course.title || courseId}" published successfully!`);
       setCourses(prev =>
-        prev.map(c => ((c.name || c.course) === courseId ? { ...c, published: 1 } : c))
+        prev.map(c => ((c.name || c.course) === courseId ? { ...c, published: 1, status: "Approved", published_on: todayStr } : c))
       );
+      await fetchCourses();
     } catch (err: any) {
       console.error("Failed to publish course:", err);
       showToast.error(err?.message || "Failed to publish course");

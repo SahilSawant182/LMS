@@ -203,9 +203,10 @@ function AssignmentsContent() {
     setDeletingName(name);
     try {
       await deleteAssignment(name);
+      setAssignments((prev: any[]) => prev.filter((a: any) => a.name !== name));
       await fetchAssignments(isInstructor);
     } catch (err: any) {
-      alert(err.message || 'Failed to delete assignment');
+      alert(err?.message || 'Failed to delete assignment');
     } finally {
       setDeletingName(null);
     }

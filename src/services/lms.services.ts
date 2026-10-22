@@ -409,6 +409,8 @@ export interface CreateCoursePayload {
   short_introduction?: string;
   description?: string;
   published?: number;
+  published_on?: string | null;
+  status?: string | null;
   video_link?: string;
   tags?: string;
   category?: string;
@@ -430,7 +432,14 @@ export interface CreateCoursePayload {
 export const createCourse = async (data: CreateCoursePayload | FormData | any) => {
   const token = typeof window !== "undefined" && localStorage.getItem("apiKey") && localStorage.getItem("apiSecret")
     ? `token ${localStorage.getItem("apiKey")}:${localStorage.getItem("apiSecret")}`
-    : `token ${API_TOKEN}`;
+    : (API_TOKEN ? `token ${API_TOKEN}` : undefined);
+
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = token;
+  }
+
+  const todayStr = new Date().toISOString().split('T')[0];
 
   let payload = data;
   if (typeof window !== "undefined" && data instanceof FormData) {
@@ -440,61 +449,162 @@ export const createCourse = async (data: CreateCoursePayload | FormData | any) =
     data.set('card_gradient', norm);
     data.set('color', norm);
 
-    return apiService.post("method/lms.lms.stride_lms.create_course", data, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        'Authorization': token
+    const pubRaw = data.get('published');
+    const isPub = String(pubRaw) === '1' || String(pubRaw) === 'true';
+    if (isPub) {
+      data.set('published', '1');
+      data.set('status', 'Approved');
+      if (!data.get('published_on')) {
+        data.set('published_on', todayStr);
       }
-    });
+    } else {
+      data.set('published', '0');
+      data.set('status', 'In Progress');
+    }
+
+    headers['Content-Type'] = 'multipart/form-data';
+    return apiService.post("method/lms.lms.stride_lms.create_course", data, { headers });
   } else if (data && typeof data === 'object') {
     const norm = normalizeCourseColor(data.color || data.card_gradient || 'Blue');
+    const pubRaw = data.published;
+    const isPub = pubRaw === 1 || pubRaw === '1' || pubRaw === true || pubRaw === 'true';
+
     payload = {
       ...data,
       card_gradient: norm,
-      color: norm
+      color: norm,
+      published: isPub ? 1 : 0,
+      status: isPub ? 'Approved' : 'In Progress',
+      published_on: isPub ? (data.published_on || todayStr) : null,
     };
   }
 
   return apiService.post("method/lms.lms.stride_lms.create_course", payload, {
-    headers: {
-      'Authorization': token
-    }
+    headers
   });
 };
 
 export const updateCourse = async (data: CreateCoursePayload | FormData | any) => {
   const token = typeof window !== "undefined" && localStorage.getItem("apiKey") && localStorage.getItem("apiSecret")
     ? `token ${localStorage.getItem("apiKey")}:${localStorage.getItem("apiSecret")}`
-    : `token ${API_TOKEN}`;
+    : (API_TOKEN ? `token ${API_TOKEN}` : undefined);
+
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = token;
+  }
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  let courseId = '';
+  let isPub = false;
+  let statusVal = 'In Progress';
+  let publishedOnVal: string | null = null;
 
   let payload = data;
   if (typeof window !== "undefined" && data instanceof FormData) {
+    courseId = (data.get('name') || data.get('course') || data.get('course_name') || '') as string;
     const rawGrad = data.get('card_gradient') as string | null;
     const rawColor = data.get('color') as string | null;
     const norm = normalizeCourseColor(rawColor || rawGrad || 'Blue');
     data.set('card_gradient', norm);
     data.set('color', norm);
 
-    return apiService.post("method/lms.lms.stride_lms.update_course", data, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        'Authorization': token
+    const pubRaw = data.get('published');
+    isPub = String(pubRaw) === '1' || String(pubRaw) === 'true';
+    if (isPub) {
+      data.set('published', '1');
+      data.set('status', 'Approved');
+      statusVal = 'Approved';
+      publishedOnVal = (data.get('published_on') as string) || todayStr;
+      data.set('published_on', publishedOnVal);
+    } else {
+      data.set('published', '0');
+      data.set('status', 'In Progress');
+      statusVal = 'In Progress';
+    }
+
+    headers['Content-Type'] = 'multipart/form-data';
+    let rpcRes: any = null;
+    try {
+      rpcRes = await apiService.post("method/lms.lms.stride_lms.update_course", data, { headers });
+    } catch (e) {
+      console.warn("update_course FormData RPC call failed:", e);
+    }
+
+    if (courseId) {
+      try {
+        const resObj: Record<string, any> = {
+          published: isPub ? 1 : 0,
+          status: statusVal,
+        };
+        if (isPub) {
+          resObj.published_on = publishedOnVal || todayStr;
+        }
+        await apiService.put(`resource/LMS Course/${encodeURIComponent(courseId)}`, resObj, {
+          headers: token ? { Authorization: token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+        });
+      } catch (errRes) {
+        console.warn("Direct resource/LMS Course update failed:", errRes);
       }
-    });
+    }
+
+    return rpcRes;
   } else if (data && typeof data === 'object') {
+    courseId = String(data.name || data.course || data.course_name || '').trim();
     const norm = normalizeCourseColor(data.color || data.card_gradient || 'Blue');
+    const pubRaw = data.published;
+    isPub = pubRaw === 1 || pubRaw === '1' || pubRaw === true || pubRaw === 'true';
+    statusVal = isPub ? 'Approved' : 'In Progress';
+    publishedOnVal = isPub ? (data.published_on || todayStr) : null;
+
     payload = {
       ...data,
+      name: courseId,
+      course: courseId,
+      course_name: courseId,
       card_gradient: norm,
-      color: norm
+      color: norm,
+      published: isPub ? 1 : 0,
+      status: statusVal,
+      published_on: publishedOnVal,
     };
   }
 
-  return apiService.post("method/lms.lms.stride_lms.update_course", payload, {
-    headers: {
-      'Authorization': token
+  let rpcResult: any = null;
+  let rpcError: any = null;
+  try {
+    rpcResult = await apiService.post("method/lms.lms.stride_lms.update_course", payload, {
+      headers
+    });
+  } catch (err) {
+    rpcError = err;
+    console.warn("update_course RPC method failed, trying resource fallback:", err);
+  }
+
+  // Also synchronize directly via standard Frappe REST Resource API for LMS Course
+  // to guarantee published: 1 and status: 'Approved' are persisted in the database
+  if (courseId) {
+    try {
+      const resObj: Record<string, any> = {
+        published: isPub ? 1 : 0,
+        status: statusVal,
+      };
+      if (isPub) {
+        resObj.published_on = publishedOnVal || todayStr;
+      }
+      const directRes = await apiService.put(`resource/LMS Course/${encodeURIComponent(courseId)}`, resObj, {
+        headers: token ? { Authorization: token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+      });
+      return rpcResult || directRes?.data || directRes;
+    } catch (errRes) {
+      console.warn("Direct resource/LMS Course update failed:", errRes);
     }
-  });
+  }
+
+  if (rpcError && !rpcResult) {
+    throw rpcError;
+  }
+  return rpcResult;
 };
 
 export const deleteCourse = async (name: string) => {
@@ -1865,12 +1975,29 @@ export const updateAssignment = async (data: FormData | Record<string, any>) => 
   );
 };
 
-export const deleteAssignment = async (name: string) => {
+export const deleteAssignment = async (name: string): Promise<any> => {
+  if (!name) return;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+
   return apiService.post(
-    `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.delete_assignment`,
-    null,
+    "method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.delete_assignment",
+    { name },
     {
-      params: { name }
+      params: { name },
+      headers,
     }
   );
 };

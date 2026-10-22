@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import CourseCard from './CourseCard';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -20,8 +20,17 @@ export default function CourseSection() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
   const COURSES_PER_PAGE = 8;
-  const totalPages = Math.max(1, Math.ceil(courses.length / COURSES_PER_PAGE));
-  const paginatedCourses = courses.slice(
+  const visibleCourses = useMemo(() => {
+    return courses.filter((c) => {
+      if (!isInstructor && (c.published === 0 || c.published === false)) {
+        return false;
+      }
+      return true;
+    });
+  }, [courses, isInstructor]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleCourses.length / COURSES_PER_PAGE));
+  const paginatedCourses = visibleCourses.slice(
     (currentPage - 1) * COURSES_PER_PAGE,
     currentPage * COURSES_PER_PAGE
   );
@@ -34,18 +43,42 @@ export default function CourseSection() {
 
   const fetchCourses = async () => {
     try {
-      let data: any[] = [];
-      try {
-        const enrollList = await getCoursesWithEnrollment();
-        if (Array.isArray(enrollList) && enrollList.length > 0) {
-          data = enrollList;
-        }
-      } catch (e) {}
+      const [enrollRes, catalogRes] = await Promise.allSettled([
+        getCoursesWithEnrollment(),
+        getCourses({ all: 1 }),
+      ]);
 
-      if (data.length === 0) {
-        const response = await getCourses();
-        data = Array.isArray(response) ? response : (response as any)?.data || (response as any)?.message || [];
-      }
+      const enrollList = enrollRes.status === "fulfilled" && Array.isArray(enrollRes.value) ? enrollRes.value : [];
+      const catalogList = catalogRes.status === "fulfilled"
+        ? (Array.isArray(catalogRes.value) ? catalogRes.value : (catalogRes.value as any)?.data || (catalogRes.value as any)?.message || [])
+        : [];
+
+      const courseMap = new Map<string, any>();
+      catalogList.forEach((c: any) => {
+        const id = c.name || c.course || c.course_name;
+        if (id) courseMap.set(id, { ...c });
+      });
+
+      enrollList.forEach((e: any) => {
+        const id = e.name || e.course || e.course_name;
+        if (id) {
+          const existing = courseMap.get(id);
+          if (existing) {
+            courseMap.set(id, {
+              ...existing,
+              ...e,
+              title: existing.title || e.title,
+              published: existing.published !== undefined ? existing.published : e.published,
+              is_enrolled: Boolean(e.is_enrolled || existing.is_enrolled),
+            });
+          } else {
+            courseMap.set(id, { ...e });
+          }
+        }
+      });
+
+      const mergedList = Array.from(courseMap.values());
+      const data = mergedList.length > 0 ? mergedList : (enrollList.length > 0 ? enrollList : catalogList);
       setCourses(data);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch courses');
@@ -143,7 +176,7 @@ export default function CourseSection() {
               currentPage={currentPage}
               totalPages={totalPages}
               onPageChange={setCurrentPage}
-              totalItems={courses.length}
+              totalItems={visibleCourses.length}
               pageSize={COURSES_PER_PAGE}
               itemName="courses"
               hideOnSinglePage={true}

@@ -85,6 +85,7 @@ export default function CourseDetailPage() {
     if (!details) return;
     setPublishingLoading(true);
     try {
+      const todayStr = new Date().toISOString().split('T')[0];
       const payload = {
         ...details,
         name: details.name || courseId,
@@ -92,9 +93,16 @@ export default function CourseDetailPage() {
         course_name: details.name || courseId,
         title: details.title || '',
         published: newPublishedStatus ? 1 : 0,
+        status: newPublishedStatus ? "Approved" : "In Progress",
+        published_on: newPublishedStatus ? (details.published_on || todayStr) : null,
       };
       await updateCourse(payload);
-      setDetails((prev: any) => ({ ...prev, published: newPublishedStatus ? 1 : 0 }));
+      setDetails((prev: any) => ({
+        ...prev,
+        published: newPublishedStatus ? 1 : 0,
+        status: newPublishedStatus ? "Approved" : "In Progress",
+        published_on: newPublishedStatus ? (details.published_on || todayStr) : null,
+      }));
       if (newPublishedStatus) {
         showToast.success("Course published successfully! It is now live in the course catalog.");
       } else {

@@ -22,6 +22,8 @@ interface CourseFormProps {
     short_introduction?: string;
     description?: string;
     published?: number;
+    published_on?: string | null;
+    status?: string | null;
     video_link?: string;
     tags?: string;
     category?: string;
@@ -230,6 +232,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
       const isPaid = Boolean(formData.paid_course || parsedPrice > 0);
 
       const isPublished = forcePublished !== undefined ? forcePublished : Boolean(formData.published);
+      const todayStr = new Date().toISOString().split('T')[0];
 
       // Build clean JSON payload matching API specification
       const normalizedColor = normalizeCourseColor(formData.card_gradient || 'Blue');
@@ -241,6 +244,8 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
         short_introduction: formData.short_introduction.trim(),
         description: formData.description.trim(),
         published: isPublished ? 1 : 0,
+        status: isPublished ? 'Approved' : 'In Progress',
+        published_on: isPublished ? (initialData?.published_on || todayStr) : null,
         video_link: formData.video_link.trim(),
         tags: formData.tags.trim(),
         category: formData.category.trim() || 'Business',
