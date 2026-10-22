@@ -2650,7 +2650,10 @@ export const deleteCourseReview = async (name: string) => {
 
 export interface LMSCouponItem {
   name?: string;
-  item: string;
+  item?: string;
+  reference_doctype?: string;
+  reference_name?: string;
+  course?: string;
 }
 
 export interface LMSCoupon {

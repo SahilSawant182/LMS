@@ -127,7 +127,7 @@ export default function CouponsPage() {
         c.applicable_items.some((item: any) =>
           typeof item === 'string'
             ? (item as string).toLowerCase().includes(q)
-            : item?.item?.toLowerCase().includes(q)
+            : (item?.reference_name || item?.item || item?.course || '')?.toLowerCase().includes(q)
         ));
 
     const matchesStatus =
@@ -620,7 +620,7 @@ export default function CouponsPage() {
                 ) : (
                   <div className="space-y-1.5 max-h-48 overflow-y-auto">
                     {selectedCoupon.applicable_items.map((item, idx) => {
-                      const itemName = typeof item === 'string' ? item : item.item;
+                      const itemName = typeof item === 'string' ? item : item.reference_name || item.item || item.course || '';
                       return (
                         <div
                           key={idx}
