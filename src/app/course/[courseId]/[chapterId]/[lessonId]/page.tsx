@@ -429,8 +429,9 @@ function EditorBlockRenderer({ block, isInstructor }: { block: EditorBlock; isIn
       );
     }
 
+    case 'programming':
     case 'program': {
-      const exerciseId = block.data?.exercise || block.data?.id || '';
+      const exerciseId = block.data?.programming_exercise || block.data?.exercise || block.data?.id || '';
       if (!exerciseId) return null;
       return (
         <div className="my-6 p-5 md:p-6 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/40 rounded-2xl border border-emerald-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -985,6 +986,45 @@ export default function LessonPage() {
   const contentBlocks = useMemo(() => parseBlocks(lessonData?.content), [lessonData?.content]);
   const instructorBlocks = useMemo(() => parseBlocks(lessonData?.instructor_content), [lessonData?.instructor_content]);
 
+  // Check if instructor added quiz, assignment, or programming exercise to this lesson
+  const attachedQuizId = useMemo(() => {
+    if (lessonData?.quiz) return String(lessonData.quiz);
+    const textToSearch = `${typeof lessonData?.content === 'string' ? lessonData.content : ''} ${typeof lessonData?.body === 'string' ? lessonData.body : ''}`;
+    const match = textToSearch.match(/class(?:Name)?=["'][^"']*quiz-block[^"']*["'][^>]*data-id=["']([^"']+)["']/i) ||
+                  textToSearch.match(/data-id=["']([^"']+)["'][^>]*class(?:Name)?=["'][^"']*quiz-block/i);
+    return match ? match[1] : '';
+  }, [lessonData]);
+
+  const attachedAssignmentId = useMemo(() => {
+    if (lessonData?.assignment) return String(lessonData.assignment);
+    const textToSearch = `${typeof lessonData?.content === 'string' ? lessonData.content : ''} ${typeof lessonData?.body === 'string' ? lessonData.body : ''}`;
+    const match = textToSearch.match(/class(?:Name)?=["'][^"']*assignment-block[^"']*["'][^>]*data-id=["']([^"']+)["']/i) ||
+                  textToSearch.match(/data-id=["']([^"']+)["'][^>]*class(?:Name)?=["'][^"']*assignment-block/i);
+    return match ? match[1] : '';
+  }, [lessonData]);
+
+  const attachedExerciseId = useMemo(() => {
+    if (lessonData?.programming_exercise) return String(lessonData.programming_exercise);
+    if (lessonData?.exercise) return String(lessonData.exercise);
+    const textToSearch = `${typeof lessonData?.content === 'string' ? lessonData.content : ''} ${typeof lessonData?.body === 'string' ? lessonData.body : ''}`;
+    const match = textToSearch.match(/class(?:Name)?=["'][^"']*programming-block[^"']*["'][^>]*data-id=["']([^"']+)["']/i) ||
+                  textToSearch.match(/data-id=["']([^"']+)["'][^>]*class(?:Name)?=["'][^"']*programming-block/i);
+    return match ? match[1] : '';
+  }, [lessonData]);
+
+  const hasQuizInBlocks = useMemo(() => 
+    contentBlocks.some((b: any) => b.type === 'quiz' && (b.data?.quiz || b.data?.id)),
+    [contentBlocks]
+  );
+  const hasAssignmentInBlocks = useMemo(() => 
+    contentBlocks.some((b: any) => b.type === 'assignment' && (b.data?.assignment || b.data?.id)),
+    [contentBlocks]
+  );
+  const hasExerciseInBlocks = useMemo(() => 
+    contentBlocks.some((b: any) => (b.type === 'programming' || b.type === 'program') && (b.data?.programming_exercise || b.data?.exercise || b.data?.id)),
+    [contentBlocks]
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
@@ -1494,61 +1534,105 @@ export default function LessonPage() {
                 )}
               </div>
 
-              {/* Lesson Quiz & Knowledge Check */}
-              <div className="mt-8 p-6 bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/40 rounded-2xl border border-indigo-100/90 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-indigo-500/20">
-                    <HelpCircle className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-slate-900">Lesson Quiz & Knowledge Check</h3>
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
-                        Lesson Test
-                      </span>
+              {/* Attached Assessments (Quiz, Assignment, Programming Exercise) - Displayed ONLY when added by the instructor */}
+              {((Boolean(attachedQuizId) && !hasQuizInBlocks) ||
+                (Boolean(attachedAssignmentId) && !hasAssignmentInBlocks) ||
+                (Boolean(attachedExerciseId) && !hasExerciseInBlocks)) && (
+                <div className="mt-8 space-y-4">
+                  {/* Quiz Option */}
+                  {Boolean(attachedQuizId) && !hasQuizInBlocks && (
+                    <div className="p-5 md:p-6 bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/40 rounded-2xl border border-indigo-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-start gap-3.5">
+                        <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-600/20">
+                          <HelpCircle className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                              Lesson Quiz
+                            </span>
+                            <h4 className="text-base font-bold text-slate-900">
+                              {attachedQuizId}
+                            </h4>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Reinforce your understanding with interactive quiz questions.
+                          </p>
+                        </div>
+                      </div>
+                      <Link
+                        href={`/quizzes/${encodeURIComponent(attachedQuizId)}`}
+                        className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-1.5 shrink-0"
+                      >
+                        <Award className="w-4 h-4" />
+                        {isInstructor ? "Manage Quiz" : "Start Quiz"}
+                      </Link>
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Reinforce your understanding of the topics taught in this lesson.
-                    </p>
-                  </div>
-                </div>
+                  )}
 
-                <div className="flex items-center gap-2 w-full md:w-auto">
-                  {isInstructor && !courseData?.is_enrolled ? (
-                    <>
+                  {/* Assignment Option */}
+                  {Boolean(attachedAssignmentId) && !hasAssignmentInBlocks && (
+                    <div className="p-5 md:p-6 bg-gradient-to-br from-violet-50/70 via-white to-indigo-50/40 rounded-2xl border border-violet-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-start gap-3.5">
+                        <div className="w-11 h-11 rounded-xl bg-violet-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-violet-600/20">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
+                              Assignment
+                            </span>
+                            <h4 className="text-base font-bold text-slate-900">
+                              {attachedAssignmentId}
+                            </h4>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Complete and submit your coursework assignment for this lesson.
+                          </p>
+                        </div>
+                      </div>
                       <Link
-                        href={`/quizzes/create?course=${encodeURIComponent(courseId)}&chapter=${encodeURIComponent(chapterId)}&lesson=${encodeURIComponent(lessonId)}&returnUrl=${encodeURIComponent(`/course/${encodeURIComponent(courseId)}/${encodeURIComponent(chapterId)}/${encodeURIComponent(lessonId)}`)}`}
-                        className="flex-1 md:flex-initial px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                        href={`/assignments/${encodeURIComponent(attachedAssignmentId)}`}
+                        className="w-full sm:w-auto px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-violet-600/20 flex items-center justify-center gap-1.5 shrink-0"
                       >
-                        <Plus className="w-3.5 h-3.5" /> Create Lesson Quiz
+                        <FileText className="w-4 h-4" />
+                        {isInstructor ? "View Submissions" : "Open Assignment"}
                       </Link>
+                    </div>
+                  )}
+
+                  {/* Programming Exercise Option */}
+                  {Boolean(attachedExerciseId) && !hasExerciseInBlocks && (
+                    <div className="p-5 md:p-6 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/40 rounded-2xl border border-emerald-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-start gap-3.5">
+                        <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-600/20">
+                          <Code className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                              Coding Exercise
+                            </span>
+                            <h4 className="text-base font-bold text-slate-900">
+                              {attachedExerciseId}
+                            </h4>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Hands-on programming exercise with live test cases.
+                          </p>
+                        </div>
+                      </div>
                       <Link
-                        href={`/quizzes/create-question?course=${encodeURIComponent(courseId)}&chapter=${encodeURIComponent(chapterId)}&lesson=${encodeURIComponent(lessonId)}&returnUrl=${encodeURIComponent(`/course/${encodeURIComponent(courseId)}/${encodeURIComponent(chapterId)}/${encodeURIComponent(lessonId)}`)}`}
-                        className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1"
+                        href={`/programming-exercises?exercise=${encodeURIComponent(attachedExerciseId)}`}
+                        className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 shrink-0"
                       >
-                        <Plus className="w-3 h-3 text-indigo-600" /> Add Question
+                        <Code className="w-4 h-4" />
+                        Launch Exercise
                       </Link>
-                      <Link
-                        href="/quizzes"
-                        className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center"
-                      >
-                        Manage Quizzes
-                      </Link>
-                    </>
-                  ) : (
-                    <Link
-                      href={
-                        contentBlocks.find((b: any) => b.type === 'quiz')?.data?.quiz || lessonData?.quiz
-                          ? `/quizzes/${encodeURIComponent(contentBlocks.find((b: any) => b.type === 'quiz')?.data?.quiz || lessonData?.quiz)}`
-                          : '/quizzes'
-                      }
-                      className="flex-1 md:flex-initial px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2"
-                    >
-                      <Award className="w-3.5 h-3.5" /> Take Lesson Quiz
-                    </Link>
+                    </div>
                   )}
                 </div>
-              </div>
+              )}
 
               {/* Bottom Action: Dynamic Lesson & Course Completion */}
               <div className="mt-10 p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
