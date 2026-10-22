@@ -12,8 +12,9 @@ import CourseCard from '@/components/CourseCard';
 import { formatDate } from '@/utils/formatters';
 import { navigateBack } from '@/utils/navigation';
 import BatchDiscussions from '@/components/batch/BatchDiscussions';
+import LiveClassTab from '@/components/live-class/LiveClassTab';
 
-export type BatchTab = 'overview' | 'courses' | 'discussions' | 'students' | 'feedback';
+export type BatchTab = 'overview' | 'courses' | 'classes' | 'discussions' | 'students' | 'feedback';
 
 export default function BatchDetailsPage() {
   const params = useParams();
@@ -43,6 +44,8 @@ export default function BatchDetailsPage() {
           setActiveTab('discussions');
         } else if (hash === 'courses') {
           setActiveTab('courses');
+        } else if (hash === 'classes' || hash === 'live-classes' || hash === 'live') {
+          setActiveTab('classes');
         } else if (hash === 'overview') {
           setActiveTab('overview');
         } else if (hash === 'students') {
@@ -485,6 +488,20 @@ export default function BatchDetailsPage() {
             </span>
           </button>
 
+          {(batchData.show_live_class === 1 || isInstructor) && (
+            <button
+              onClick={() => handleTabChange('classes')}
+              className={`px-4 py-2.5 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'classes'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Video className="w-4 h-4" />
+              <span>Live Classes</span>
+            </button>
+          )}
+
           <button
             onClick={() => handleTabChange('discussions')}
             className={`px-4 py-2.5 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
@@ -668,7 +685,21 @@ export default function BatchDetailsPage() {
           </section>
         )}
 
-        {/* Tab 3: Discussions */}
+        {/* Tab 3: Live Classes */}
+        {activeTab === 'classes' && (
+          <section id="live-classes">
+            <LiveClassTab
+              batchId={batchId}
+              batchTitle={batchData.title || batchData.name}
+              isInstructor={isInstructor}
+              conferencingProvider={batchData.conferencing_provider}
+              zoomAccount={batchData.zoom_account}
+              googleMeetAccount={batchData.google_meet_account}
+            />
+          </section>
+        )}
+
+        {/* Tab 4: Discussions */}
         {activeTab === 'discussions' && (
           <section id="discussions">
             <BatchDiscussions
