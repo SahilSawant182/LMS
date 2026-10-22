@@ -13,6 +13,7 @@ function CreateQuestionForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
+  const courseParam = searchParams.get('course') || '';
   
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -168,17 +169,21 @@ function CreateQuestionForm() {
             <p className="text-xs sm:text-sm text-slate-500 mb-6 leading-relaxed">
               Creating assessment questions is restricted to authorized instructors and administrators. As a student, you can view and take quizzes from the assessments catalog.
             </p>
-            <Link
-              href={returnUrl || "/quizzes?tab=questions"}
-              onClick={(e) => {
-                e.preventDefault();
-                navigateBack(router, returnUrl || "/quizzes?tab=questions");
+            <button
+              onClick={() => {
+                if (returnUrl) {
+                  router.push(returnUrl);
+                } else if (courseParam) {
+                  router.push(`/course/${encodeURIComponent(courseParam)}`);
+                } else {
+                  router.push("/quizzes?tab=questions");
+                }
               }}
               className="inline-flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back
-            </Link>
+              {returnUrl ? "Back to Lesson" : "Back"}
+            </button>
           </div>
         </div>
       </div>

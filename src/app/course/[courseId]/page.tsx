@@ -173,9 +173,24 @@ export default function CourseDetailPage() {
         const d = detailsRes.value?.data || detailsRes.value?.message?.data || detailsRes.value?.message || detailsRes.value;
         setDetails(d);
         
+        let userIsEnrolled = false;
+        if (enrollRes.status === 'fulfilled' && enrollRes.value) {
+          userIsEnrolled = Boolean(enrollRes.value.is_enrolled);
+        } else if (d && d.membership) {
+          userIsEnrolled = true;
+        }
+
         // Ensure student cannot receive instructor permissions
         if (!currentIsInstructor) {
           setIsInstructor(false);
+        } else if (userIsEnrolled) {
+          const currentEmail = (email || '').trim().toLowerCase();
+          const instructors = Array.isArray(d?.instructors) ? d.instructors : [];
+          const isAssigned = instructors.some((inst: any) => {
+            const iEmail = String(inst?.instructor || inst?.name || inst?.email || inst?.user || '').trim().toLowerCase();
+            return iEmail && iEmail === currentEmail;
+          });
+          setIsInstructor(isAssigned);
         } else {
           setIsInstructor(true);
         }

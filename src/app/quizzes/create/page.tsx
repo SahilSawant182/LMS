@@ -80,6 +80,7 @@ export function CreateQuizContent({ initialQuizName }: { initialQuizName?: strin
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
+  const courseParam = searchParams.get('course') || '';
   const quizParam = initialQuizName || searchParams.get('quiz') || searchParams.get('name') || '';
 
   const [isInstructor, setIsInstructor] = useState<boolean | null>(null);
@@ -739,16 +740,21 @@ export function CreateQuizContent({ initialQuizName }: { initialQuizName?: strin
             <p className="text-xs sm:text-sm text-slate-500 mb-6 leading-relaxed">
               Quiz creation is reserved for verified instructors and administrators.
             </p>
-            <Link
-              href={returnUrl || "/quizzes"}
-              onClick={(e) => {
-                e.preventDefault();
-                navigateBack(router, returnUrl || "/quizzes");
+            <button
+              onClick={() => {
+                if (returnUrl) {
+                  router.push(returnUrl);
+                } else if (courseParam) {
+                  router.push(`/course/${encodeURIComponent(courseParam)}`);
+                } else {
+                  router.push("/quizzes");
+                }
               }}
-              className="inline-flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all cursor-pointer shadow-md shadow-indigo-600/20"
             >
-              {returnUrl ? "Back to Lesson Editor" : "Back"}
-            </Link>
+              <ArrowLeft className="w-4 h-4" />
+              {returnUrl ? "Back to Lesson" : "Back"}
+            </button>
           </div>
         </div>
       </div>

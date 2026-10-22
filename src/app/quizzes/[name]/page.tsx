@@ -1587,24 +1587,28 @@ export default function QuizDetailsPage() {
                           No Questions Added Yet
                         </h4>
                         <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-                          This assessment currently contains 0 questions. You can edit this quiz to add questions directly from the Question Bank or create new assessment questions.
+                          {isInstructor
+                            ? "This assessment currently contains 0 questions. You can edit this quiz to add questions directly from the Question Bank or create new assessment questions."
+                            : "This assessment does not have any questions available yet. Please check back later or contact your instructor."}
                         </p>
-                        <div className="mt-3 flex flex-wrap gap-2.5">
-                          <Link
-                            href={`/quizzes/create?quiz=${encodeURIComponent(quiz.name)}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                            Edit Quiz & Add Questions
-                          </Link>
-                          <Link
-                            href="/quizzes?tab=questions"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 text-xs font-semibold rounded-lg shadow-sm transition-colors"
-                          >
-                            <PlusCircle className="w-3.5 h-3.5 text-amber-700" />
-                            Browse Question Bank
-                          </Link>
-                        </div>
+                        {isInstructor && (
+                          <div className="mt-3 flex flex-wrap gap-2.5">
+                            <Link
+                              href={`/quizzes/create?quiz=${encodeURIComponent(quiz.name)}`}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              Edit Quiz & Add Questions
+                            </Link>
+                            <Link
+                              href="/quizzes?tab=questions"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 text-xs font-semibold rounded-lg shadow-sm transition-colors"
+                            >
+                              <PlusCircle className="w-3.5 h-3.5 text-amber-700" />
+                              Browse Question Bank
+                            </Link>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -81,15 +81,18 @@ function QuizzesContent() {
 
   // Sync tab with URL
   useEffect(() => {
-    if (tabParam === "questions") {
+    const isInst = isAuthorizedInstructor();
+    setIsInstructor(isInst);
+    if (tabParam === "questions" && isInst) {
       setActiveTab("questions");
-    } else if (tabParam === "quizzes") {
+    } else {
       setActiveTab("quizzes");
     }
   }, [tabParam]);
 
   useEffect(() => {
-    setIsInstructor(isAuthorizedInstructor());
+    const isInst = isAuthorizedInstructor();
+    setIsInstructor(isInst);
 
     // Fetch Quizzes
     const fetchQuizzesData = async () => {
@@ -108,10 +111,13 @@ function QuizzesContent() {
     };
 
     fetchQuizzesData();
-    fetchQuestionsData();
+    if (isInst) {
+      fetchQuestionsData();
+    }
   }, []);
 
   const fetchQuestionsData = async () => {
+    if (!isAuthorizedInstructor()) return;
     setLoadingQuestions(true);
     setErrorQuestions(null);
     try {
@@ -128,6 +134,7 @@ function QuizzesContent() {
   };
 
   const handleTabSwitch = (tab: "quizzes" | "questions") => {
+    if (tab === "questions" && !isInstructor) return;
     setActiveTab(tab);
     const newParams = new URLSearchParams(searchParams.toString());
     newParams.set("tab", tab);
@@ -221,10 +228,12 @@ function QuizzesContent() {
               </span>
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight text-white">
-              Course Quizzes & Question Bank
+              {isInstructor ? "Course Quizzes & Question Bank" : "Assessments & Quizzes"}
             </h1>
             <p className="text-indigo-100 mt-1.5 text-xs sm:text-sm max-w-2xl leading-relaxed">
-              Create, manage, and take assessment quizzes or manage the centralized question bank for all courses.
+              {isInstructor 
+                ? "Create, manage, and take assessment quizzes or manage the centralized question bank for all courses."
+                : "Explore and take course assessments to test your knowledge and track your progress."}
             </p>
           </div>
 
@@ -268,23 +277,25 @@ function QuizzesContent() {
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => handleTabSwitch("questions")}
-            className={`flex items-center gap-2 px-5 py-3 font-semibold text-sm border-b-2 transition-all ${
-              activeTab === "questions"
-                ? "border-indigo-500 text-white font-bold bg-slate-800/40 rounded-t-xl"
-                : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <HelpCircle className="w-4 h-4" />
-            <span>Question Bank</span>
-            <span className={`ml-1.5 px-2 py-0.5 rounded-full text-xs font-bold ${
-              activeTab === "questions" ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400"
-            }`}>
-              {questions.length}
-            </span>
-          </button>
+          {isInstructor && (
+            <button
+              type="button"
+              onClick={() => handleTabSwitch("questions")}
+              className={`flex items-center gap-2 px-5 py-3 font-semibold text-sm border-b-2 transition-all ${
+                activeTab === "questions"
+                  ? "border-indigo-500 text-white font-bold bg-slate-800/40 rounded-t-xl"
+                  : "border-transparent text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <HelpCircle className="w-4 h-4" />
+              <span>Question Bank</span>
+              <span className={`ml-1.5 px-2 py-0.5 rounded-full text-xs font-bold ${
+                activeTab === "questions" ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400"
+              }`}>
+                {questions.length}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -407,7 +418,7 @@ function QuizzesContent() {
         )}
 
         {/* TAB 2: QUESTION BANK */}
-        {activeTab === "questions" && (
+        {isInstructor && activeTab === "questions" && (
           <div>
             {/* Filters & Actions Header */}
             <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-6 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
