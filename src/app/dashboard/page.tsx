@@ -280,13 +280,21 @@ export function DashboardContent() {
                 try {
                   const pbRes = await getCourseProgressBar({ course: courseId, member: studentEmail });
                   const parsed = parseProgressBarValue(pbRes);
+                  const isCompleted = Boolean(
+                    parsed.isCompleted ||
+                    (parsed.percent >= 100) ||
+                    (parsed.totalLessons !== undefined && parsed.completedLessons !== undefined && parsed.totalLessons > 0 && parsed.completedLessons >= parsed.totalLessons)
+                  );
+                  if (isCompleted && studentEmail && courseId && typeof window !== 'undefined') {
+                    localStorage.setItem(`lms_course_completed_${studentEmail}_${courseId}`, 'true');
+                  }
                   return {
                     ...c,
-                    progress: parsed.percent,
-                    completed_lessons: parsed.completedLessons !== undefined ? parsed.completedLessons : c.completed_lessons,
+                    progress: isCompleted ? 100 : parsed.percent,
+                    completed_lessons: isCompleted && parsed.totalLessons ? parsed.totalLessons : (parsed.completedLessons !== undefined ? parsed.completedLessons : c.completed_lessons),
                     total_lessons: parsed.totalLessons !== undefined ? parsed.totalLessons : c.total_lessons,
-                    pending_lessons: parsed.pendingLessons !== undefined ? parsed.pendingLessons : c.pending_lessons,
-                    progress_status: parsed.progressStatus || c.progress_status
+                    pending_lessons: isCompleted ? 0 : (parsed.pendingLessons !== undefined ? parsed.pendingLessons : c.pending_lessons),
+                    progress_status: isCompleted ? 'Completed' : (parsed.progressStatus || c.progress_status)
                   };
                 } catch (e) {
                   return c;

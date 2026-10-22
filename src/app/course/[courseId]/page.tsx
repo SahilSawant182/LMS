@@ -260,7 +260,9 @@ export default function CourseDetailPage() {
           eChapters.forEach((ch: any) => {
             if (Array.isArray(ch.lessons)) {
               ch.lessons.forEach((l: any) => {
-                if (l.name) enrollLessonsMap.set(l.name, l);
+                if (l.name) enrollLessonsMap.set(String(l.name).trim().toLowerCase(), l);
+                if (l.title) enrollLessonsMap.set(String(l.title).trim().toLowerCase(), l);
+                if (l.lesson_name) enrollLessonsMap.set(String(l.lesson_name).trim().toLowerCase(), l);
               });
             }
           });
@@ -335,12 +337,17 @@ export default function CourseDetailPage() {
           return {
             ...chapter,
             lessons: sortedLessons.map(lesson => {
-              const fromEnroll = enrollLessonsMap.get(lesson.name);
+              const lKey = String(lesson.name || '').trim().toLowerCase();
+              const lTitleKey = String(lesson.title || lesson.lesson_name || '').trim().toLowerCase();
+              const fromEnroll = enrollLessonsMap.get(lKey) || (lTitleKey ? enrollLessonsMap.get(lTitleKey) : null);
               return {
                 ...lesson,
                 chapter: lesson.chapter || chapter.name,
                 is_locked: currentIsInstructor ? false : (fromEnroll?.is_locked !== undefined ? fromEnroll.is_locked : lesson.is_locked),
                 include_in_preview: fromEnroll?.include_in_preview !== undefined ? fromEnroll.include_in_preview : lesson.include_in_preview,
+                is_complete: fromEnroll?.is_complete !== undefined ? fromEnroll.is_complete : (lesson.is_complete !== undefined ? lesson.is_complete : 0),
+                completed: fromEnroll?.completed !== undefined ? fromEnroll.completed : (lesson.completed !== undefined ? lesson.completed : 0),
+                status: fromEnroll?.status || lesson.status,
               };
             })
           };
@@ -730,25 +737,121 @@ export default function CourseDetailPage() {
                 ? progress.data
                 : (Array.isArray(progress?.message) ? progress.message : []))));
 
+  // High-confidence course-level completion checks (consistent with Student Dashboard and Frappe LMS)
+  const pbIsComplete = Boolean(
+    parsedPB?.isCompleted ||
+    (parsedPB !== null && (parsedPB.percent || 0) >= 100) ||
+    (parsedPB !== null && (parsedPB.totalLessons || 0) > 0 && (parsedPB.completedLessons || 0) >= (parsedPB.totalLessons || 0))
+  );
+
+  const enrollIsComplete = Boolean(
+    enrollmentData?.status === 'Completed' ||
+    enrollmentData?.status === 'Complete' ||
+    (enrollmentData?.progress !== undefined && Number(enrollmentData.progress) >= 100) ||
+    (Number(enrollmentData?.completed_lessons || 0) > 0 && Number(enrollmentData?.total_lessons || 0) > 0 && Number(enrollmentData?.completed_lessons) >= Number(enrollmentData?.total_lessons)) ||
+    details?.membership?.status === 'Completed' ||
+    details?.membership?.status === 'Complete' ||
+    (details?.membership?.progress !== undefined && Number(details.membership.progress) >= 100) ||
+    normalizedProgress?.status === 'Completed' ||
+    normalizedProgress?.status === 'Complete' ||
+    (normalizedProgress?.progress !== undefined && Number(normalizedProgress.progress) >= 100) ||
+    (normalizedProgress?.progress_percentage !== undefined && Number(normalizedProgress.progress_percentage) >= 100)
+  );
+
+  const localIsComplete = typeof window !== 'undefined' && Boolean(
+    (currentUserEmail && localStorage.getItem(`lms_course_completed_${currentUserEmail}_${courseId}`) === 'true') ||
+    localStorage.getItem(`lms_course_completed_${courseId}`) === 'true'
+  );
+
+  const courseLevelComplete = pbIsComplete || enrollIsComplete || localIsComplete;
+
+  const enrollLessonsLookupMap = (() => {
+    const map = new Map<string, any>();
+    const eChapters = (enrollmentData as any)?.chapters || [];
+    if (Array.isArray(eChapters)) {
+      eChapters.forEach((ch: any) => {
+        if (Array.isArray(ch?.lessons)) {
+          ch.lessons.forEach((l: any) => {
+            if (l?.name) map.set(String(l.name).trim().toLowerCase(), l);
+            if (l?.title) map.set(String(l.title).trim().toLowerCase(), l);
+            if (l?.lesson_name) map.set(String(l.lesson_name).trim().toLowerCase(), l);
+          });
+        }
+      });
+    }
+    return map;
+  })();
+
   const checkOutlineLessonComplete = (l: any) => {
     if (!l) return false;
-    if (l.is_complete === 1 || l.is_complete === true || l.completed === 1 || l.completed === true || l.status === 'Complete' || l.status === 'Completed') {
+    // 1. If course is complete at course-level, every syllabus lesson is completed
+    if (courseLevelComplete) return true;
+
+    // 2. Direct property flags on lesson object
+    if (
+      l.is_complete === 1 ||
+      l.is_complete === true ||
+      l.completed === 1 ||
+      l.completed === true ||
+      l.status === 'Complete' ||
+      l.status === 'Completed'
+    ) {
       return true;
     }
-    const lName = (l.name || '').trim().toLowerCase();
-    const lTitle = (l.title || l.lesson_name || '').trim().toLowerCase();
-    if (!Array.isArray(progressRecords) || progressRecords.length === 0) return false;
-    return progressRecords.some((r: any) => {
-      const rLesson = String(r.lesson || '').trim().toLowerCase();
-      const rLessonName = String(r.lesson_name || '').trim().toLowerCase();
-      const rTitle = String(r.title || '').trim().toLowerCase();
-      const isCompleteStatus = r.status === 'Complete' || r.status === 'Completed' || r.completed === 1 || r.completed === '1';
-      if (!isCompleteStatus) return false;
-      return (
-        (lName && (rLesson === lName || rLessonName === lName || rTitle === lName)) ||
-        (lTitle && (rLesson === lTitle || rLessonName === lTitle || rTitle === lTitle))
-      );
-    });
+
+    const lName = String(l.name || '').trim().toLowerCase();
+    const lTitle = String(l.title || l.lesson_name || '').trim().toLowerCase();
+
+    // 3. Check enrollment data lessons lookup map
+    const fromMap = (lName ? enrollLessonsLookupMap.get(lName) : null) || (lTitle ? enrollLessonsLookupMap.get(lTitle) : null);
+    if (
+      fromMap &&
+      (fromMap.is_complete === 1 ||
+        fromMap.is_complete === true ||
+        fromMap.completed === 1 ||
+        fromMap.completed === true ||
+        fromMap.status === 'Complete' ||
+        fromMap.status === 'Completed')
+    ) {
+      return true;
+    }
+
+    // 4. Check localStorage for local completion flag
+    if (typeof window !== 'undefined') {
+      const email = currentUserEmail || localStorage.getItem("userEmail") || "";
+      if (email) {
+        if (
+          (l.name && localStorage.getItem(`lms_lesson_${email}_${l.name}_completed`) === 'true') ||
+          (l.name && localStorage.getItem(`lms_lesson_${email}_${courseId}_${l.name}_completed`) === 'true') ||
+          (l.title && localStorage.getItem(`lms_lesson_${email}_${l.title}_completed`) === 'true')
+        ) {
+          return true;
+        }
+      }
+    }
+
+    // 5. Check progress records returned by API
+    if (Array.isArray(progressRecords) && progressRecords.length > 0) {
+      return progressRecords.some((r: any) => {
+        const rLesson = String(r.lesson || '').trim().toLowerCase();
+        const rLessonName = String(r.lesson_name || '').trim().toLowerCase();
+        const rTitle = String(r.title || '').trim().toLowerCase();
+        const isCompleteStatus =
+          r.status === 'Complete' ||
+          r.status === 'Completed' ||
+          r.completed === 1 ||
+          r.completed === '1' ||
+          r.is_complete === 1 ||
+          r.is_complete === true;
+        if (!isCompleteStatus) return false;
+        return (
+          (lName && (rLesson === lName || rLessonName === lName || rTitle === lName)) ||
+          (lTitle && (rLesson === lTitle || rLessonName === lTitle || rTitle === lTitle))
+        );
+      });
+    }
+
+    return false;
   };
 
   // Helper to determine the appropriate starting point for "Continue Learning"
@@ -809,25 +912,31 @@ export default function CourseDetailPage() {
     return flatOutline[0];
   };
 
-  const actualCompletedOutlineCount = allOutlineLessons.filter(l => checkOutlineLessonComplete(l)).length;
-  const isAllOutlineLessonsComplete = allOutlineLessons.length > 0 && allOutlineLessons.every(l => checkOutlineLessonComplete(l));
+  const actualCompletedOutlineCount = courseLevelComplete && allOutlineLessons.length > 0
+    ? allOutlineLessons.length
+    : allOutlineLessons.filter(l => checkOutlineLessonComplete(l)).length;
+
+  const isAllOutlineLessonsComplete = allOutlineLessons.length > 0 && (courseLevelComplete || allOutlineLessons.every(l => checkOutlineLessonComplete(l)));
+
+  const isCourseComplete = Boolean(courseLevelComplete || isAllOutlineLessonsComplete);
 
   const totalLessonsCount = allOutlineLessons.length > 0
     ? allOutlineLessons.length
     : (parsedPB?.totalLessons || Number(normalizedProgress.total_lessons || enrollmentData?.total_lessons || details?.lessons || 0));
 
-  const isCourseComplete = Boolean(
-    (allOutlineLessons.length > 0 ? isAllOutlineLessonsComplete : Boolean(parsedPB?.isCompleted)) ||
-    enrollmentData?.status === 'Completed'
-  );
-
   const completedLessonsCount = isCourseComplete
-    ? totalLessonsCount
-    : actualCompletedOutlineCount;
+    ? (totalLessonsCount > 0 ? totalLessonsCount : Math.max(allOutlineLessons.length, parsedPB?.totalLessons || 0, 1))
+    : Math.max(actualCompletedOutlineCount, parsedPB?.completedLessons || 0, Number(enrollmentData?.completed_lessons || 0));
 
-  const progressPercent = totalLessonsCount > 0
-    ? (isCourseComplete ? 100 : Math.min(100, Math.round((actualCompletedOutlineCount / totalLessonsCount) * 100)))
-    : (parsedPB?.percent ?? 0);
+  const calculatedPercent = totalLessonsCount > 0 && actualCompletedOutlineCount > 0
+    ? Math.min(100, Math.round((actualCompletedOutlineCount / totalLessonsCount) * 100))
+    : 0;
+  const pbPercent = parsedPB?.percent ?? 0;
+  const enrollPercent = Number(enrollmentData?.progress || details?.membership?.progress || normalizedProgress?.progress || normalizedProgress?.progress_percentage || 0);
+
+  const progressPercent = isCourseComplete
+    ? 100
+    : Math.max(calculatedPercent, pbPercent, enrollPercent);
 
   const isUserEnrolled = Boolean(
     isEnrolled ||
@@ -1164,7 +1273,7 @@ export default function CourseDetailPage() {
                                     href={`/course/${courseId}/${encodeURIComponent(chapter.name)}/${encodeURIComponent(lesson.name)}`}
                                     className="flex items-center gap-1 text-indigo-600 text-xs font-bold opacity-0 group-hover/lesson:opacity-100 transition-all -translate-x-2 group-hover/lesson:translate-x-0"
                                   >
-                                    {isInstructor ? "Start Lesson" : (isPreview ? "Preview" : "Start")} <ChevronRight className="w-3 h-3" />
+                                    {isInstructor ? "Start Lesson" : (isPreview ? "Preview" : (isLessonCompleted ? "Review" : "Start"))} <ChevronRight className="w-3 h-3" />
                                   </Link>
                                 )}
                               </li>

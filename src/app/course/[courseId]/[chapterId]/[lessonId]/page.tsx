@@ -903,6 +903,14 @@ export default function LessonPage() {
         status: "Complete"
       });
       setIsCompletedLocally(true);
+      if (typeof window !== "undefined" && userEmail) {
+        const normLesson = lessonData.name || lessonId;
+        localStorage.setItem(`lms_lesson_${userEmail}_${normLesson}_completed`, 'true');
+        localStorage.setItem(`lms_lesson_${userEmail}_${courseId}_${normLesson}_completed`, 'true');
+        if (lessonData.title) {
+          localStorage.setItem(`lms_lesson_${userEmail}_${lessonData.title}_completed`, 'true');
+        }
+      }
       const [progressRes, pbRes] = await Promise.allSettled([
         getCourseProgress(courseId, userEmail),
         getCourseProgressBar({ course: courseId, member: userEmail })
@@ -954,6 +962,9 @@ export default function LessonPage() {
 
       if (shouldCompleteCourse) {
         setIsCourseCompletedLocally(true);
+        if (typeof window !== "undefined" && userEmail) {
+          localStorage.setItem(`lms_course_completed_${userEmail}_${courseId}`, 'true');
+        }
         setShowCompletionModal(true);
         showToast.success('Course completed successfully! Congratulations!');
       } else {
@@ -1089,7 +1100,37 @@ export default function LessonPage() {
 
   const progressRecords = normalizedProgress.records || normalizedProgress.data?.records || [];
 
+  // Course-level completion checks (consistent with Student Dashboard and Course Page)
+  const pbIsComplete = Boolean(
+    parsedPB?.isCompleted ||
+    (parsedPB !== null && (parsedPB.percent || 0) >= 100) ||
+    (parsedPB !== null && (parsedPB.totalLessons || 0) > 0 && (parsedPB.completedLessons || 0) >= (parsedPB.totalLessons || 0))
+  );
+
+  const enrollIsComplete = Boolean(
+    courseData?.status === 'Completed' ||
+    courseData?.status === 'Complete' ||
+    ((courseData as any)?.progress !== undefined && Number((courseData as any).progress) >= 100) ||
+    (Number((courseData as any)?.completed_lessons || 0) > 0 && Number((courseData as any)?.total_lessons || 0) > 0 && Number((courseData as any)?.completed_lessons) >= Number((courseData as any)?.total_lessons)) ||
+    normalizedProgress?.status === 'Completed' ||
+    normalizedProgress?.status === 'Complete' ||
+    (normalizedProgress?.progress !== undefined && Number(normalizedProgress.progress) >= 100) ||
+    (normalizedProgress?.progress_percentage !== undefined && Number(normalizedProgress.progress_percentage) >= 100)
+  );
+
+  const localIsComplete = typeof window !== 'undefined' && Boolean(
+    (userEmail && localStorage.getItem(`lms_course_completed_${userEmail}_${courseId}`) === 'true') ||
+    localStorage.getItem(`lms_course_completed_${courseId}`) === 'true'
+  );
+
+  const courseLevelComplete = Boolean(isCourseCompletedLocally || pbIsComplete || enrollIsComplete || localIsComplete);
+
   const checkLessonRecordedComplete = (lessonItem: { lessonName?: string; name?: string; title?: string; lesson_name?: string }) => {
+    // 1. If course is completed at course-level, all lessons are complete
+    if (courseLevelComplete) {
+      return true;
+    }
+
     const lName = (lessonItem.lessonName || lessonItem.name || '').trim().toLowerCase();
     const lTitle = (lessonItem.title || lessonItem.lesson_name || '').trim().toLowerCase();
     const currentTId = (currentTargetId || '').trim().toLowerCase();
@@ -1098,13 +1139,32 @@ export default function LessonPage() {
     if (isCompletedLocally && (lName === currentTId || lName === currLId || lTitle === currentTId || lTitle === currLId)) {
       return true;
     }
+
+    // Check localStorage
+    if (typeof window !== 'undefined' && userEmail) {
+      const lesKey = lessonItem.lessonName || lessonItem.name;
+      if (
+        (lesKey && localStorage.getItem(`lms_lesson_${userEmail}_${lesKey}_completed`) === 'true') ||
+        (lesKey && localStorage.getItem(`lms_lesson_${userEmail}_${courseId}_${lesKey}_completed`) === 'true') ||
+        (lessonItem.title && localStorage.getItem(`lms_lesson_${userEmail}_${lessonItem.title}_completed`) === 'true')
+      ) {
+        return true;
+      }
+    }
+
     if (!Array.isArray(progressRecords) || progressRecords.length === 0) return false;
 
     return progressRecords.some((r: any) => {
       const rLesson = String(r.lesson || '').trim().toLowerCase();
       const rLessonName = String(r.lesson_name || '').trim().toLowerCase();
       const rTitle = String(r.title || '').trim().toLowerCase();
-      const isCompleteStatus = r.status === 'Complete' || r.status === 'Completed' || r.completed === 1 || r.completed === '1';
+      const isCompleteStatus =
+        r.status === 'Complete' ||
+        r.status === 'Completed' ||
+        r.completed === 1 ||
+        r.completed === '1' ||
+        r.is_complete === 1 ||
+        r.is_complete === true;
 
       if (!isCompleteStatus) return false;
 
@@ -1117,7 +1177,9 @@ export default function LessonPage() {
 
   // Accurate outline lesson calculation
   const totalLessonsInOutline = flatLessons.length;
-  const actualCompletedLessonsCount = flatLessons.filter(l => checkLessonRecordedComplete(l)).length;
+  const actualCompletedLessonsCount = courseLevelComplete && totalLessonsInOutline > 0
+    ? totalLessonsInOutline
+    : flatLessons.filter(l => checkLessonRecordedComplete(l)).length;
 
   const totalLessonsCount = totalLessonsInOutline > 0
     ? totalLessonsInOutline
@@ -1125,22 +1187,24 @@ export default function LessonPage() {
 
   // Course is strictly complete only if all syllabus outline lessons are recorded as complete
   const areAllLessonsCompleted = totalLessonsInOutline > 0
-    ? flatLessons.every(l => checkLessonRecordedComplete(l))
+    ? (courseLevelComplete || flatLessons.every(l => checkLessonRecordedComplete(l)))
     : Boolean(parsedPB?.isCompleted || (parsedPB?.pendingLessons === 0 && (parsedPB?.totalLessons || 0) > 0));
 
-  const isCourseComplete = Boolean(
-    isCourseCompletedLocally ||
-    areAllLessonsCompleted ||
-    courseData?.status === 'Completed'
-  );
+  const isCourseComplete = Boolean(courseLevelComplete || areAllLessonsCompleted);
 
   const completedLessonsCount = isCourseComplete
-    ? totalLessonsCount
-    : actualCompletedLessonsCount;
+    ? (totalLessonsCount > 0 ? totalLessonsCount : Math.max(totalLessonsInOutline, parsedPB?.totalLessons || 0, 1))
+    : Math.max(actualCompletedLessonsCount, parsedPB?.completedLessons || 0, Number((courseData as any)?.completed_lessons || 0));
 
-  const progressPercent = totalLessonsCount > 0
-    ? (isCourseComplete ? 100 : Math.min(100, Math.round((actualCompletedLessonsCount / totalLessonsCount) * 100)))
-    : (parsedPB?.percent ?? 0);
+  const calculatedPercent = totalLessonsCount > 0 && actualCompletedLessonsCount > 0
+    ? Math.min(100, Math.round((actualCompletedLessonsCount / totalLessonsCount) * 100))
+    : 0;
+  const pbPercent = parsedPB?.percent ?? 0;
+  const enrollPercent = Number((courseData as any)?.progress || normalizedProgress?.progress || normalizedProgress?.progress_percentage || 0);
+
+  const progressPercent = isCourseComplete
+    ? 100
+    : Math.max(calculatedPercent, pbPercent, enrollPercent);
 
   const isLessonComplete = (lessonItem: { lessonName?: string; name?: string; title?: string; lesson_name?: string }) => {
     return checkLessonRecordedComplete(lessonItem);
