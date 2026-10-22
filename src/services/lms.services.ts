@@ -2376,9 +2376,103 @@ export const getAssignmentResult = async (submission: string, user?: string) => 
 
 
 
+export interface CreateBatchFeedbackPayload {
+  batch: string;
+  feedback: string;
+  content?: number;
+  instructors?: number;
+  value?: number;
+  member?: string;
+  name?: string;
+}
+
 export const getBatchFeedback = async (batch: string) => {
-  return apiService.get(`method/lms.lms.doctype.lms_batch_feedback.lms_batch_feedback.get_batch_feedback`, {
-    params: { batch },
+  try {
+    const res = await apiService.get(`method/lms.lms.doctype.lms_batch_feedback.lms_batch_feedback.get_batch_feedback`, {
+      params: { batch },
+      headers: {
+        'Authorization': `token ${API_TOKEN}`
+      }
+    });
+    const data = res?.data || res?.message || res;
+    if (Array.isArray(data) && data.length > 0) {
+      return res;
+    }
+  } catch (err) {
+    console.warn("get_batch_feedback method failed, falling back to resource/LMS Batch Feedback:", err);
+  }
+
+  try {
+    const res = await apiService.get("resource/LMS Batch Feedback", {
+      params: {
+        filters: JSON.stringify([["batch", "=", batch]]),
+        fields: JSON.stringify(["name", "batch", "member", "member_name", "member_image", "feedback", "content", "instructors", "value", "creation", "modified", "owner"]),
+        limit_page_length: 100,
+        order_by: "creation desc"
+      },
+      headers: {
+        'Authorization': `token ${API_TOKEN}`
+      }
+    });
+    return res;
+  } catch (err) {
+    console.warn("resource/LMS Batch Feedback fallback failed:", err);
+    return { data: [] };
+  }
+};
+
+export const createBatchFeedback = async (payload: CreateBatchFeedbackPayload) => {
+  const member = payload.member || getCurrentUserEmail();
+  const contentScore = Number(payload.content) || 5;
+  const instructorScore = Number(payload.instructors) || 5;
+  const valueScore = Number(payload.value) || 5;
+
+  const docData: Record<string, any> = {
+    batch: payload.batch,
+    feedback: payload.feedback,
+    content: contentScore,
+    instructors: instructorScore,
+    value: valueScore,
+    member: member,
+  };
+
+  if (payload.name && !payload.name.startsWith("fb_local_")) {
+    try {
+      return await apiService.put(`resource/LMS Batch Feedback/${encodeURIComponent(payload.name)}`, docData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `token ${API_TOKEN}`
+        }
+      });
+    } catch (e) {
+      console.warn("Update via resource/LMS Batch Feedback failed:", e);
+    }
+  }
+
+  try {
+    return await apiService.post("resource/LMS Batch Feedback", docData, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `token ${API_TOKEN}`
+      }
+    });
+  } catch (err: any) {
+    console.warn("POST resource/LMS Batch Feedback failed, attempting RPC method fallback:", err);
+    try {
+      return await apiService.post("method/lms.lms.doctype.lms_batch_feedback.lms_batch_feedback.create_batch_feedback", docData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `token ${API_TOKEN}`
+        }
+      });
+    } catch (rpcErr) {
+      throw err;
+    }
+  }
+};
+
+export const deleteBatchFeedback = async (name: string) => {
+  return apiService.delete(`resource/LMS Batch Feedback/${encodeURIComponent(name)}`, {
     headers: {
       'Authorization': `token ${API_TOKEN}`
     }

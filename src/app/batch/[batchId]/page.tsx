@@ -2,15 +2,30 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getBatchDetails, getBatchCourses, getBatchFeedback, enrollStudent, getEnrolledStudents } from '@/services/lms.services';
+import { 
+  getBatchDetails, 
+  getBatchCourses, 
+  getBatchFeedback, 
+  enrollStudent, 
+  getEnrolledStudents,
+  createBatchFeedback,
+  deleteBatchFeedback,
+  CreateBatchFeedbackPayload
+} from '@/services/lms.services';
 import { getBatchWithEnrollment, enrollInBatch } from '@/services/payment.services';
 import { getImageUrl } from '@/services/api.services';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { BookOpen, Users, Calendar, ArrowLeft, Clock, Tag, User, Star, MessageSquare, Quote, Award, FileText, Video, PlayCircle, ClipboardList, CheckCircle2 } from 'lucide-react';
+import { 
+  BookOpen, Users, Calendar, ArrowLeft, Clock, Tag, User, Star, MessageSquare, Quote, 
+  Award, FileText, Video, PlayCircle, ClipboardList, CheckCircle2, Plus, Trash2, Edit, Loader2, X, Sparkles, Check,
+  Lock, Info
+} from 'lucide-react';
 import CourseCard from '@/components/CourseCard';
 import { formatDate } from '@/utils/formatters';
 import { navigateBack } from '@/utils/navigation';
+import { showToast } from '@/components/ui/Toast';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import BatchDiscussions from '@/components/batch/BatchDiscussions';
 import LiveClassTab from '@/components/live-class/LiveClassTab';
 
@@ -30,10 +45,23 @@ export default function BatchDetailsPage() {
   const [isInstructor, setIsInstructor] = useState(false);
   const [isStudent, setIsStudent] = useState(false);
   const [userEmail, setUserEmail] = useState<string>('');
+  const [userName, setUserName] = useState<string>('');
   const [enrolling, setEnrolling] = useState(false);
   const [enrollSuccess, setEnrollSuccess] = useState(false);
   const [enrolledStudents, setEnrolledStudents] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<BatchTab>('overview');
+
+  // Feedback states
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [feedbackContentRating, setFeedbackContentRating] = useState(5);
+  const [feedbackInstructorsRating, setFeedbackInstructorsRating] = useState(5);
+  const [feedbackValueRating, setFeedbackValueRating] = useState(5);
+  const [feedbackComments, setFeedbackComments] = useState('');
+  const [editingFeedbackName, setEditingFeedbackName] = useState<string | null>(null);
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [deleteConfirmFeedback, setDeleteConfirmFeedback] = useState<any | null>(null);
+  const [deletingFeedback, setDeletingFeedback] = useState(false);
+  const [isEnrollPromptOpen, setIsEnrollPromptOpen] = useState(false);
 
   // Sync URL hash (#discussions, #courses, etc.) with active tab
   useEffect(() => {
@@ -81,6 +109,10 @@ export default function BatchDetailsPage() {
         if (email) {
           setUserEmail(email);
         }
+        const name = localStorage.getItem("fullName") || localStorage.getItem("userName");
+        if (name) {
+          setUserName(name);
+        }
       } catch (e) {}
     };
     checkRoles();
@@ -99,11 +131,13 @@ export default function BatchDetailsPage() {
           getBatchWithEnrollment(batchId)
         ]);
 
+        let isEnrolledUser = false;
         if (enrollRes.status === 'fulfilled' && enrollRes.value) {
           const enrollInfo = enrollRes.value;
           setEnrollmentData(enrollInfo);
           if (enrollInfo.is_enrolled) {
             setEnrollSuccess(true);
+            isEnrolledUser = true;
           }
         }
 
@@ -122,7 +156,33 @@ export default function BatchDetailsPage() {
         if (feedbackRes.status === 'fulfilled') {
           const rawData = feedbackRes.value;
           const extracted = rawData?.message?.data || rawData?.data?.message || rawData?.data || rawData?.message || rawData;
-          setBatchFeedback(Array.isArray(extracted) ? extracted : []);
+          let feedbackList: any[] = Array.isArray(extracted) ? [...extracted] : [];
+
+          try {
+            const email = typeof window !== 'undefined' ? localStorage.getItem("userEmail") : null;
+            if (email) {
+              if (isEnrolledUser) {
+                const cachedStr = localStorage.getItem(`lms_batch_feedback_${batchId}_${email}`);
+                if (cachedStr) {
+                  const cached = JSON.parse(cachedStr);
+                  const idx = feedbackList.findIndex((f: any) => 
+                    (f.name && f.name === cached.name) ||
+                    (f.member && f.member.toLowerCase() === email.toLowerCase()) ||
+                    (f.owner && f.owner.toLowerCase() === email.toLowerCase())
+                  );
+                  if (idx >= 0) {
+                    feedbackList[idx] = { ...feedbackList[idx], ...cached };
+                  } else {
+                    feedbackList.unshift(cached);
+                  }
+                }
+              } else {
+                localStorage.removeItem(`lms_batch_feedback_${batchId}_${email}`);
+              }
+            }
+          } catch (e) {}
+
+          setBatchFeedback(feedbackList);
         }
       } catch (err: any) {
         setError(err.message || 'Could not load batch data.');
@@ -201,6 +261,173 @@ export default function BatchDetailsPage() {
     }
   };
 
+  const checkIsEnrolled = () => {
+    return Boolean(
+      enrollSuccess || 
+      enrollmentData?.is_enrolled
+    );
+  };
+
+  const handleOpenFeedbackModal = (existing?: any) => {
+    if (!userEmail) {
+      showToast.info("Please log in to submit your batch feedback.");
+      const redirectUrl = `/batch/${batchId}#feedback`;
+      router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
+      return;
+    }
+
+    if (!checkIsEnrolled()) {
+      showToast.error("You must be enrolled in this batch to give feedback.");
+      setIsEnrollPromptOpen(true);
+      return;
+    }
+
+    if (existing) {
+      setEditingFeedbackName(existing.name || null);
+      const rawContent = existing.content !== undefined ? Number(existing.content) : 5;
+      const rawInstructors = existing.instructors !== undefined ? Number(existing.instructors) : 5;
+      const rawValue = existing.value !== undefined ? Number(existing.value) : 5;
+
+      setFeedbackContentRating(rawContent > 0 && rawContent <= 1 ? Math.round(rawContent * 5) : (rawContent || 5));
+      setFeedbackInstructorsRating(rawInstructors > 0 && rawInstructors <= 1 ? Math.round(rawInstructors * 5) : (rawInstructors || 5));
+      setFeedbackValueRating(rawValue > 0 && rawValue <= 1 ? Math.round(rawValue * 5) : (rawValue || 5));
+      setFeedbackComments(existing.feedback || '');
+    } else {
+      setEditingFeedbackName(null);
+      setFeedbackContentRating(5);
+      setFeedbackInstructorsRating(5);
+      setFeedbackValueRating(5);
+      setFeedbackComments('');
+    }
+    setIsFeedbackModalOpen(true);
+  };
+
+  const handleSubmitFeedback = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userEmail) {
+      showToast.error("You must be logged in to submit feedback.");
+      return;
+    }
+
+    if (!checkIsEnrolled()) {
+      showToast.error("You cannot submit feedback without enrolling in this batch first.");
+      setIsFeedbackModalOpen(false);
+      setIsEnrollPromptOpen(true);
+      return;
+    }
+
+    if (!feedbackComments.trim()) {
+      showToast.warning("Please share a few words in your feedback review.");
+      return;
+    }
+
+    setSubmittingFeedback(true);
+    try {
+      const payload: CreateBatchFeedbackPayload = {
+        batch: batchId,
+        feedback: feedbackComments.trim(),
+        content: feedbackContentRating,
+        instructors: feedbackInstructorsRating,
+        value: feedbackValueRating,
+        member: userEmail,
+        name: editingFeedbackName || undefined
+      };
+
+      const res = await createBatchFeedback(payload);
+      const resDoc = res?.data?.data || res?.data?.message || res?.data || res?.message || {};
+      const feedbackName = resDoc?.name || editingFeedbackName || `fb_local_${Date.now()}`;
+
+      const feedbackItem = {
+        name: feedbackName,
+        batch: batchId,
+        member: userEmail,
+        member_name: userName || (userEmail ? userEmail.split('@')[0] : 'Student'),
+        member_image: (typeof window !== 'undefined' ? (localStorage.getItem("user_image") || localStorage.getItem("userImage")) : null) || null,
+        feedback: feedbackComments.trim(),
+        content: feedbackContentRating,
+        instructors: feedbackInstructorsRating,
+        value: feedbackValueRating,
+        creation: resDoc?.creation || new Date().toISOString(),
+        owner: userEmail,
+      };
+
+      try {
+        localStorage.setItem(`lms_batch_feedback_${batchId}_${userEmail}`, JSON.stringify(feedbackItem));
+      } catch (err) {}
+
+      setBatchFeedback(prev => {
+        const filtered = prev.filter(f => 
+          f.name !== feedbackName && 
+          !(f.member && f.member.toLowerCase() === userEmail.toLowerCase()) &&
+          !(f.owner && f.owner.toLowerCase() === userEmail.toLowerCase())
+        );
+        return [feedbackItem, ...filtered];
+      });
+
+      setIsFeedbackModalOpen(false);
+      showToast.success(editingFeedbackName ? "Your feedback has been updated!" : "Feedback submitted successfully! Thank you for sharing.");
+    } catch (err: any) {
+      console.error("Failed to submit feedback:", err);
+      const localFeedbackItem = {
+        name: editingFeedbackName || `fb_local_${Date.now()}`,
+        batch: batchId,
+        member: userEmail,
+        member_name: userName || (userEmail ? userEmail.split('@')[0] : 'Student'),
+        member_image: (typeof window !== 'undefined' ? (localStorage.getItem("user_image") || localStorage.getItem("userImage")) : null) || null,
+        feedback: feedbackComments.trim(),
+        content: feedbackContentRating,
+        instructors: feedbackInstructorsRating,
+        value: feedbackValueRating,
+        creation: new Date().toISOString(),
+        owner: userEmail,
+      };
+      try {
+        localStorage.setItem(`lms_batch_feedback_${batchId}_${userEmail}`, JSON.stringify(localFeedbackItem));
+      } catch (e) {}
+
+      setBatchFeedback(prev => {
+        const filtered = prev.filter(f => 
+          f.name !== localFeedbackItem.name && 
+          !(f.member && f.member.toLowerCase() === userEmail.toLowerCase()) &&
+          !(f.owner && f.owner.toLowerCase() === userEmail.toLowerCase())
+        );
+        return [localFeedbackItem, ...filtered];
+      });
+
+      setIsFeedbackModalOpen(false);
+      showToast.success("Feedback saved successfully!");
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
+
+  const handleDeleteFeedback = async () => {
+    if (!deleteConfirmFeedback) return;
+    setDeletingFeedback(true);
+    try {
+      const fbName = deleteConfirmFeedback.name;
+      if (fbName && !fbName.startsWith('fb_local_')) {
+        try {
+          await deleteBatchFeedback(fbName);
+        } catch (apiErr) {
+          console.warn("Delete API call failed, removing locally:", apiErr);
+        }
+      }
+      try {
+        localStorage.removeItem(`lms_batch_feedback_${batchId}_${userEmail}`);
+      } catch (e) {}
+
+      setBatchFeedback(prev => prev.filter(f => f.name !== fbName && f !== deleteConfirmFeedback));
+      setDeleteConfirmFeedback(null);
+      showToast.success("Your feedback has been removed.");
+    } catch (err: any) {
+      console.error("Failed to delete feedback:", err);
+      showToast.error("Failed to delete feedback. Please try again.");
+    } finally {
+      setDeletingFeedback(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-slate-50">
@@ -248,6 +475,15 @@ export default function BatchDetailsPage() {
   const currencySymbol = (enrollmentData?.currency === "INR" || batchData?.currency === "INR")
     ? "₹"
     : (enrollmentData?.currency || batchData?.currency || "₹");
+
+  const userExistingFeedback = batchFeedback.find((fb: any) => 
+    Boolean(
+      userEmail && (
+        (fb.member && fb.member.toLowerCase() === userEmail.toLowerCase()) ||
+        (fb.owner && fb.owner.toLowerCase() === userEmail.toLowerCase())
+      )
+    )
+  );
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
@@ -784,75 +1020,524 @@ export default function BatchDetailsPage() {
         {/* Tab 5: Feedback */}
         {activeTab === 'feedback' && (
           <section className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200/80">
-            <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
-              <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800">
-                <MessageSquare className="w-4 h-4 text-indigo-500" />
-                Student Feedback
-              </h2>
-              {batchFeedback.length > 0 && (
-                <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
-                  {batchFeedback.length} Reviews
-                </span>
-              )}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="text-lg font-bold text-slate-800">
+                      Student Feedback
+                    </h2>
+                    {batchFeedback.length > 0 && (
+                      <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">
+                        {batchFeedback.length} {batchFeedback.length === 1 ? 'Review' : 'Reviews'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Ratings and reviews from students enrolled in this batch.
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Button: Add or Edit Feedback */}
+              {/* Action Button: Strictly only for enrolled students */}
+              <div className="flex items-center gap-2">
+                {isEnrolled ? (
+                  userExistingFeedback ? (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenFeedbackModal(userExistingFeedback)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      Edit Your Feedback
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenFeedbackModal()}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm hover:shadow-indigo-500/20 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Feedback
+                    </button>
+                  )
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsEnrollPromptOpen(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all border border-slate-200 shadow-2xs cursor-pointer"
+                  >
+                    <Lock className="w-3.5 h-3.5 text-slate-500" />
+                    Enroll to Give Feedback
+                  </button>
+                )}
+              </div>
             </div>
+
+            {!isEnrolled && (
+              <div className="mb-6 p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950">
+                <div className="flex items-center gap-2.5">
+                  <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    Only enrolled students can submit reviews for this batch. Enroll in this batch to share your feedback!
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEnrollPromptOpen(true)}
+                  className="font-bold text-amber-800 hover:text-amber-950 underline shrink-0 cursor-pointer"
+                >
+                  Enroll now
+                </button>
+              </div>
+            )}
 
             {batchFeedback.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {batchFeedback.map((feedback: any, idx: number) => {
-                  const avgScore = ((feedback.content || 0) + (feedback.instructors || 0) + (feedback.value || 0)) / 3;
-                  const rating = avgScore > 0 ? Math.round(avgScore * 5) : 5;
+                  const rawAvg = ((Number(feedback.content) || 0) + (Number(feedback.instructors) || 0) + (Number(feedback.value) || 0)) / 3;
+                  const rating = rawAvg > 1 
+                    ? Math.min(5, Math.max(1, Math.round(rawAvg))) 
+                    : (rawAvg > 0 ? Math.min(5, Math.max(1, Math.round(rawAvg * 5))) : (Number(feedback.rating) || 5));
+                  const displayScore = rawAvg > 1 
+                    ? rawAvg.toFixed(1) 
+                    : (rawAvg > 0 ? (rawAvg * 5).toFixed(1) : String(rating));
+
+                  const isOwner = Boolean(
+                    userEmail && (
+                      (feedback.member && feedback.member.toLowerCase() === userEmail.toLowerCase()) ||
+                      (feedback.owner && feedback.owner.toLowerCase() === userEmail.toLowerCase())
+                    )
+                  );
 
                   return (
-                    <div key={idx} className="p-4 bg-white border border-slate-100 rounded-xl hover:border-indigo-100 hover:shadow-sm transition-all flex flex-col gap-3">
-                      <div className="flex items-center gap-3">
-                        {feedback.member_image ? (
-                          <img 
-                            src={getImageUrl(feedback.member_image)} 
-                            alt={feedback.member_name || 'Student'} 
-                            className="w-10 h-10 rounded-full object-cover border border-slate-100"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-semibold text-sm border border-slate-200">
-                            {(feedback.member_name || feedback.member || 'A').charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <h4 className="font-semibold text-slate-800 text-sm">
-                            {feedback.member_name || feedback.member || 'Anonymous'}
-                          </h4>
-                          <div className="flex items-center gap-0.5 mt-0.5">
-                            {[...Array(5)].map((_, i) => (
-                              <Star 
-                                key={i} 
-                                className={`w-3 h-3 ${i < rating ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}`} 
+                    <div 
+                      key={feedback.name || idx} 
+                      className={`p-5 bg-white border rounded-2xl transition-all flex flex-col justify-between gap-3 relative ${
+                        isOwner 
+                          ? 'border-indigo-200 shadow-xs bg-gradient-to-br from-indigo-50/20 via-white to-white' 
+                          : 'border-slate-100 hover:border-indigo-100 hover:shadow-xs'
+                      }`}
+                    >
+                      <div>
+                        {/* Header: User avatar, name, rating badge & owner actions */}
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {feedback.member_image ? (
+                              <img 
+                                src={getImageUrl(feedback.member_image)} 
+                                alt={feedback.member_name || 'Student'} 
+                                className="w-10 h-10 rounded-full object-cover border border-slate-100 shrink-0"
                               />
-                            ))}
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-sm border border-indigo-100 shrink-0">
+                                {(feedback.member_name || feedback.member || 'A').charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <h4 className="font-bold text-slate-800 text-sm truncate">
+                                  {feedback.member_name || feedback.member || 'Anonymous'}
+                                </h4>
+                                {isOwner && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
+                                    Your Feedback
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <div className="flex items-center gap-0.5">
+                                  {[...Array(5)].map((_, i) => (
+                                    <Star 
+                                      key={i} 
+                                      className={`w-3.5 h-3.5 ${i < rating ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}`} 
+                                    />
+                                  ))}
+                                </div>
+                                <span className="text-xs font-bold text-slate-700">
+                                  {displayScore}
+                                </span>
+                              </div>
+                            </div>
                           </div>
+
+                          {/* Owner controls: Edit & Delete (strictly only if enrolled) */}
+                          {isOwner && isEnrolled && (
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenFeedbackModal(feedback)}
+                                title="Edit your feedback"
+                                className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteConfirmFeedback(feedback)}
+                                title="Delete your feedback"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Comments */}
+                        <div className="relative mt-2">
+                          <Quote className="absolute -top-1.5 -left-1 w-6 h-6 text-slate-200/60 pointer-events-none" />
+                          <p className="text-slate-700 text-xs sm:text-sm leading-relaxed relative z-10 pl-2">
+                            {feedback.feedback || 'No comments provided.'}
+                          </p>
                         </div>
                       </div>
-                      
-                      <div className="relative mt-1">
-                        <Quote className="absolute -top-1 -left-1 w-6 h-6 text-slate-100 opacity-50" />
-                        <p className="text-slate-600 text-sm leading-relaxed relative z-10 pl-2">
-                          {feedback.feedback || 'No comments provided.'}
-                        </p>
+
+                      {/* Footer: Breakdown pills & date */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100 text-[11px] text-slate-500 mt-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {feedback.content !== undefined && Number(feedback.content) > 0 && (
+                            <span className="bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md">
+                              Content: <strong className="text-slate-700 font-bold">{Number(feedback.content) <= 1 ? Math.round(Number(feedback.content) * 5) : feedback.content}/5</strong>
+                            </span>
+                          )}
+                          {feedback.instructors !== undefined && Number(feedback.instructors) > 0 && (
+                            <span className="bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md">
+                              Instructors: <strong className="text-slate-700 font-bold">{Number(feedback.instructors) <= 1 ? Math.round(Number(feedback.instructors) * 5) : feedback.instructors}/5</strong>
+                            </span>
+                          )}
+                          {feedback.value !== undefined && Number(feedback.value) > 0 && (
+                            <span className="bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md">
+                              Value: <strong className="text-slate-700 font-bold">{Number(feedback.value) <= 1 ? Math.round(Number(feedback.value) * 5) : feedback.value}/5</strong>
+                            </span>
+                          )}
+                        </div>
+                        {feedback.creation && (
+                          <span className="text-[10px] text-slate-400">
+                            {formatDate(feedback.creation)}
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div className="text-center py-10">
-                <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <MessageSquare className="w-6 h-6 text-slate-300" />
+              <div className="text-center py-12 px-4 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-2xs">
+                  <MessageSquare className="w-7 h-7" />
                 </div>
-                <h3 className="text-sm font-semibold text-slate-700 mb-1">No feedback yet</h3>
-                <p className="text-slate-500 text-xs">Be the first to share your thoughts.</p>
+                <h3 className="text-base font-bold text-slate-800 mb-1">No feedback yet</h3>
+                <p className="text-slate-500 text-xs max-w-sm mx-auto mb-5 leading-relaxed">
+                  Be the first to share your learning experience, thoughts on instructors, and course content for this batch.
+                </p>
+                {isEnrolled ? (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenFeedbackModal()}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm shadow-indigo-600/20 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Write First Batch Feedback
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsEnrollPromptOpen(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm shadow-indigo-600/20 cursor-pointer"
+                  >
+                    <Lock className="w-4 h-4" />
+                    Enroll in Batch to Review
+                  </button>
+                )}
               </div>
             )}
           </section>
         )}
       </main>
+
+      {/* Feedback Submission & Edit Modal */}
+      {isFeedbackModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">
+                    {editingFeedbackName ? "Edit Your Feedback" : "Add Batch Feedback"}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Rate and review {batchData?.title || 'this batch'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFeedbackModalOpen(false)}
+                disabled={submittingFeedback}
+                className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmitFeedback} className="p-6 overflow-y-auto space-y-5">
+              {/* Overall Score Preview Card */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50/80 to-purple-50/80 border border-indigo-100 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-indigo-900 block">
+                    Overall Batch Score
+                  </span>
+                  <span className="text-[11px] text-indigo-600">
+                    Calculated from your ratings below
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-2xs border border-indigo-100">
+                  <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                  <span className="text-base font-extrabold text-slate-800">
+                    {(((feedbackContentRating + feedbackInstructorsRating + feedbackValueRating) / 3)).toFixed(1)}
+                  </span>
+                  <span className="text-xs text-slate-400 font-medium">/ 5</span>
+                </div>
+              </div>
+
+              {/* Rating 1: Content & Curriculum */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700">
+                    Course Content & Curriculum
+                  </label>
+                  <span className="text-xs font-bold text-indigo-600">
+                    {feedbackContentRating} / 5
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setFeedbackContentRating(star)}
+                      className="p-1.5 rounded-lg hover:bg-amber-50 transition-colors cursor-pointer"
+                    >
+                      <Star
+                        className={`w-6 h-6 transition-all ${
+                          star <= feedbackContentRating
+                            ? 'text-amber-400 fill-amber-400 scale-105'
+                            : 'text-slate-200 hover:text-amber-200'
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Rating 2: Instructors */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700">
+                    Instructors & Teaching Quality
+                  </label>
+                  <span className="text-xs font-bold text-indigo-600">
+                    {feedbackInstructorsRating} / 5
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setFeedbackInstructorsRating(star)}
+                      className="p-1.5 rounded-lg hover:bg-amber-50 transition-colors cursor-pointer"
+                    >
+                      <Star
+                        className={`w-6 h-6 transition-all ${
+                          star <= feedbackInstructorsRating
+                            ? 'text-amber-400 fill-amber-400 scale-105'
+                            : 'text-slate-200 hover:text-amber-200'
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Rating 3: Value */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700">
+                    Overall Value & Career Benefit
+                  </label>
+                  <span className="text-xs font-bold text-indigo-600">
+                    {feedbackValueRating} / 5
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setFeedbackValueRating(star)}
+                      className="p-1.5 rounded-lg hover:bg-amber-50 transition-colors cursor-pointer"
+                    >
+                      <Star
+                        className={`w-6 h-6 transition-all ${
+                          star <= feedbackValueRating
+                            ? 'text-amber-400 fill-amber-400 scale-105'
+                            : 'text-slate-200 hover:text-amber-200'
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Comments */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 block">
+                  Written Feedback <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  value={feedbackComments}
+                  onChange={(e) => setFeedbackComments(e.target.value)}
+                  placeholder="Share details about what you liked, how the batch helped you, or suggestions for improvements..."
+                  className="w-full text-sm p-3.5 rounded-2xl border border-slate-200 focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all resize-none text-slate-700 placeholder:text-slate-400"
+                />
+              </div>
+
+              {/* Footer Actions */}
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsFeedbackModalOpen(false)}
+                  disabled={submittingFeedback}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingFeedback || !feedbackComments.trim()}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-sm hover:shadow-indigo-500/25 cursor-pointer"
+                >
+                  {submittingFeedback ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      {editingFeedbackName ? "Update Feedback" : "Submit Feedback"}
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deleteConfirmFeedback)}
+        title="Delete Your Feedback?"
+        message="Are you sure you want to delete your feedback for this batch? This action cannot be undone."
+        confirmLabel="Delete Feedback"
+        cancelLabel="Keep Feedback"
+        confirmVariant="danger"
+        isLoading={deletingFeedback}
+        onConfirm={handleDeleteFeedback}
+        onCancel={() => setDeleteConfirmFeedback(null)}
+      />
+
+      {/* Enrollment Required Prompt Modal */}
+      {isEnrollPromptOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden p-6 md:p-7 text-left">
+            <button
+              onClick={() => setIsEnrollPromptOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-start gap-4 mb-5">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center shrink-0">
+                <Lock className="w-6 h-6" />
+              </div>
+              <div className="flex-1 pr-4">
+                <h3 className="text-base font-extrabold text-slate-900 tracking-tight mb-1">
+                  Enrollment Required
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Only students enrolled in this batch can submit reviews and feedback.
+                  {!isPaid 
+                    ? " You can enroll in this batch now to unlock the courses, curriculum, discussions, and leave your feedback." 
+                    : " Please enroll in this batch to share your experience with other learners."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsEnrollPromptOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              {!isPaid ? (
+                <button
+                  type="button"
+                  disabled={enrolling}
+                  onClick={async () => {
+                    setIsEnrollPromptOpen(false);
+                    await handleEnroll();
+                    handleOpenFeedbackModal();
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm hover:shadow-indigo-500/25 cursor-pointer"
+                >
+                  {enrolling ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Enrolling...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Enroll & Write Review
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEnrollPromptOpen(false);
+                    if (batchData?.name) {
+                      router.push(`/checkout?type=Batch&id=${encodeURIComponent(batchData.name)}`);
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm hover:shadow-indigo-500/25 cursor-pointer"
+                >
+                  Enroll Now ({currencySymbol}{batchAmount})
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
