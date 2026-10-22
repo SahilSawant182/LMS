@@ -14,6 +14,7 @@ import { isAuthorizedInstructor } from '@/services/auth.services';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { navigateBack } from '@/utils/navigation';
+import { compareCurriculumItems } from '@/utils/curriculum';
 import {
   PlayCircle, Clock, BookOpen, Users, Award,
   Globe, Tags, ChevronRight, Star, CheckCircle2,
@@ -233,89 +234,66 @@ export default function CourseDetailPage() {
         ? (detailsRes.value?.data || detailsRes.value?.message?.data || detailsRes.value?.message || detailsRes.value)
         : null;
 
-      const rawCourseChapters = (courseObj && Array.isArray(courseObj.chapters) && courseObj.chapters.length > 0)
-        ? courseObj.chapters
-        : (enrollRes.status === 'fulfilled' && enrollRes.value && Array.isArray((enrollRes.value as any).chapters) && (enrollRes.value as any).chapters.length > 0)
-          ? (enrollRes.value as any).chapters
-          : null;
+      const rawOutline = outlineRes.status === 'fulfilled' ? outlineRes.value : null;
+      const outlineChapters: any[] = Array.isArray(rawOutline)
+        ? rawOutline
+        : (rawOutline?.message?.data || rawOutline?.data?.message || rawOutline?.data || rawOutline?.message || []);
 
-      // Prioritize chapters with nested lessons from get_course / enrollment API
-      if (rawCourseChapters && rawCourseChapters.length > 0) {
-        const sortedChapters = [...rawCourseChapters].sort((a: any, b: any) => {
-          const aIdx = (a.idx !== undefined && a.idx !== null && !isNaN(Number(a.idx))) ? Number(a.idx) : null;
-          const bIdx = (b.idx !== undefined && b.idx !== null && !isNaN(Number(b.idx))) ? Number(b.idx) : null;
-          if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
-            return aIdx - bIdx;
-          }
-          return 0;
-        });
+      const courseChapters: any[] = (courseObj && Array.isArray(courseObj.chapters)) ? courseObj.chapters : [];
+      const enrollChapters: any[] = (enrollRes.status === 'fulfilled' && enrollRes.value && Array.isArray((enrollRes.value as any).chapters))
+        ? (enrollRes.value as any).chapters
+        : [];
+
+      const hasLessons = (arr: any[]) => Array.isArray(arr) && arr.some((ch: any) => Array.isArray(ch?.lessons) && ch.lessons.length > 0);
+
+      let baseChapters: any[] = [];
+      if (hasLessons(outlineChapters)) {
+        baseChapters = outlineChapters;
+      } else if (hasLessons(courseChapters)) {
+        baseChapters = courseChapters;
+      } else if (hasLessons(enrollChapters)) {
+        baseChapters = enrollChapters;
+      } else if (outlineChapters.length > 0) {
+        baseChapters = outlineChapters;
+      } else if (courseChapters.length > 0) {
+        baseChapters = courseChapters;
+      } else if (enrollChapters.length > 0) {
+        baseChapters = enrollChapters;
+      }
+
+      if (baseChapters.length > 0) {
+        // Sort chapters consistently using sequence numbers, creation timestamp, and title numbering
+        const sortedChapters = [...baseChapters].sort(compareCurriculumItems);
+        const allSourceChapters = [...outlineChapters, ...courseChapters, ...enrollChapters];
 
         const mergedOutline = sortedChapters.map(chapter => {
-          let chLessons: any[] = Array.isArray(chapter.lessons) ? chapter.lessons : [];
+          let chLessons: any[] = Array.isArray(chapter.lessons) && chapter.lessons.length > 0 ? chapter.lessons : [];
+
+          if (chLessons.length === 0) {
+            const matchCh = allSourceChapters.find((otherCh: any) => {
+              if (!otherCh) return false;
+              const oName = String(otherCh.name || '').trim().toLowerCase();
+              const oTitle = String(otherCh.title || otherCh.chapter_name || '').trim().toLowerCase();
+              const cName = String(chapter.name || '').trim().toLowerCase();
+              const cTitle = String(chapter.title || chapter.chapter_name || '').trim().toLowerCase();
+              return (cName && (oName === cName || oTitle === cName)) || (cTitle && (oName === cTitle || oTitle === cTitle));
+            });
+            if (matchCh && Array.isArray(matchCh.lessons) && matchCh.lessons.length > 0) {
+              chLessons = matchCh.lessons;
+            }
+          }
+
           if (chLessons.length === 0 && lessonsArray.length > 0) {
-            chLessons = lessonsArray.filter((l: any) => 
-              l.chapter === chapter.name || 
-              l.chapter === chapter.title || 
-              l.chapter === chapter.chapter_name
-            );
+            chLessons = lessonsArray.filter((l: any) => {
+              const lCh = String(l?.chapter || '').trim().toLowerCase();
+              const cName = String(chapter?.name || '').trim().toLowerCase();
+              const cTitle = String(chapter?.title || chapter?.chapter_name || '').trim().toLowerCase();
+              return lCh && (lCh === cName || lCh === cTitle);
+            });
           }
 
-          const sortedLessons = [...chLessons].sort((a: any, b: any) => {
-            const aIdx = (a.idx !== undefined && a.idx !== null && !isNaN(Number(a.idx))) ? Number(a.idx) : null;
-            const bIdx = (b.idx !== undefined && b.idx !== null && !isNaN(Number(b.idx))) ? Number(b.idx) : null;
-            if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
-              return aIdx - bIdx;
-            }
-            return 0;
-          });
-
-          return {
-            ...chapter,
-            lessons: sortedLessons.map(lesson => {
-              const fromEnroll = enrollLessonsMap.get(lesson.name);
-              return {
-                ...lesson,
-                chapter: lesson.chapter || chapter.name,
-                is_locked: currentIsInstructor ? false : (fromEnroll?.is_locked !== undefined ? fromEnroll.is_locked : lesson.is_locked),
-                include_in_preview: fromEnroll?.include_in_preview !== undefined ? fromEnroll.include_in_preview : lesson.include_in_preview,
-              };
-            })
-          };
-        });
-
-        setOutline(mergedOutline);
-      } else if (outlineRes.status === 'fulfilled') {
-        const rawOutline = outlineRes.value;
-        const outlineArray = Array.isArray(rawOutline)
-          ? rawOutline
-          : (rawOutline?.message?.data || rawOutline?.data?.message || rawOutline?.data || rawOutline?.message || []);
-
-        const safeOutline = Array.isArray(outlineArray) ? outlineArray : [];
-
-        const sortedOutline = [...safeOutline].sort((a: any, b: any) => {
-          const aIdx = (a.idx !== undefined && a.idx !== null && !isNaN(Number(a.idx))) ? Number(a.idx) : null;
-          const bIdx = (b.idx !== undefined && b.idx !== null && !isNaN(Number(b.idx))) ? Number(b.idx) : null;
-          if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
-            return aIdx - bIdx;
-          }
-          return 0;
-        });
-
-        // Merge lessons into their respective chapters
-        const mergedOutline = sortedOutline.map(chapter => {
-          const chLessons = lessonsArray.filter(lesson => 
-            lesson.chapter === chapter.name || 
-            lesson.chapter === chapter.title || 
-            lesson.chapter === chapter.chapter_name
-          );
-          const sortedLessons = [...chLessons].sort((a: any, b: any) => {
-            const aIdx = (a.idx !== undefined && a.idx !== null && !isNaN(Number(a.idx))) ? Number(a.idx) : null;
-            const bIdx = (b.idx !== undefined && b.idx !== null && !isNaN(Number(b.idx))) ? Number(b.idx) : null;
-            if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
-              return aIdx - bIdx;
-            }
-            return 0;
-          });
+          // Sort lessons inside this chapter consistently by sequence, creation timestamp, and title numbering
+          const sortedLessons = [...chLessons].sort(compareCurriculumItems);
 
           return {
             ...chapter,

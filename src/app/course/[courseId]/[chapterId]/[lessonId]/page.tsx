@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getLesson, getChapters, getLessons, getCourseProgress, getCourseProgressBar, parseProgressBarValue, createCourseProgress, getCourse } from '@/services/lms.services';
+import { getLesson, getChapters, getLessons, getCourseProgress, getCourseProgressBar, parseProgressBarValue, createCourseProgress, getCourse, getCourseOutline } from '@/services/lms.services';
+import { compareCurriculumItems } from '@/utils/curriculum';
 import { getCourseWithEnrollment } from '@/services/payment.services';
 import { getImageUrl } from '@/services/api.services';
 import { isAuthorizedInstructor } from '@/services/auth.services';
@@ -624,14 +625,15 @@ export default function LessonPage() {
       setError(null);
       setIsPaywallLocked(false);
       try {
-        const [lessonRes, chaptersRes, lessonsRes, progressRes, progressBarRes, courseEnrollRes, courseRes] = await Promise.allSettled([
+        const [lessonRes, chaptersRes, lessonsRes, progressRes, progressBarRes, courseEnrollRes, courseRes, outlineRes] = await Promise.allSettled([
           getLesson({ course: courseId, chapter: chapterId, name: lessonId }),
           getChapters({ course: courseId }),
           getLessons({ course: courseId }),
           getCourseProgress(courseId, currentEmail),
           getCourseProgressBar({ course: courseId, member: currentEmail }),
           getCourseWithEnrollment(courseId),
-          getCourse(courseId)
+          getCourse(courseId),
+          getCourseOutline({ course: courseId })
         ]);
 
         let cData: CourseWithEnrollment | null = null;
@@ -719,7 +721,15 @@ export default function LessonPage() {
             return null;
           };
 
-          if (courseObj && Array.isArray(courseObj.chapters)) {
+          const rawOutline = outlineRes.status === 'fulfilled' ? outlineRes.value : null;
+          const outlineChapters: any[] = Array.isArray(rawOutline)
+            ? rawOutline
+            : (rawOutline?.message?.data || rawOutline?.data?.message || rawOutline?.data || rawOutline?.message || []);
+
+          if (outlineChapters && Array.isArray(outlineChapters) && outlineChapters.length > 0) {
+            fallbackLesson = searchChapters(outlineChapters);
+          }
+          if (!fallbackLesson && courseObj && Array.isArray(courseObj.chapters)) {
             fallbackLesson = searchChapters(courseObj.chapters);
           }
           if (!fallbackLesson && cData && Array.isArray((cData as any).chapters)) {
@@ -771,38 +781,74 @@ export default function LessonPage() {
           });
         }
 
-        const rawCh = (courseObj && Array.isArray(courseObj.chapters) && courseObj.chapters.length > 0)
-          ? courseObj.chapters
-          : (cData && Array.isArray((cData as any).chapters) && (cData as any).chapters.length > 0)
-            ? (cData as any).chapters
-            : (chaptersRes.status === 'fulfilled' ? chaptersRes.value : []);
-        const rawLe = lessonsRes.status === 'fulfilled' ? lessonsRes.value : [];
-        const chArray = Array.isArray(rawCh) ? rawCh : (rawCh?.message?.data || rawCh?.data || rawCh?.message || []);
-        const leArray = Array.isArray(rawLe) ? rawLe : (rawLe?.message?.data || rawLe?.data || rawLe?.message || []);
+        const rawOutlineVal = outlineRes.status === 'fulfilled' ? outlineRes.value : null;
+        const outlineChaptersList: any[] = Array.isArray(rawOutlineVal)
+          ? rawOutlineVal
+          : (rawOutlineVal?.message?.data || rawOutlineVal?.data?.message || rawOutlineVal?.data || rawOutlineVal?.message || []);
 
-        const sortedChArray = [...chArray].sort((a: any, b: any) => {
-          const aIdx = (a.idx !== undefined && a.idx !== null && !isNaN(Number(a.idx))) ? Number(a.idx) : null;
-          const bIdx = (b.idx !== undefined && b.idx !== null && !isNaN(Number(b.idx))) ? Number(b.idx) : null;
-          if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
-            return aIdx - bIdx;
-          }
-          return 0;
-        });
+        const courseChaptersList: any[] = (courseObj && Array.isArray(courseObj.chapters)) ? courseObj.chapters : [];
+        const enrollChaptersList: any[] = (cData && Array.isArray((cData as any).chapters)) ? (cData as any).chapters : [];
+
+        const rawChaptersVal = chaptersRes.status === 'fulfilled' ? chaptersRes.value : [];
+        const listChapters: any[] = Array.isArray(rawChaptersVal)
+          ? rawChaptersVal
+          : (rawChaptersVal?.message?.data || rawChaptersVal?.data || rawChaptersVal?.message || []);
+
+        const rawLe = lessonsRes.status === 'fulfilled' ? lessonsRes.value : [];
+        const leArray: any[] = Array.isArray(rawLe) ? rawLe : (rawLe?.message?.data || rawLe?.data || rawLe?.message || []);
+
+        const hasLessons = (arr: any[]) => Array.isArray(arr) && arr.some((ch: any) => Array.isArray(ch?.lessons) && ch.lessons.length > 0);
+
+        let baseChapters: any[] = [];
+        if (hasLessons(outlineChaptersList)) {
+          baseChapters = outlineChaptersList;
+        } else if (hasLessons(courseChaptersList)) {
+          baseChapters = courseChaptersList;
+        } else if (hasLessons(enrollChaptersList)) {
+          baseChapters = enrollChaptersList;
+        } else if (outlineChaptersList.length > 0) {
+          baseChapters = outlineChaptersList;
+        } else if (courseChaptersList.length > 0) {
+          baseChapters = courseChaptersList;
+        } else if (enrollChaptersList.length > 0) {
+          baseChapters = enrollChaptersList;
+        } else {
+          baseChapters = listChapters;
+        }
+
+        // Sort chapters consistently using sequence numbers, creation timestamp, and title numbering
+        const sortedChArray = [...baseChapters].sort(compareCurriculumItems);
+
+        const allSourceChapters = [...outlineChaptersList, ...courseChaptersList, ...enrollChaptersList];
 
         const mapped = sortedChArray.map((c: any) => {
-          let chLessons: any[] = Array.isArray(c.lessons) ? c.lessons : [];
-          if (chLessons.length === 0 && leArray.length > 0) {
-            chLessons = leArray.filter((l: any) => l.chapter === c.name || l.chapter === c.title || l.chapter === c.chapter_name);
+          let chLessons: any[] = Array.isArray(c.lessons) && c.lessons.length > 0 ? c.lessons : [];
+
+          if (chLessons.length === 0) {
+            const matchCh = allSourceChapters.find((otherCh: any) => {
+              if (!otherCh) return false;
+              const oName = String(otherCh.name || '').trim().toLowerCase();
+              const oTitle = String(otherCh.title || otherCh.chapter_name || '').trim().toLowerCase();
+              const cName = String(c.name || '').trim().toLowerCase();
+              const cTitle = String(c.title || c.chapter_name || '').trim().toLowerCase();
+              return (cName && (oName === cName || oTitle === cName)) || (cTitle && (oName === cTitle || oTitle === cTitle));
+            });
+            if (matchCh && Array.isArray(matchCh.lessons) && matchCh.lessons.length > 0) {
+              chLessons = matchCh.lessons;
+            }
           }
 
-          const sortedChLessons = [...chLessons].sort((a: any, b: any) => {
-            const aIdx = (a.idx !== undefined && a.idx !== null && !isNaN(Number(a.idx))) ? Number(a.idx) : null;
-            const bIdx = (b.idx !== undefined && b.idx !== null && !isNaN(Number(b.idx))) ? Number(b.idx) : null;
-            if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
-              return aIdx - bIdx;
-            }
-            return 0;
-          });
+          if (chLessons.length === 0 && leArray.length > 0) {
+            chLessons = leArray.filter((l: any) => {
+              const lCh = String(l?.chapter || '').trim().toLowerCase();
+              const cName = String(c?.name || '').trim().toLowerCase();
+              const cTitle = String(c?.title || c?.chapter_name || '').trim().toLowerCase();
+              return lCh && (lCh === cName || lCh === cTitle);
+            });
+          }
+
+          // Sort lessons inside this chapter consistently by sequence, creation timestamp, and title numbering
+          const sortedChLessons = [...chLessons].sort(compareCurriculumItems);
 
           return {
             ...c,
@@ -816,6 +862,7 @@ export default function LessonPage() {
               
               return {
                 ...l,
+                chapter: l.chapter || c.name,
                 is_locked: isLessonLocked,
                 include_in_preview: fromEnroll?.include_in_preview !== undefined 
                   ? Number(fromEnroll.include_in_preview) 
@@ -972,7 +1019,26 @@ export default function LessonPage() {
   })));
   
   const currentTargetId = lessonData?.name || lessonId;
-  const currentIndex = flatLessons.findIndex(l => l.chapterName === chapterId && l.lessonName === currentTargetId);
+  const targetChapter = chapterId ? decodeURIComponent(chapterId).toLowerCase().trim() : '';
+  const targetLesson = currentTargetId ? decodeURIComponent(currentTargetId).toLowerCase().trim() : '';
+  const altLesson = lessonId ? decodeURIComponent(lessonId).toLowerCase().trim() : '';
+
+  const exactIdx = flatLessons.findIndex(l => {
+    const lCh = decodeURIComponent(l.chapterName || '').toLowerCase().trim();
+    const lName = decodeURIComponent(l.lessonName || '').toLowerCase().trim();
+    const lTitle = decodeURIComponent(l.title || '').toLowerCase().trim();
+    const isChMatch = !targetChapter || lCh === targetChapter;
+    const isLMatch = lName === targetLesson || lName === altLesson || lTitle === targetLesson || lTitle === altLesson;
+    return isChMatch && isLMatch;
+  });
+
+  const fallbackIdx = exactIdx !== -1 ? exactIdx : flatLessons.findIndex(l => {
+    const lName = decodeURIComponent(l.lessonName || '').toLowerCase().trim();
+    const lTitle = decodeURIComponent(l.title || '').toLowerCase().trim();
+    return lName === targetLesson || lName === altLesson || lTitle === targetLesson || lTitle === altLesson;
+  });
+
+  const currentIndex = exactIdx !== -1 ? exactIdx : fallbackIdx;
   const prevLesson = currentIndex > 0 ? flatLessons[currentIndex - 1] : null;
   const nextLesson = currentIndex !== -1 && currentIndex < flatLessons.length - 1 ? flatLessons[currentIndex + 1] : null;
   const isLastLesson = currentIndex !== -1 && currentIndex === flatLessons.length - 1;
@@ -1115,7 +1181,12 @@ export default function LessonPage() {
                 </h3>
                 <ul className="space-y-1">
                   {chapter.lessons?.map((l: any, lIndex: number) => {
-                    const isActive = l.name === lessonId && chapter.name === chapterId;
+                    const lNameLower = decodeURIComponent(l.name || '').toLowerCase().trim();
+                    const lesIdLower = decodeURIComponent(lessonId || '').toLowerCase().trim();
+                    const chNameLower = decodeURIComponent(chapter.name || '').toLowerCase().trim();
+                    const chIdLower = decodeURIComponent(chapterId || '').toLowerCase().trim();
+                    const isActive = (l.name === lessonId || lNameLower === lesIdLower) && 
+                      (!chapterId || chapter.name === chapterId || chNameLower === chIdLower);
                     const isLessonLocked = isInstructor ? false : Boolean(l.is_locked);
                     const isLessonPreview = Number(l.include_in_preview) === 1;
                     const isCompleted = isLessonComplete({

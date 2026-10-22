@@ -5,6 +5,7 @@ import Navbar from '@/components/Navbar';
 import { getCourseProgressFiltered, getCourses, getCourseOutline, getCourse } from '@/services/lms.services';
 import { Search, Filter, CheckCircle, Clock, BookOpen, User, RefreshCw, RotateCcw, X, Layers, FileText, ChevronDown } from 'lucide-react';
 import { formatDate } from '@/utils/formatters';
+import { compareCurriculumItems } from '@/utils/curriculum';
 
 interface CourseOption {
   name: string;
@@ -306,11 +307,12 @@ export default function CourseProgressPage() {
         }
 
         if (isMounted && Array.isArray(outlineList)) {
-          const formattedChapters: ChapterOption[] = outlineList.map((ch: any) => ({
+          const sortedOutline = [...outlineList].sort(compareCurriculumItems);
+          const formattedChapters: ChapterOption[] = sortedOutline.map((ch: any) => ({
             name: ch.name || '',
             title: ch.title || ch.name || 'Untitled Chapter',
             course: filters.course,
-            lessons: Array.isArray(ch.lessons) ? ch.lessons.map((l: any) => ({
+            lessons: Array.isArray(ch.lessons) ? [...ch.lessons].sort(compareCurriculumItems).map((l: any) => ({
               name: l.name || '',
               title: l.title || l.lesson_name || l.name || 'Untitled Lesson',
               chapter: ch.name || '',
