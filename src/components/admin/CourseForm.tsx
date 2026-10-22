@@ -6,10 +6,10 @@ import { navigateBack } from '@/utils/navigation';
 import { 
   BookOpen, Check, X, Loader2, Sparkles, Upload, 
   PlayCircle, DollarSign, Award, Layers, Eye, 
-  Palette, Tag, ShieldCheck, Clock, Trash2, ArrowLeft,
+  Palette, Tag, ShieldCheck, Clock, ArrowLeft,
   CheckCircle2, Lock, Image as ImageIcon, Globe
 } from 'lucide-react';
-import { createCourse, updateCourse, deleteCourse, getMasterData, getCategoryList, CreateCoursePayload, normalizeCourseColor } from '@/services/lms.services';
+import { createCourse, updateCourse, getMasterData, getCategoryList, CreateCoursePayload, normalizeCourseColor } from '@/services/lms.services';
 import { uploadFile, getImageUrl } from '@/services/api.services';
 import Dropdown from '@/components/ui/Dropdown';
 
@@ -935,35 +935,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
         </div>
 
         {/* Action Buttons Footer */}
-        <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            {isEditing && (
-              <button
-                type="button"
-                disabled={loading}
-                onClick={async () => {
-                  if (confirm(`Are you sure you want to permanently delete course "${formData.title}"? This cannot be undone.`)) {
-                    setLoading(true);
-                    try {
-                      await deleteCourse(formData.name);
-                      setSuccess('Course deleted successfully.');
-                      setTimeout(() => {
-                        router.push('/courses');
-                        router.refresh();
-                      }, 1200);
-                    } catch (err: any) {
-                      setError(err?.message || 'Failed to delete course.');
-                      setLoading(false);
-                    }
-                  }
-                }}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-rose-600 hover:text-rose-700 hover:bg-rose-50 text-xs font-bold transition-colors border border-rose-200 disabled:opacity-50"
-              >
-                <Trash2 className="w-4 h-4" /> Delete Course
-              </button>
-            )}
-          </div>
-
+        <div className="pt-4 flex flex-col sm:flex-row items-center justify-end gap-4">
           <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
             <button
               type="button"

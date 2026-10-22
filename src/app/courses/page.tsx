@@ -6,7 +6,7 @@ import CourseCard from "@/components/CourseCard";
 import Pagination from "@/components/ui/Pagination";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getCourses, deleteCourse, updateCourse } from "@/services/lms.services";
+import { getCourses, updateCourse } from "@/services/lms.services";
 import { getCoursesWithEnrollment } from "@/services/payment.services";
 import { getImageUrl } from "@/services/api.services";
 import { showToast } from "@/components/ui/Toast";
@@ -167,16 +167,6 @@ export default function CoursesPage() {
     }
   };
 
-  const handleDelete = async (courseId: string) => {
-    if (confirm("Are you sure you want to delete this course?")) {
-      try {
-        await deleteCourse(courseId);
-        fetchCourses();
-      } catch (err: any) {
-        alert(err?.message || "Failed to delete course");
-      }
-    }
-  };
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
@@ -390,7 +380,6 @@ export default function CoursesPage() {
                       published={course.published}
                       onPublish={isInstructor && !course.published ? () => handlePublish(course) : undefined}
                       onEdit={isInstructor ? () => handleEdit(course.name) : undefined}
-                      onDelete={isInstructor ? () => handleDelete(course.name) : undefined}
                     />
                   </Link>
                 </div>

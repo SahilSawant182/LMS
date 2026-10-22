@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star, Users, BookOpen, ArrowRight, Edit2, Trash2, CheckCircle, Globe, Lock } from 'lucide-react';
+import { Star, Users, BookOpen, ArrowRight, Edit2, CheckCircle, Globe, Lock } from 'lucide-react';
 
 export interface CourseCardProps {
   image?: string;
@@ -17,7 +17,6 @@ export interface CourseCardProps {
   isEnrolled?: boolean;
   published?: boolean | number;
   onEdit?: (e: React.MouseEvent) => void;
-  onDelete?: (e: React.MouseEvent) => void;
   onPublish?: (e: React.MouseEvent) => void;
 }
 
@@ -37,7 +36,6 @@ export default function CourseCard({
   isEnrolled = false,
   published,
   onEdit,
-  onDelete,
   onPublish
 }: CourseCardProps) {
 
@@ -83,8 +81,8 @@ export default function CourseCard({
           <div className="text-gray-400 font-medium bg-gray-200 w-full h-full flex items-center justify-center">No Image</div>
         )}
 
-        {/* Floating actions for Edit/Delete/Publish */}
-        {(onEdit || onDelete || onPublish) && (
+        {/* Floating actions for Edit/Publish */}
+        {(onEdit || onPublish) && (
           <div className="absolute top-3 left-3 flex items-center gap-1.5 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
             {onPublish && (
               <button
@@ -104,15 +102,6 @@ export default function CourseCard({
                 <Edit2 className="w-4 h-4" />
               </button>
             )}
-            {onDelete && (
-              <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(e); }}
-                className="bg-white/90 backdrop-blur-sm p-1.5 rounded-full text-red-600 hover:bg-red-600 hover:text-white shadow-sm transition-colors"
-                title="Delete Course"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
           </div>
         )}
 
@@ -125,7 +114,7 @@ export default function CourseCard({
         )}
 
         {/* Enrolled Badge over Image */}
-        {enrolled && !(onEdit || onDelete || onPublish) && (published !== false && published !== 0) && (
+        {enrolled && !(onEdit || onPublish) && (published !== false && published !== 0) && (
           <div className="absolute top-3 left-3 bg-emerald-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md z-20 flex items-center gap-1 backdrop-blur-sm">
             <CheckCircle className="w-3.5 h-3.5" />
             <span>Enrolled</span>

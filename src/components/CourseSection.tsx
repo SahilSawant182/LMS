@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import CourseCard from './CourseCard';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { getCourses, Course, deleteCourse } from '../services/lms.services';
+import { getCourses, Course } from '../services/lms.services';
 import { getCoursesWithEnrollment } from '../services/payment.services';
 import { getImageUrl } from '../services/api.services';
 import { Plus } from 'lucide-react';
@@ -73,17 +73,6 @@ export default function CourseSection() {
     router.push(`/course/${courseId}/edit`);
   };
 
-  const handleDelete = async (courseId: string) => {
-    if (confirm('Are you sure you want to delete this course?')) {
-      try {
-        await deleteCourse(courseId);
-        alert('Course deleted successfully!');
-        fetchCourses();
-      } catch (err) {
-        alert('Failed to delete course');
-      }
-    }
-  };
 
   return (
     <section className="bg-slate-50 pt-12 pb-24 relative overflow-hidden">
@@ -143,7 +132,6 @@ export default function CourseSection() {
                           : 'Free'
                       }
                       onEdit={isInstructor ? () => handleEdit(course.name) : undefined}
-                      onDelete={isInstructor ? () => handleDelete(course.name) : undefined}
                     />
                   </Link>
                 </div>
