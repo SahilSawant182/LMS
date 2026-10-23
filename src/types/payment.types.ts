@@ -16,21 +16,21 @@ export interface CheckoutAddress {
 export interface CheckoutSummary {
   item_type: ItemType;
   item_id: string;
-  doctype?: string;
+  doctype: string;
   title: string;
   currency: string;
   original_amount: number;
-  original_amount_formatted?: string;
+  original_amount_formatted: string;
   discount_amount: number;
-  discount_amount_formatted?: string;
-  gst_applied?: number;
-  gst_amount_formatted?: string;
+  discount_amount_formatted: string;
+  gst_applied: number;
+  gst_amount_formatted: string;
   amount: number;
   total_amount: number;
-  total_amount_formatted?: string;
+  total_amount_formatted: string;
   is_free: boolean;
   coupon?: string | null;
-  saved_address?: CheckoutAddress | null;
+  saved_address?: Record<string, any> | null;
   image?: string | null;
   description?: string | null;
 }
@@ -43,11 +43,17 @@ export interface ValidateCouponPayload {
 
 export interface ValidateCouponResponse {
   original_amount: number;
+  original_amount_formatted?: string;
   discount_amount: number;
   discount_amount_formatted?: string;
   amount: number;
   currency: string;
   coupon: string;
+  gst_applied?: number;
+  gst_amount_formatted?: string;
+  total_amount?: number;
+  total_amount_formatted?: string;
+  [key: string]: any;
 }
 
 export interface InitiatePaymentPayload {

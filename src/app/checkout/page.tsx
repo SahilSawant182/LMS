@@ -222,13 +222,21 @@ function CheckoutContent() {
         const disc = Number(res.discount_amount || 0);
         const orig = Number(res.original_amount || summary.original_amount);
         const total = Math.max(0, Number(res.amount !== undefined ? res.amount : orig - disc));
+        
+        // Calculate the 18% GST included within the tax-inclusive total
+        const includedGst = res.gst_applied !== undefined 
+          ? Number(res.gst_applied) 
+          : (total > 0 ? Math.round(total - (total / 1.18)) : 0);
 
         setSummary({
           ...summary,
           coupon: res.coupon || code,
           original_amount: orig,
+          original_amount_formatted: res.original_amount_formatted || `₹ ${orig.toLocaleString("en-IN")}`,
           discount_amount: disc,
           discount_amount_formatted: res.discount_amount_formatted || `₹ ${disc.toLocaleString("en-IN")}`,
+          gst_applied: includedGst,
+          gst_amount_formatted: res.gst_amount_formatted || `₹ ${includedGst.toLocaleString("en-IN")}`,
           total_amount: total,
           total_amount_formatted: `₹ ${total.toLocaleString("en-IN")}`,
           is_free: total === 0,
@@ -257,12 +265,28 @@ function CheckoutContent() {
     try {
       // Re-fetch clean checkout summary without coupon
       const fresh = await getCheckoutSummary({
-        item_type: itemTypeParam,
+        item_type: itemTypeParam === "batch" ? "batch" : "course",
         item_id: itemIdParam,
       });
       setSummary(fresh);
-    } catch (err) {
-      console.error("Failed to reset coupon:", err);
+    } catch (err: any) {
+      console.error("Error resetting checkout summary:", err);
+      // Fallback: reset discount to 0
+      if (summary) {
+        const orig = summary.original_amount;
+        const includedGst = orig > 0 ? Math.round(orig - (orig / 1.18)) : 0;
+        setSummary({
+          ...summary,
+          coupon: null,
+          discount_amount: 0,
+          discount_amount_formatted: "",
+          gst_applied: includedGst,
+          gst_amount_formatted: `₹ ${includedGst.toLocaleString("en-IN")}`,
+          total_amount: orig,
+          total_amount_formatted: `₹ ${orig.toLocaleString("en-IN")}`,
+          is_free: orig === 0,
+        });
+      }
     } finally {
       setCouponLoading(false);
     }
@@ -892,7 +916,7 @@ function CheckoutContent() {
                       <span className="text-[10px] text-slate-400 font-normal">(Included)</span>
                     </span>
                     <span className="font-medium text-slate-700">
-                      {summary.gst_amount_formatted || "₹ 0"}
+                      {summary.gst_amount_formatted || (summary.gst_applied ? `₹ ${Math.round(summary.gst_applied).toLocaleString("en-IN")}` : "₹ 0")}
                     </span>
                   </div>
 

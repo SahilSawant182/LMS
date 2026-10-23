@@ -16,6 +16,22 @@ import {
   BatchWithEnrollment
 } from "@/types/payment.types";
 
+export type {
+  ItemType,
+  CheckoutAddress,
+  CheckoutSummary,
+  ValidateCouponPayload,
+  ValidateCouponResponse,
+  InitiatePaymentPayload,
+  InitiatePaymentResponse,
+  VerifyPaymentPayload,
+  VerifyPaymentResponse,
+  PaymentStatus,
+  PaymentHistoryResponse,
+  CourseWithEnrollment,
+  BatchWithEnrollment
+};
+
 const METHOD_PREFIX = "method/lms.lms.stride_lms";
 
 const authHeaders = () => {
