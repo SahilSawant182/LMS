@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getLesson, getChapters, getLessons, getCourseProgress, getCourseProgressBar, parseProgressBarValue, createCourseProgress, getCourse, getCourseOutline } from '@/services/lms.services';
 import { compareCurriculumItems } from '@/utils/curriculum';
@@ -12,6 +12,11 @@ import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { navigateBack } from '@/utils/navigation';
 import { showToast } from '@/components/ui/Toast';
+import InlineHighlightMenu from '@/components/notes/InlineHighlightMenu';
+import LessonNotesTab from '@/components/notes/LessonNotesTab';
+import { getLessonNotes, saveLessonNote, deleteLessonHighlight } from '@/services/notes.services';
+import { applyHighlightToDOM, removeHighlightFromDOM } from '@/utils/lessonHighlight';
+import { LessonNote, LessonNotesResponse, NoteColor } from '@/types/notes.types';
 import { 
   ArrowLeft, 
   CheckCircle, 
@@ -37,7 +42,9 @@ import {
   Trophy,
   X,
   CheckCircle2,
-  RotateCcw
+  RotateCcw,
+  StickyNote,
+  MessageSquare
 } from 'lucide-react';
 
 interface EditorBlock {
@@ -574,6 +581,17 @@ export default function LessonPage() {
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [isCurriculumSidebarOpen, setIsCurriculumSidebarOpen] = useState(true);
 
+  // ── LMS Lesson Notes state ──────────────────────────────────────────────
+  const [lessonNotesData, setLessonNotesData] = useState<LessonNotesResponse | null>(null);
+  const [activeTab, setActiveTab] = useState<'notes' | 'discussion'>('notes');
+  const [highlightMenu, setHighlightMenu] = useState<{
+    rect: DOMRect;
+    selectedText: string;
+    existingNoteId: string | null;
+  } | null>(null);
+  const readingContainerRef = useRef<HTMLElement | null>(null);
+  // ────────────────────────────────────────────────────────────────────────
+
   // Automatically shrink the navigation sidebar when opening a particular lesson
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -892,6 +910,121 @@ export default function LessonPage() {
 
     fetchLesson();
   }, [courseId, chapterId, lessonId]);
+
+  // ── Fetch + rehydrate highlights when lessonData resolves ────────────────
+  useEffect(() => {
+    if (!lessonData?.name) return;
+    let cancelled = false;
+    const load = async () => {
+      const data = await getLessonNotes(lessonData.name);
+      if (cancelled) return;
+      setLessonNotesData(data);
+      // Apply highlights to DOM after content renders
+      if (data.highlights.length > 0) {
+        // Wait one tick for the DOM to be ready
+        setTimeout(() => {
+          const container = readingContainerRef.current;
+          if (!container) return;
+          data.highlights.forEach((h) => applyHighlightToDOM(h, container as HTMLElement));
+        }, 200);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [lessonData?.name]);
+
+  // ── Text selection handler for inline highlight menu ─────────────────────
+  const handleReadingMouseUp = useCallback(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) {
+      setHighlightMenu(null);
+      return;
+    }
+    const text = selection.toString().trim();
+    if (!text || text.length < 3) {
+      setHighlightMenu(null);
+      return;
+    }
+    try {
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      // Detect if selection sits inside an existing highlight
+      const anchor = selection.anchorNode;
+      const markEl = (anchor instanceof Element ? anchor : anchor?.parentElement)?.closest?.('[data-note-id]') as HTMLElement | null;
+      const existingNoteId = markEl?.dataset.noteId || null;
+      setHighlightMenu({ rect, selectedText: text, existingNoteId });
+    } catch {
+      setHighlightMenu(null);
+    }
+  }, []);
+
+  const handleHighlightColor = useCallback(async (color: NoteColor) => {
+    if (!highlightMenu || !lessonData?.name) return;
+    const { selectedText, existingNoteId } = highlightMenu;
+    setHighlightMenu(null);
+    window.getSelection()?.removeAllRanges();
+    try {
+      const saved = await saveLessonNote({
+        lesson: lessonData.name,
+        highlighted_text: selectedText,
+        color,
+      });
+      if (saved) {
+        const container = readingContainerRef.current;
+        if (container) applyHighlightToDOM(saved as LessonNote, container as HTMLElement);
+        setLessonNotesData((prev) => prev
+          ? { ...prev, highlights: [...prev.highlights, saved as LessonNote] }
+          : prev
+        );
+        showToast.success('Text highlighted!');
+      }
+    } catch {
+      showToast.error('Could not save highlight.');
+    }
+  }, [highlightMenu, lessonData?.name]);
+
+  const handleAddToNotes = useCallback(() => {
+    if (!highlightMenu) return;
+    const { selectedText } = highlightMenu;
+    setHighlightMenu(null);
+    window.getSelection()?.removeAllRanges();
+
+    // Decode entities and format as clean Markdown quote block
+    const clean = selectedText
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, ' ');
+
+    const quoteLines = clean
+      .split('\n')
+      .map((line) => (line.trim() ? `> ${line.trim()}` : '>'))
+      .join('\n');
+    const quoteBlock = `${quoteLines}\n\n`;
+
+    // Dispatch event to LessonNotesTab to append quote
+    window.dispatchEvent(new CustomEvent('lms-append-note', { detail: { text: quoteBlock } }));
+    setActiveTab('notes');
+    showToast.success('Added to your notes!');
+  }, [highlightMenu]);
+
+  const handleRemoveHighlight = useCallback(async () => {
+    if (!highlightMenu?.existingNoteId || !lessonData?.name) return;
+    const { existingNoteId, selectedText } = highlightMenu;
+    setHighlightMenu(null);
+    window.getSelection()?.removeAllRanges();
+    const container = readingContainerRef.current;
+    if (container) removeHighlightFromDOM(existingNoteId, container as HTMLElement);
+    await deleteLessonHighlight(lessonData.name, selectedText);
+    setLessonNotesData((prev) => prev
+      ? { ...prev, highlights: prev.highlights.filter((h) => h.name !== existingNoteId) }
+      : prev
+    );
+    showToast.success('Highlight removed.');
+  }, [highlightMenu, lessonData?.name]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const handleMarkComplete = async () => {
     if (!lessonData) return;
@@ -1633,7 +1766,13 @@ export default function LessonPage() {
           ) : (
             <div className="max-w-7xl mx-auto p-4 md:p-8 w-full flex-grow flex flex-col">
               {/* Main Content Card rendered from Editor.js blocks in `content` */}
-              <div className="bg-white p-6 md:p-12 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200/60 flex-grow relative overflow-hidden">
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              <div
+                id="lesson-reading-content"
+                ref={readingContainerRef as React.RefObject<HTMLDivElement>}
+                onMouseUp={handleReadingMouseUp}
+                className="bg-white p-6 md:p-12 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200/60 flex-grow relative overflow-hidden"
+              >
                 <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500"></div>
 
                 {/* Lesson Header Title */}
@@ -1821,6 +1960,82 @@ export default function LessonPage() {
                         <Code className="w-4 h-4" />
                         Launch Exercise
                       </Link>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Inline Highlight Menu Portal ─────────────────────────────────── */}
+              {highlightMenu && (
+                <InlineHighlightMenu
+                  rect={highlightMenu.rect}
+                  selectedText={highlightMenu.selectedText}
+                  existingNoteId={highlightMenu.existingNoteId}
+                  onHighlight={handleHighlightColor}
+                  onAddToNotes={handleAddToNotes}
+                  onRemoveHighlight={highlightMenu.existingNoteId ? handleRemoveHighlight : undefined}
+                  onClose={() => setHighlightMenu(null)}
+                />
+              )}
+
+              {/* ── Tab Section (Notes + Discussion) ─────────────────────────────── */}
+              {!isInstructor && (
+                <div className="mt-8">
+                  {/* Tab Nav */}
+                  <div className="flex gap-1 mb-5 border-b border-slate-200">
+                    <button
+                      onClick={() => setActiveTab('notes')}
+                      className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-t-xl transition-colors cursor-pointer ${
+                        activeTab === 'notes'
+                          ? 'bg-white border border-b-white border-slate-200 text-indigo-700 -mb-px'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <StickyNote className="w-4 h-4" />
+                      My Notes
+                      {(lessonNotesData?.highlights.length || 0) > 0 && (
+                        <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-600">
+                          {lessonNotesData!.highlights.length}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('discussion')}
+                      className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-t-xl transition-colors cursor-pointer ${
+                        activeTab === 'discussion'
+                          ? 'bg-white border border-b-white border-slate-200 text-indigo-700 -mb-px'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      Discussion
+                    </button>
+                  </div>
+
+                  {/* Tab Content */}
+                  {activeTab === 'notes' && (
+                    <LessonNotesTab
+                      lessonName={lessonData?.name || lessonId}
+                      initialNotebook={lessonNotesData?.notebook || null}
+                      highlights={lessonNotesData?.highlights || []}
+                      readingContainerRef={readingContainerRef}
+                      onHighlightDeleted={(noteId) => {
+                        setLessonNotesData((prev) =>
+                          prev ? { ...prev, highlights: prev.highlights.filter((h) => h.name !== noteId) } : prev
+                        );
+                        const container = readingContainerRef.current;
+                        if (container) removeHighlightFromDOM(noteId, container as HTMLElement);
+                      }}
+                    />
+                  )}
+
+                  {activeTab === 'discussion' && (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                        <MessageSquare className="w-6 h-6 text-slate-400" />
+                      </div>
+                      <p className="text-sm font-semibold text-slate-700">Community Discussion</p>
+                      <p className="text-xs text-slate-500 mt-1 max-w-xs">Course-level Q&amp;A and peer discussions will appear here.</p>
                     </div>
                   )}
                 </div>
