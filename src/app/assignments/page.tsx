@@ -23,9 +23,11 @@ import {
   AlertCircle,
   RefreshCw,
   User,
-  GraduationCap
+  GraduationCap,
+  Award
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import GradingModal from '@/components/modals/GradingModal';
 
 function AssignmentsContent() {
   const router = useRouter();
@@ -45,6 +47,26 @@ function AssignmentsContent() {
   const [selectedSubmission, setSelectedSubmission] = useState<any | null>(null);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [loadingModalDetail, setLoadingModalDetail] = useState(false);
+
+  // Grading Modal state
+  const [gradingModalOpen, setGradingModalOpen] = useState(false);
+  const [gradingSubmission, setGradingSubmission] = useState<any | null>(null);
+
+  const handleOpenGradingModal = (sub: any) => {
+    if (!sub) return;
+    setGradingSubmission(sub);
+    setGradingModalOpen(true);
+  };
+
+  const handleOnGraded = (updated: any) => {
+    const subName = updated.name || updated.submission;
+    setInstructorSubmissions((prev) =>
+      prev.map((s) => (s.name === subName || s.submission === subName ? { ...s, ...updated } : s))
+    );
+    if (selectedSubmission && (selectedSubmission.name === subName || selectedSubmission.submission === subName)) {
+      setSelectedSubmission((prev: any) => (prev ? { ...prev, ...updated } : null));
+    }
+  };
 
   // Sync tab with URL
   useEffect(() => {
@@ -245,13 +267,19 @@ function AssignmentsContent() {
     }
   };
 
+  const isGradedStatus = (st?: string) => {
+    const s = (st || '').trim().toLowerCase();
+    return s === 'graded' || s === 'pass' || s === 'fail' || s === 'not applicable';
+  };
+
   const filteredSubmissions = useMemo(() => {
     return instructorSubmissions.filter((sub) => {
       // Status filter
-      if (submissionStatusFilter !== 'All') {
-        const status = (sub.status || 'Not Graded').trim().toLowerCase();
-        const target = submissionStatusFilter.trim().toLowerCase();
-        if (status !== target) return false;
+      if (submissionStatusFilter === 'Graded') {
+        if (!isGradedStatus(sub.status)) return false;
+      } else if (submissionStatusFilter === 'Not Graded') {
+        const isNotGraded = !sub.status || sub.status === 'Not Graded';
+        if (!isNotGraded) return false;
       }
       // Search filter
       if (submissionSearch.trim()) {
@@ -276,11 +304,11 @@ function AssignmentsContent() {
   }, [instructorSubmissions, submissionStatusFilter, submissionSearch]);
 
   const notGradedCount = useMemo(() => {
-    return instructorSubmissions.filter(s => (s.status || 'Not Graded') === 'Not Graded').length;
+    return instructorSubmissions.filter(s => !s.status || s.status === 'Not Graded').length;
   }, [instructorSubmissions]);
 
   const gradedCount = useMemo(() => {
-    return instructorSubmissions.filter(s => s.status === 'Graded').length;
+    return instructorSubmissions.filter(s => isGradedStatus(s.status)).length;
   }, [instructorSubmissions]);
 
   return (
@@ -610,17 +638,33 @@ function AssignmentsContent() {
                       <div className="flex items-center justify-between md:justify-end gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-slate-100">
                         {/* Status badge */}
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
-                          isGraded 
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                          sub.status === 'Pass'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : sub.status === 'Fail'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : sub.status === 'Not Graded'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                            : sub.status === 'Not Applicable'
+                            ? 'bg-slate-50 text-slate-700 border border-slate-200'
+                            : isGraded
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : 'bg-amber-50 text-amber-700 border border-amber-200'
                         }`}>
-                          {isGraded ? (
+                          {sub.status === 'Pass' || isGraded ? (
                             <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : sub.status === 'Fail' ? (
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
                           ) : (
                             <Clock className="w-3.5 h-3.5 text-amber-600" />
                           )}
                           <span>{sub.status || 'Not Graded'}</span>
                         </span>
+
+                        {(sub.marks !== undefined && sub.marks !== null) && (
+                          <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-white border border-slate-200 text-slate-800">
+                            {sub.marks} Marks
+                          </span>
+                        )}
 
                         {/* Action Buttons */}
                         <div className="flex items-center gap-2">
@@ -633,11 +677,20 @@ function AssignmentsContent() {
                             <span>Details</span>
                           </button>
 
+                          <button
+                            type="button"
+                            onClick={() => handleOpenGradingModal(sub)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                          >
+                            <Award className="w-3.5 h-3.5" />
+                            <span>Grade</span>
+                          </button>
+
                           <Link
                             href={`/assignments/${encodeURIComponent(sub.assignment || '')}`}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
+                            title="Go to assignment"
                           >
-                            <span>Open & Grade</span>
                             <ChevronRight className="w-3.5 h-3.5" />
                           </Link>
                         </div>
@@ -819,7 +872,7 @@ function AssignmentsContent() {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => setViewModalOpen(false)}
@@ -828,21 +881,46 @@ function AssignmentsContent() {
                 Close
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setViewModalOpen(false);
-                  router.push(`/assignments/${encodeURIComponent(selectedSubmission.assignment || '')}`);
-                }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-              >
-                <span>Go to Assignment & Grade</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetSub = selectedSubmission;
+                    setViewModalOpen(false);
+                    handleOpenGradingModal(targetSub);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                >
+                  <Award className="w-3.5 h-3.5" />
+                  <span>Grade Submission</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewModalOpen(false);
+                    router.push(`/assignments/${encodeURIComponent(selectedSubmission.assignment || '')}`);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  <span>Assignment Page</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* GRADING MODAL FOR INSTRUCTORS */}
+      <GradingModal
+        isOpen={gradingModalOpen}
+        onClose={() => setGradingModalOpen(false)}
+        submission={gradingSubmission}
+        assignmentTitle={gradingSubmission?.assignment_title || gradingSubmission?.assignment}
+        totalMarks={gradingSubmission?.total_marks}
+        onGraded={handleOnGraded}
+      />
     </div>
   );
 }

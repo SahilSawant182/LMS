@@ -469,7 +469,7 @@ export default function BatchDetailsPage() {
     enrollmentData?.is_sold_out ||
     batchData?.is_sold_out ||
     (batchData?.seats_left !== undefined && Number(batchData.seats_left) <= 0 && Number(batchData?.seat_count) > 0) ||
-    (batchData?.enrollment?.seat_count && Number(batchData.enrollment.total_enrolled) >= Number(batchData.enrollment.seat_count))
+    (Number(batchData?.enrollment?.seat_count) > 0 && Number(batchData.enrollment.total_enrolled) >= Number(batchData.enrollment.seat_count))
   );
   const batchAmount = enrollmentData?.amount !== undefined ? Number(enrollmentData.amount) : Number(batchData?.amount || 0);
   const currencySymbol = (enrollmentData?.currency === "INR" || batchData?.currency === "INR")

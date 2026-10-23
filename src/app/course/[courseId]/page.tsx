@@ -892,17 +892,21 @@ export default function CourseDetailPage() {
         item.lesson.lesson_name === backendLessonId
       );
       if (foundIdx !== -1) {
-        const foundItem = flatOutline[foundIdx];
-        if (!checkOutlineLessonComplete(foundItem.lesson)) {
-          return foundItem;
-        }
-        if (foundIdx < flatOutline.length - 1) {
-          return flatOutline[foundIdx + 1];
+        // Verify all preceding lessons are completed so student is never sent to a locked lesson
+        const allPrecedingDone = flatOutline.slice(0, foundIdx).every(item => checkOutlineLessonComplete(item.lesson));
+        if (allPrecedingDone) {
+          const foundItem = flatOutline[foundIdx];
+          if (!checkOutlineLessonComplete(foundItem.lesson)) {
+            return foundItem;
+          }
+          if (foundIdx < flatOutline.length - 1 && checkOutlineLessonComplete(foundItem.lesson)) {
+            return flatOutline[foundIdx + 1];
+          }
         }
       }
     }
 
-    // 2. Find the FIRST uncompleted lesson in curriculum sequence (the appropriate starting point)
+    // 2. Find the FIRST uncompleted lesson in curriculum sequence (the appropriate unlocked starting point)
     const firstUncompleted = flatOutline.find(item => !checkOutlineLessonComplete(item.lesson));
     if (firstUncompleted) {
       return firstUncompleted;
@@ -946,6 +950,31 @@ export default function CourseDetailPage() {
     (Array.isArray(progressRecords) && progressRecords.length > 0) ||
     details?.membership
   );
+
+  // Helper to check if a lesson is locked sequentially for students
+  const isLessonSequentiallyLocked = (lessonItem: any) => {
+    if (isInstructor) return false;
+    if (isCourseComplete) return false;
+    if (!isUserEnrolled) return false; // Non-enrolled users are handled by preview/paywall logic
+
+    const lessonIdx = allOutlineLessons.findIndex((ol: any) => {
+      const olName = String(ol.name || '').trim().toLowerCase();
+      const olTitle = String(ol.title || ol.lesson_name || '').trim().toLowerCase();
+      const lName = String(lessonItem?.name || '').trim().toLowerCase();
+      const lTitle = String(lessonItem?.title || lessonItem?.lesson_name || '').trim().toLowerCase();
+      return (lName && (olName === lName || olTitle === lName)) ||
+             (lTitle && (olName === lTitle || olTitle === lTitle));
+    });
+
+    if (lessonIdx <= 0) return false; // First lesson is always unlocked
+
+    for (let i = 0; i < lessonIdx; i++) {
+      if (!checkOutlineLessonComplete(allOutlineLessons[i])) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   const hasCertificate = Boolean(details?.has_certificate || enrollmentData?.has_certificate || enrollmentData?.certificate);
 
@@ -1224,7 +1253,9 @@ export default function CourseDetailPage() {
                       {chapter.lessons && chapter.lessons.length > 0 ? (
                         <ul className="divide-y divide-slate-100">
                           {chapter.lessons.map((lesson: any, lIndex: number) => {
-                            const isLocked = !isInstructor && !isUserEnrolled && isPaid && !isFree && (lesson.is_locked === true || (!lesson.include_in_preview && lesson.include_in_preview !== 1));
+                            const isPaywallLocked = !isInstructor && !isUserEnrolled && isPaid && !isFree && (lesson.is_locked === true || (!lesson.include_in_preview && lesson.include_in_preview !== 1));
+                            const isSequentialLocked = isLessonSequentiallyLocked(lesson);
+                            const isLocked = isPaywallLocked || isSequentialLocked;
                             const isPreview = !isInstructor && !isUserEnrolled && Boolean(lesson.include_in_preview === 1 || lesson.include_in_preview === true);
                             const isLessonCompleted = isUserEnrolled && (isCourseComplete || checkOutlineLessonComplete(lesson));
 
@@ -1233,14 +1264,14 @@ export default function CourseDetailPage() {
                                 <div className="flex items-center gap-2.5">
                                   {isLocked ? (
                                     <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
-                                      <Lock className="w-3 h-3" />
+                                      <Lock className="w-3 h-3 text-slate-400" />
                                     </div>
                                   ) : isLessonCompleted ? (
                                     <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
                                   ) : (
                                     <PlayCircle className="w-4 h-4 text-slate-300 group-hover/lesson:text-indigo-500 transition-colors shrink-0" />
                                   )}
-                                  <span className={`text-sm font-medium transition-colors ${isLocked ? "text-slate-500" : isLessonCompleted ? "text-slate-800 font-semibold" : "text-slate-700 group-hover/lesson:text-slate-900"}`}>
+                                  <span className={`text-sm font-medium transition-colors ${isLocked ? "text-slate-400 cursor-not-allowed" : isLessonCompleted ? "text-slate-800 font-semibold" : "text-slate-700 group-hover/lesson:text-slate-900"}`}>
                                     {lesson.title || lesson.lesson_name || lesson.name}
                                   </span>
                                   {isLessonCompleted && (
@@ -1260,7 +1291,7 @@ export default function CourseDetailPage() {
                                   )}
                                 </div>
 
-                                {isLocked ? (
+                                {isPaywallLocked ? (
                                   <button
                                     onClick={() => router.push(`/checkout?item_type=course&item_id=${encodeURIComponent(courseId)}`)}
                                     className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 text-xs font-bold transition-all px-2.5 py-1 rounded-md hover:bg-indigo-50 cursor-pointer"
@@ -1268,6 +1299,13 @@ export default function CourseDetailPage() {
                                   >
                                     <Lock className="w-3 h-3" /> Unlock
                                   </button>
+                                ) : isSequentialLocked ? (
+                                  <div
+                                    className="flex items-center gap-1 text-slate-400 text-xs font-semibold px-2.5 py-1 rounded-md select-none cursor-not-allowed"
+                                    title="Complete the previous lesson to unlock this lesson"
+                                  >
+                                    <Lock className="w-3 h-3 text-slate-400" /> Locked
+                                  </div>
                                 ) : (
                                   <Link
                                     href={`/course/${courseId}/${encodeURIComponent(chapter.name)}/${encodeURIComponent(lesson.name)}`}

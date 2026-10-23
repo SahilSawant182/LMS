@@ -1972,10 +1972,23 @@ export const createAssignment = async (data: FormData | Record<string, any>) => 
 export const createAssignmentSubmission = async (data: FormData | Record<string, any>) => {
   const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
   const currentUser = getCurrentUserEmail();
-  
-  // Extract all fields cleanly into payloadObj
+
+  const authHeaders: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      authHeaders["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!authHeaders["Authorization"] && API_TOKEN) {
+    authHeaders["Authorization"] = `token ${API_TOKEN}`;
+  }
+
+  // Extract all fields cleanly into payloadObj and build FormData
   let payloadObj: Record<string, any> = {};
   let fileToUpload: File | null = null;
+  const fdToSend = new FormData();
 
   if (isFormData) {
     const fd = data as FormData;
@@ -1998,14 +2011,11 @@ export const createAssignmentSubmission = async (data: FormData | Record<string,
     payloadObj.member = currentUser;
   }
 
-  // Ensure answer and content are synchronized
-  const answerText = payloadObj.answer || payloadObj.content || '';
+  // Extract student's answer text / solution / URL
+  const answerText = payloadObj.answer || payloadObj.content || payloadObj.submission_url || '';
   if (answerText) {
-    payloadObj.content = answerText;
     payloadObj.answer = answerText;
-  }
-  if (!payloadObj.status) {
-    payloadObj.status = 'Submitted';
+    payloadObj.content = answerText;
   }
 
   // Handle file upload if present
@@ -2014,6 +2024,7 @@ export const createAssignmentSubmission = async (data: FormData | Record<string,
       const upRes = await uploadFile(fileToUpload);
       const fileUrl = upRes?.message?.file_url || upRes?.file_url || upRes?.data?.file_url;
       if (fileUrl) {
+        payloadObj.assignment_attachment = fileUrl;
         payloadObj.attachment = fileUrl;
       }
     } catch (upErr) {
@@ -2021,65 +2032,122 @@ export const createAssignmentSubmission = async (data: FormData | Record<string,
     }
   }
 
-  // 1. Primary method call with JSON
-  try {
-    const res = await apiService.post(
-      `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.create_assignment_submission`,
-      payloadObj
-    );
-    if (res && res.status !== 'failed' && res.message !== 'failed') {
-      return res;
+  // Populate FormData
+  Object.entries(payloadObj).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && typeof v !== 'object') {
+      fdToSend.append(k, String(v));
     }
-  } catch (err) {
-    console.warn("create_assignment_submission JSON call failed, trying urlencoded:", err);
+  });
+  if (fileToUpload && !payloadObj.attachment) {
+    fdToSend.append('attachment', fileToUpload);
   }
 
-  // 2. Primary method call with URLSearchParams
-  try {
-    const urlParams = new URLSearchParams();
-    Object.entries(payloadObj).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && typeof v !== 'object') {
-        urlParams.append(k, String(v));
-      }
-    });
-    const res = await apiService.post(
-      `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.create_assignment_submission`,
-      urlParams,
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
-    if (res && res.status !== 'failed' && res.message !== 'failed') {
-      return res;
-    }
-  } catch (err) {
-    console.warn("create_assignment_submission urlencoded call failed, trying resource fallback:", err);
-  }
-
-  // 3. Fallback to resource/LMS Assignment Submission
-  try {
-    const res = await apiService.post("resource/LMS Assignment Submission", payloadObj);
-    return res;
-  } catch (resourceErr) {
-    console.warn("Resource fallback for LMS Assignment Submission failed:", resourceErr);
-  }
-
-  // 4. Return resolved local payload object so client UI updates without failing
-  return {
-    status: 200,
-    message: "Assignment submitted successfully",
-    data: {
-      ...payloadObj,
-      name: payloadObj.name || `sub_${Date.now()}`,
-      status: 'Submitted'
-    }
+  // Clean document for Frappe DocType 'LMS Assignment Submission'
+  const frappeDoc: Record<string, any> = {
+    doctype: "LMS Assignment Submission",
+    assignment: payloadObj.assignment,
+    member: payloadObj.member || currentUser,
   };
+  if (payloadObj.answer !== undefined) {
+    frappeDoc.answer = payloadObj.answer;
+  }
+  if (payloadObj.assignment_attachment || payloadObj.attachment) {
+    frappeDoc.assignment_attachment = payloadObj.assignment_attachment || payloadObj.attachment;
+  }
+
+  let lastError: any = null;
+
+  // 1. Primary method: POST method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.create_assignment_submission
+  try {
+    const res = await apiService.post(
+      `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.create_assignment_submission`,
+      fdToSend,
+      { headers: authHeaders }
+    );
+    if (res && res.status !== 'failed' && res.message !== 'failed') {
+      return res;
+    }
+  } catch (err: any) {
+    lastError = err;
+    console.warn("create_assignment_submission FormData call failed:", err);
+  }
+
+  // 2. Fallback: create_assignment_submission with JSON payload
+  try {
+    const res = await apiService.post(
+      `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.create_assignment_submission`,
+      payloadObj,
+      { headers: authHeaders }
+    );
+    if (res && res.status !== 'failed' && res.message !== 'failed') {
+      return res;
+    }
+  } catch (err: any) {
+    lastError = err;
+    console.warn("create_assignment_submission JSON call failed:", err);
+  }
+
+  // 3. Fallback: POST resource/LMS Assignment Submission
+  try {
+    const res = await apiService.post("resource/LMS Assignment Submission", frappeDoc, {
+      headers: authHeaders,
+    });
+    if (res) {
+      return res;
+    }
+  } catch (resourceErr: any) {
+    lastError = resourceErr;
+    console.warn("POST resource/LMS Assignment Submission failed:", resourceErr);
+
+    const errData = resourceErr?.response?.data;
+    const errDataStr = typeof errData === 'string' ? errData : JSON.stringify(errData || {});
+    const errMsg = (String(resourceErr?.message || '') + ' ' + errDataStr).toLowerCase();
+    const isDuplicate = errMsg.includes("already exists") ||
+      errMsg.includes("duplicate") ||
+      errMsg.includes("already submitted") ||
+      errMsg.includes("submission for");
+
+    // If duplicate submission error occurs, delegate to updateAssignmentSubmission!
+    if (isDuplicate) {
+      try {
+        return await updateAssignmentSubmission(payloadObj);
+      } catch (updErr) {
+        lastError = updErr;
+      }
+    }
+  }
+
+  throw lastError || new Error("Failed to submit assignment. Please try again.");
 };
+
+export interface GradeAssignmentSubmissionPayload {
+  name: string;
+  status: 'Pass' | 'Fail' | 'Not Graded' | 'Not Applicable' | string;
+  marks?: number | string;
+  comments?: string;
+  feedback?: string;
+  [key: string]: any;
+}
 
 export const updateAssignmentSubmission = async (data: FormData | Record<string, any>, submissionName?: string) => {
   const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
   const currentUser = getCurrentUserEmail();
-  
+
+  const authHeaders: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      authHeaders["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!authHeaders["Authorization"] && API_TOKEN) {
+    authHeaders["Authorization"] = `token ${API_TOKEN}`;
+  }
+
   let payloadObj: Record<string, any> = {};
   let fileToUpload: File | null = null;
+  const fdToSend = new FormData();
 
   if (isFormData) {
     const fd = data as FormData;
@@ -2097,19 +2165,20 @@ export const updateAssignmentSubmission = async (data: FormData | Record<string,
     }
   }
 
-  const subName = submissionName || payloadObj.name || (isFormData ? (data as FormData).get('name') as string : undefined);
+  let subName = submissionName || payloadObj.name || (isFormData ? (data as FormData).get('name') as string : undefined);
+  if (subName) {
+    payloadObj.name = subName;
+  }
 
-  if (!payloadObj.member && currentUser) {
+  // Only assign currentUser as member if member is absent and this is NOT an instructor grading/updating a student submission
+  if (!payloadObj.member && currentUser && !payloadObj.status && !subName) {
     payloadObj.member = currentUser;
   }
 
-  const answerText = payloadObj.answer || payloadObj.content || '';
+  const answerText = payloadObj.answer || payloadObj.content || payloadObj.submission_url || '';
   if (answerText) {
-    payloadObj.content = answerText;
     payloadObj.answer = answerText;
-  }
-  if (!payloadObj.status) {
-    payloadObj.status = 'Submitted';
+    payloadObj.content = answerText;
   }
 
   if (fileToUpload) {
@@ -2117,6 +2186,7 @@ export const updateAssignmentSubmission = async (data: FormData | Record<string,
       const upRes = await uploadFile(fileToUpload);
       const fileUrl = upRes?.message?.file_url || upRes?.file_url || upRes?.data?.file_url;
       if (fileUrl) {
+        payloadObj.assignment_attachment = fileUrl;
         payloadObj.attachment = fileUrl;
       }
     } catch (upErr) {
@@ -2124,35 +2194,97 @@ export const updateAssignmentSubmission = async (data: FormData | Record<string,
     }
   }
 
-  // 1. Primary method call with JSON
+  Object.entries(payloadObj).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && typeof v !== 'object') {
+      fdToSend.append(k, String(v));
+    }
+  });
+  if (fileToUpload && !payloadObj.attachment) {
+    fdToSend.append('attachment', fileToUpload);
+  }
+
+  let lastError: any = null;
+
+  // 1. Direct JSON call to update_assignment_submission (Preferred when no file attachment)
+  if (!fileToUpload) {
+    try {
+      const res = await apiService.post(
+        `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.update_assignment_submission`,
+        payloadObj,
+        { headers: authHeaders }
+      );
+      if (res && res.status !== 'failed' && res.message !== 'failed') return res;
+    } catch (err) {
+      lastError = err;
+      console.warn("update_assignment_submission JSON call failed, trying FormData:", err);
+    }
+  }
+
+  // 2. FormData call to update_assignment_submission
   try {
     const res = await apiService.post(
       `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.update_assignment_submission`,
-      payloadObj
+      fdToSend,
+      { headers: authHeaders }
     );
-    if (res) return res;
+    if (res && res.status !== 'failed' && res.message !== 'failed') return res;
   } catch (err) {
-    console.warn("update_assignment_submission JSON call failed, trying resource PUT fallback:", err);
+    lastError = err;
+    console.warn("update_assignment_submission FormData failed:", err);
   }
 
-  // 2. Resource PUT fallback
-  if (subName) {
+  // 3. Fallback: update_assignment method with FormData or JSON
+  try {
+    const res = await apiService.post(
+      `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.update_assignment`,
+      !fileToUpload ? payloadObj : fdToSend,
+      { headers: authHeaders }
+    );
+    if (res && res.status !== 'failed' && res.message !== 'failed') return res;
+  } catch (err) {
+    lastError = err;
+    console.warn("update_assignment method failed:", err);
+  }
+
+  // 4. Fallback to resource/LMS Assignment Submission/${subName}
+  const frappeDoc: Record<string, any> = {};
+  if (payloadObj.status !== undefined) {
+    frappeDoc.status = payloadObj.status;
+  }
+  if (payloadObj.marks !== undefined) {
+    frappeDoc.marks = payloadObj.marks;
+    frappeDoc.score = payloadObj.marks;
+  }
+  if (payloadObj.comments !== undefined || payloadObj.feedback !== undefined) {
+    frappeDoc.comments = payloadObj.comments || payloadObj.feedback;
+    frappeDoc.feedback = payloadObj.feedback || payloadObj.comments;
+  }
+  if (payloadObj.answer !== undefined) {
+    frappeDoc.answer = payloadObj.answer;
+  }
+  if (payloadObj.assignment_attachment || payloadObj.attachment) {
+    frappeDoc.assignment_attachment = payloadObj.assignment_attachment || payloadObj.attachment;
+  }
+
+  if (subName && !subName.startsWith("sub_")) {
     try {
-      return await apiService.put(`resource/LMS Assignment Submission/${encodeURIComponent(subName)}`, payloadObj);
+      const res = await apiService.put(
+        `resource/LMS Assignment Submission/${encodeURIComponent(subName)}`,
+        frappeDoc,
+        { headers: authHeaders }
+      );
+      if (res) return res;
     } catch (e) {
+      lastError = e;
       console.warn("Resource PUT for LMS Assignment Submission failed:", e);
     }
   }
 
-  return {
-    status: 200,
-    message: "Assignment submission updated successfully",
-    data: {
-      ...payloadObj,
-      name: subName,
-      status: 'Submitted'
-    }
-  };
+  throw lastError || new Error("Failed to update assignment submission. Please try again.");
+};
+
+export const gradeAssignmentSubmission = async (payload: GradeAssignmentSubmissionPayload) => {
+  return await updateAssignmentSubmission(payload, payload.name);
 };
 
 export const updateAssignment = async (data: FormData | Record<string, any>) => {
@@ -2205,21 +2337,52 @@ export const getAssignmentSubmissions = async (filters?: {
   [key: string]: any;
 }) => {
   const currentUser = getCurrentUserEmail();
+
+  const authHeaders: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      authHeaders["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!authHeaders["Authorization"] && API_TOKEN) {
+    authHeaders["Authorization"] = `token ${API_TOKEN}`;
+  }
+
+  const normalizeItem = (item: any) => {
+    if (!item || typeof item !== "object") return item;
+    const answerVal = item.answer || item.content || item.submission_url || '';
+    const fileVal = item.assignment_attachment || item.attachment || '';
+    return {
+      ...item,
+      answer: answerVal,
+      content: answerVal,
+      submission_url: item.type === 'URL' ? answerVal : (item.submission_url || ''),
+      assignment_attachment: fileVal,
+      attachment: fileVal,
+    };
+  };
+
   const extractList = (res: any): any[] | null => {
     if (!res) return null;
-    if (Array.isArray(res)) return res;
-    if (typeof res === 'object') {
-      if (Array.isArray(res.submissions)) return res.submissions;
-      if (res.data && Array.isArray(res.data.submissions)) return res.data.submissions;
-      if (res.data?.data && Array.isArray(res.data.data.submissions)) return res.data.data.submissions;
-      if (res.message && Array.isArray(res.message.data?.submissions)) return res.message.data.submissions;
-      if (res.message && Array.isArray(res.message.submissions)) return res.message.submissions;
-      if (res.message?.data && Array.isArray(res.message.data)) return res.message.data;
-      if (res.data && Array.isArray(res.data.data)) return res.data.data;
-      if (Array.isArray(res.data)) return res.data;
-      if (Array.isArray(res.message)) return res.message;
-      if (res.submission && typeof res.submission === 'object') return [res.submission];
-      if (res.data && res.data.submission && typeof res.data.submission === 'object') return [res.data.submission];
+    let rawList: any[] | null = null;
+    if (Array.isArray(res)) rawList = res;
+    else if (typeof res === 'object') {
+      if (Array.isArray(res.submissions)) rawList = res.submissions;
+      else if (res.data && Array.isArray(res.data.submissions)) rawList = res.data.submissions;
+      else if (res.data?.data && Array.isArray(res.data.data.submissions)) rawList = res.data.data.submissions;
+      else if (res.message && Array.isArray(res.message.data?.submissions)) rawList = res.message.data.submissions;
+      else if (res.message && Array.isArray(res.message.submissions)) rawList = res.message.submissions;
+      else if (res.message?.data && Array.isArray(res.message.data)) rawList = res.message.data;
+      else if (res.data && Array.isArray(res.data.data)) rawList = res.data.data;
+      else if (Array.isArray(res.data)) rawList = res.data;
+      else if (Array.isArray(res.message)) rawList = res.message;
+      else if (res.submission && typeof res.submission === 'object') rawList = [res.submission];
+      else if (res.data && res.data.submission && typeof res.data.submission === 'object') rawList = [res.data.submission];
+    }
+    if (Array.isArray(rawList)) {
+      return rawList.map(normalizeItem);
     }
     return null;
   };
@@ -2233,10 +2396,10 @@ export const getAssignmentSubmissions = async (filters?: {
   try {
     const res = await apiService.get(
       `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignment_submissions`,
-      { params }
+      { params, headers: authHeaders }
     );
     const list = extractList(res);
-    if (list !== null) return list;
+    if (list !== null && list.length > 0) return list;
   } catch (err) {
     console.warn("get_assignment_submissions call with full params failed:", err);
   }
@@ -2246,28 +2409,29 @@ export const getAssignmentSubmissions = async (filters?: {
     try {
       const res = await apiService.get(
         `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignment_submissions`,
-        { params: { assignment: filters.assignment } }
+        { params: { assignment: filters.assignment }, headers: authHeaders }
       );
       const list = extractList(res);
-      if (list !== null) return list;
+      if (list !== null && list.length > 0) return list;
     } catch (e) {}
   }
 
   // 3. Try with no extra params (returns logged-in user's submissions)
   try {
     const res = await apiService.get(
-      `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignment_submissions`
+      `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.get_assignment_submissions`,
+      { headers: authHeaders }
     );
     const list = extractList(res);
-    if (list !== null) return list;
+    if (list !== null && list.length > 0) return list;
   } catch (e) {}
 
-  // 4. Resource fallback to 'resource/LMS Assignment Submission'
+  // 4. Resource fallback to 'resource/LMS Assignment Submission' with valid Frappe schema fields
   try {
     const resourceParams: Record<string, any> = {
       fields: JSON.stringify([
         "name", "assignment", "assignment_title", "member", "member_name",
-        "content", "answer", "submission_url", "attachment", "status",
+        "answer", "assignment_attachment", "status", "type",
         "creation", "modified", "owner"
       ]),
       limit_page_length: 100,
@@ -2281,19 +2445,61 @@ export const getAssignmentSubmissions = async (filters?: {
     if (filters?.assignment) {
       filtersArray.push(["LMS Assignment Submission", "assignment", "=", filters.assignment]);
     }
+    if (filters?.member) {
+      filtersArray.push(["LMS Assignment Submission", "member", "=", filters.member]);
+    }
     if (filtersArray.length > 0) {
       resourceParams.filters = JSON.stringify(filtersArray);
     }
 
     const resourceRes = await apiService.get("resource/LMS Assignment Submission", {
-      params: resourceParams
+      params: resourceParams,
+      headers: authHeaders
     });
-    const items = extractList(resourceRes) || (Array.isArray(resourceRes) ? resourceRes : null);
+    const items = extractList(resourceRes) || (Array.isArray(resourceRes) ? resourceRes.map(normalizeItem) : null);
     if (Array.isArray(items) && items.length > 0) {
       return items;
     }
   } catch (resourceErr) {
     console.warn("Resource fallback for LMS Assignment Submission failed:", resourceErr);
+  }
+
+  // 5. Broad resource query without assignment filter (in case assignment name in filter didn't match PK)
+  if (filters?.assignment) {
+    try {
+      const broadParams: Record<string, any> = {
+        fields: JSON.stringify([
+          "name", "assignment", "assignment_title", "member", "member_name",
+          "answer", "assignment_attachment", "status", "type",
+          "creation", "modified", "owner"
+        ]),
+        limit_page_length: 100,
+        order_by: "modified desc"
+      };
+      if (filters?.member || currentUser) {
+        broadParams.filters = JSON.stringify([["LMS Assignment Submission", "member", "=", filters?.member || currentUser]]);
+      }
+      const broadRes = await apiService.get("resource/LMS Assignment Submission", {
+        params: broadParams,
+        headers: authHeaders
+      });
+      const items = extractList(broadRes) || (Array.isArray(broadRes) ? broadRes.map(normalizeItem) : null);
+      if (Array.isArray(items) && items.length > 0) {
+        if (filters?.assignment) {
+          const aId = String(filters.assignment).trim().toLowerCase();
+          const matched = items.filter((it: any) => {
+            const itAss = String(it.assignment || '').trim().toLowerCase();
+            const itTitle = String(it.assignment_title || '').trim().toLowerCase();
+            return itAss === aId || itAss.includes(aId) || aId.includes(itAss) || (itTitle && (itTitle === aId || itTitle.includes(aId) || aId.includes(itTitle)));
+          });
+          if (matched.length > 0) return matched;
+        } else {
+          return items;
+        }
+      }
+    } catch (broadErr) {
+      console.warn("Broad resource query for LMS Assignment Submission failed:", broadErr);
+    }
   }
 
   return [];

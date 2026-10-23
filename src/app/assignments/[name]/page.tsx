@@ -9,6 +9,7 @@ import { getImageUrl, getCurrentUserEmail } from '@/services/api.services';
 import { navigateBack } from '@/utils/navigation';
 import { formatDate } from '@/utils/formatters';
 import { ArrowLeft, BookOpen, Send, Upload, CheckCircle, Trash2, Edit, Users, ExternalLink, Clock, Eye, X, Award, FileCheck2 } from 'lucide-react';
+import GradingModal from '@/components/modals/GradingModal';
 
 export default function AssignmentDetailPage() {
   const router = useRouter();
@@ -32,6 +33,26 @@ export default function AssignmentDetailPage() {
   const [selectedResult, setSelectedResult] = useState<any | null>(null);
   const [loadingResult, setLoadingResult] = useState(false);
   const [resultModalOpen, setResultModalOpen] = useState(false);
+
+  // Grading Modal State
+  const [gradingModalOpen, setGradingModalOpen] = useState(false);
+  const [gradingSubmission, setGradingSubmission] = useState<any | null>(null);
+
+  const handleOpenGradingModal = (sub: any) => {
+    if (!sub) return;
+    setGradingSubmission(sub);
+    setGradingModalOpen(true);
+  };
+
+  const handleOnGraded = (updated: any) => {
+    const subName = updated.name || updated.submission;
+    setSubmissions((prev) =>
+      prev.map((s) => (s.name === subName || s.submission === subName ? { ...s, ...updated } : s))
+    );
+    if (selectedResult && (selectedResult.name === subName || selectedResult.submission === subName)) {
+      setSelectedResult((prev: any) => (prev ? { ...prev, ...updated } : null));
+    }
+  };
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -147,14 +168,20 @@ export default function AssignmentDetailPage() {
         submissionsList.push(...assignmentsData.submissions);
       }
 
-      // Find the user's submission - strictly check that member/owner matches currentUserEmail
+      // Find the user's submission - check that member/owner matches currentUserEmail
       let mySub = submissionsList.find((s: any) => {
         const sAssignment = String(s.assignment || '').trim().toLowerCase();
         const sTitle = String(s.assignment_title || '').trim().toLowerCase();
-        const matchesAssignment = sAssignment === targetName || sAssignment === targetDataName || sAssignment === decodedName || (targetTitle && sTitle === targetTitle);
+        const matchesAssignment =
+          !sAssignment ||
+          sAssignment === targetName ||
+          sAssignment === targetDataName ||
+          sAssignment === decodedName ||
+          (targetTitle && sTitle === targetTitle) ||
+          (targetTitle && sAssignment === targetTitle);
         if (!matchesAssignment) return false;
 
-        if (!currentUserEmail) return false;
+        if (!currentUserEmail) return true;
         const sMember = String(s.member || s.owner || s.member_name || s.user || '').trim().toLowerCase();
         return Boolean(sMember && (sMember === currentUserEmail || sMember.includes(currentUserEmail) || currentUserEmail.includes(sMember)));
       }) || localSub;
@@ -264,52 +291,8 @@ export default function AssignmentDetailPage() {
 
     try {
       const memberEmail = getCurrentUserEmail().trim();
-      const assignmentId = assignment?.name || name || '';
+      const assignmentId = assignment?.name || (name ? decodeURIComponent(name) : '');
       const assignmentTitle = assignment?.title || assignment?.assignment_title || assignmentId;
-
-      // Instant local persistence to ensure student's answer and status are never lost across reload or reopen
-      if (typeof window !== "undefined") {
-        try {
-          const payloadCache = {
-            assignment: assignmentId,
-            assignment_title: assignmentTitle,
-            member: memberEmail,
-            content: submissionAnswer,
-            answer: submissionAnswer,
-            submission_url: submissionUrl,
-            status: 'Submitted',
-            submitted_at: new Date().toISOString()
-          };
-
-          const keysToStore = [
-            memberEmail ? `lms_submission_${memberEmail.toLowerCase()}_${assignmentId}` : '',
-            memberEmail && name ? `lms_submission_${memberEmail.toLowerCase()}_${name}` : '',
-            memberEmail && assignment?.name ? `lms_submission_${memberEmail.toLowerCase()}_${assignment.name}` : '',
-            memberEmail && assignmentTitle ? `lms_submission_${memberEmail.toLowerCase()}_${assignmentTitle}` : '',
-            `lms_submission_${assignmentId}`,
-            name ? `lms_submission_${name}` : '',
-            assignment?.name ? `lms_submission_${assignment.name}` : '',
-            assignmentTitle ? `lms_submission_${assignmentTitle}` : '',
-          ].filter(Boolean);
-
-          keysToStore.forEach(k => {
-            localStorage.setItem(k, JSON.stringify(payloadCache));
-          });
-
-          // Also save raw answer
-          const answerKeys = [
-            `lms_assignment_answer_${assignmentId}`,
-            name ? `lms_assignment_answer_${name}` : '',
-            assignment?.name ? `lms_assignment_answer_${assignment.name}` : '',
-            assignmentTitle ? `lms_assignment_answer_${assignmentTitle}` : '',
-            memberEmail ? `lms_assignment_answer_${memberEmail.toLowerCase()}_${assignmentId}` : '',
-          ].filter(Boolean);
-
-          answerKeys.forEach(k => {
-            localStorage.setItem(k, submissionAnswer);
-          });
-        } catch (e) {}
-      }
 
       const formData = new FormData();
       formData.append('assignment', assignmentId);
@@ -320,7 +303,7 @@ export default function AssignmentDetailPage() {
         formData.append('answer', submissionAnswer);
       }
       if (file) formData.append('attachment', file);
-      
+
       let response;
       if (assignment?._is_submitted && assignment?.submission_name) {
         formData.append('name', assignment.submission_name);
@@ -328,9 +311,36 @@ export default function AssignmentDetailPage() {
       } else {
         response = await createAssignmentSubmission(formData);
       }
-      
+
       const resData = response?.data?.message?.data || response?.data?.data || response?.message?.data || response?.data || response;
       const subName = resData?.name || assignment?.submission_name;
+
+      // Persistence in localStorage so draft and answer are preserved
+      if (typeof window !== "undefined") {
+        try {
+          const payloadCache = {
+            assignment: assignmentId,
+            assignment_title: assignmentTitle,
+            member: memberEmail,
+            name: subName,
+            content: submissionAnswer,
+            answer: submissionAnswer,
+            submission_url: submissionUrl,
+            status: 'Submitted',
+            submitted_at: new Date().toISOString()
+          };
+
+          const keysToStore = [
+            memberEmail ? `lms_submission_${memberEmail.toLowerCase()}_${assignmentId}` : '',
+            memberEmail && name ? `lms_submission_${memberEmail.toLowerCase()}_${name}` : '',
+            `lms_submission_${assignmentId}`,
+          ].filter(Boolean);
+
+          keysToStore.forEach(k => {
+            localStorage.setItem(k, JSON.stringify(payloadCache));
+          });
+        } catch (e) {}
+      }
 
       setAssignment((prev: any) => ({
         ...prev,
@@ -341,10 +351,17 @@ export default function AssignmentDetailPage() {
         answer: submissionAnswer,
         submission_url: submissionUrl
       }));
-      
+
       setSubmitSuccess(true);
-      
+      setError(null);
+
+      // Re-fetch assignment data in background to ensure latest server state is loaded
+      if (assignmentId) {
+        fetchAssignment(assignmentId).catch(() => {});
+      }
+
     } catch (err: any) {
+      console.error("Assignment submission error:", err);
       setError(err.message || 'Failed to submit assignment');
     } finally {
       setSubmitting(false);
@@ -634,27 +651,50 @@ export default function AssignmentDetailPage() {
 
                   {submissions.length > 0 ? (
                     <div className="space-y-4">
-                      {submissions.map((sub: any) => (
-                        <div key={sub.name} className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-                          <div className="flex items-start justify-between mb-3">
-                            <div>
-                              <h3 className="font-bold text-slate-900">{sub.member_name || sub.member || sub.owner}</h3>
-                              <p className="text-xs text-slate-500 mt-0.5">{sub.owner}</p>
+                      {submissions.map((sub: any) => {
+                        const statusBadgeClass =
+                          sub.status === 'Pass' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
+                          sub.status === 'Fail' ? 'bg-rose-100 text-rose-800 border-rose-200' :
+                          sub.status === 'Not Graded' ? 'bg-amber-100 text-amber-800 border-amber-200' :
+                          sub.status === 'Not Applicable' ? 'bg-slate-100 text-slate-700 border-slate-200' :
+                          sub.status === 'Graded' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
+                          'bg-indigo-100 text-indigo-700 border-indigo-200';
+
+                        return (
+                          <div key={sub.name} className="p-4 rounded-xl border border-slate-200 bg-slate-50 hover:border-indigo-200 transition-colors">
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-3">
+                              <div>
+                                <h3 className="font-bold text-slate-900">{sub.member_name || sub.member || sub.owner}</h3>
+                                <p className="text-xs text-slate-500 mt-0.5">{sub.owner}</p>
+                                <span className="text-[11px] font-mono text-slate-400 block mt-0.5">{sub.name}</span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${statusBadgeClass}`}>
+                                  {sub.status || 'Not Graded'}
+                                </span>
+                                {(sub.marks !== undefined && sub.marks !== null) && (
+                                  <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-white border border-slate-200 text-slate-800">
+                                    {sub.marks}{sub.total_marks || assignment?.total_marks ? ` / ${sub.total_marks || assignment.total_marks}` : ''} Marks
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenGradingModal(sub)}
+                                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors cursor-pointer shadow-xs"
+                                >
+                                  <Award className="w-3.5 h-3.5" />
+                                  Grade
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewAssignmentResult(sub.name || sub.submission, sub.member || sub.owner || sub.user)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition-colors cursor-pointer border border-indigo-200"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  View Result
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2.5 py-1 text-xs font-bold rounded-lg ${sub.status === 'Graded' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                                {sub.status || 'Submitted'}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleViewAssignmentResult(sub.name || sub.submission, sub.member || sub.owner || sub.user)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition-colors cursor-pointer border border-indigo-200"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                View Result
-                              </button>
-                            </div>
-                          </div>
                           
                           {/* Answer rendering based on type */}
                           {(!assignment?.type || assignment.type === 'Text') && (sub.answer || sub.anwer || sub.content) && (
@@ -678,7 +718,8 @@ export default function AssignmentDetailPage() {
                             </a>
                           )}
                         </div>
-                      ))}
+                      );
+                    })}
                     </div>
                   ) : (
                     <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-200">
@@ -842,13 +883,27 @@ export default function AssignmentDetailPage() {
               )}
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
+              {isInstructor && selectedResult && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetSub = selectedResult;
+                    setResultModalOpen(false);
+                    handleOpenGradingModal(targetSub);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Award className="w-4 h-4" />
+                  Evaluate & Grade This Submission
+                </button>
+              )}
               <button
                 onClick={() => {
                   setResultModalOpen(false);
                   setSelectedResult(null);
                 }}
-                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors cursor-pointer ml-auto"
               >
                 Close
               </button>
@@ -856,6 +911,16 @@ export default function AssignmentDetailPage() {
           </div>
         </div>
       )}
+
+      {/* GRADING MODAL FOR INSTRUCTORS */}
+      <GradingModal
+        isOpen={gradingModalOpen}
+        onClose={() => setGradingModalOpen(false)}
+        submission={gradingSubmission}
+        assignmentTitle={assignment?.title || assignment?.name}
+        totalMarks={assignment?.total_marks}
+        onGraded={handleOnGraded}
+      />
     </div>
   );
 }
