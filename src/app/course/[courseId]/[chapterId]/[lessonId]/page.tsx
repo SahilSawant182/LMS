@@ -958,7 +958,7 @@ export default function LessonPage() {
         ? flatLessons.every(l => checkUpdatedLessonDone(l))
         : false;
 
-      const shouldCompleteCourse = allOutlineLessonsDone || (isLastLesson && (updatedPercent >= 100 || Boolean(parsedUpdatedPB?.isCompleted)));
+      const shouldCompleteCourse = allOutlineLessonsDone;
 
       if (shouldCompleteCourse) {
         setIsCourseCompletedLocally(true);
@@ -982,15 +982,23 @@ export default function LessonPage() {
       setShowCompletionModal(true);
       return;
     }
-    await handleMarkComplete();
+
+    // Verify all other lessons are completed before completing the course
     const otherLessonsDone = flatLessons.length > 0
-      ? flatLessons.filter(l => (l.lessonName || l.name) !== currentTargetId).every(l => checkLessonRecordedComplete(l))
+      ? flatLessons.filter((_, idx) => idx !== currentIndex).every(l => checkLessonRecordedComplete(l))
       : true;
 
-    if (isLastLesson || otherLessonsDone) {
-      setIsCourseCompletedLocally(true);
-      setShowCompletionModal(true);
+    if (!otherLessonsDone) {
+      showToast.error("Please complete all previous lessons before completing the course.");
+      return;
     }
+
+    await handleMarkComplete();
+    setIsCourseCompletedLocally(true);
+    if (typeof window !== "undefined" && userEmail) {
+      localStorage.setItem(`lms_course_completed_${userEmail}_${courseId}`, 'true');
+    }
+    setShowCompletionModal(true);
   };
 
   // Parse blocks from lessonData.content and lessonData.instructor_content
@@ -1131,6 +1139,18 @@ export default function LessonPage() {
       return true;
     }
 
+    // Direct completion properties on lesson item if present
+    if (
+      (lessonItem as any).is_complete === 1 ||
+      (lessonItem as any).is_complete === true ||
+      (lessonItem as any).completed === 1 ||
+      (lessonItem as any).completed === true ||
+      (lessonItem as any).status === 'Complete' ||
+      (lessonItem as any).status === 'Completed'
+    ) {
+      return true;
+    }
+
     const lName = (lessonItem.lessonName || lessonItem.name || '').trim().toLowerCase();
     const lTitle = (lessonItem.title || lessonItem.lesson_name || '').trim().toLowerCase();
     const currentTId = (currentTargetId || '').trim().toLowerCase();
@@ -1212,6 +1232,29 @@ export default function LessonPage() {
 
   const currentLessonIsCompleted = isCompletedLocally || checkLessonRecordedComplete({ lessonName: currentTargetId, title: lessonData?.title || lessonData?.lesson_name || '' });
 
+  // Sequential Locking Logic for Students
+  const isLessonSequentiallyLocked = (idx: number) => {
+    if (isInstructor) return false;
+    if (courseLevelComplete) return false;
+    if (idx <= 0) return false; // First lesson is always unlocked
+    for (let i = 0; i < idx; i++) {
+      if (!checkLessonRecordedComplete(flatLessons[i])) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const isCurrentLessonSequentiallyLocked = currentIndex > 0 && isLessonSequentiallyLocked(currentIndex);
+
+  const allOtherLessonsCompleted = flatLessons.length > 0
+    ? flatLessons.filter((_, idx) => idx !== currentIndex).every(l => checkLessonRecordedComplete(l))
+    : true;
+
+  const canCompleteCourse = isLastLesson && allOtherLessonsCompleted;
+
+  const firstIncompleteLesson = flatLessons.find(l => !checkLessonRecordedComplete(l)) || flatLessons[0];
+
   // Find current lesson title from outline if lessonData is null
   const currentLessonFromOutline = flatLessons.find(l => l.lessonName === currentTargetId || l.lessonName === lessonId);
   const lessonDisplayTitle = lessonData?.title || lessonData?.lesson_name || lessonData?.name || currentLessonFromOutline?.title || `Lesson ${lessonId}`;
@@ -1291,7 +1334,13 @@ export default function LessonPage() {
                     const chIdLower = decodeURIComponent(chapterId || '').toLowerCase().trim();
                     const isActive = (l.name === lessonId || lNameLower === lesIdLower) && 
                       (!chapterId || chapter.name === chapterId || chNameLower === chIdLower);
-                    const isLessonLocked = isInstructor ? false : Boolean(l.is_locked);
+
+                    const lFlatIndex = flatLessons.findIndex(fl => 
+                      (fl.lessonName === l.name || (l.name && fl.lessonName && fl.lessonName.toLowerCase() === l.name.toLowerCase())) &&
+                      (fl.chapterName === chapter.name || (chapter.name && fl.chapterName && fl.chapterName.toLowerCase() === chapter.name.toLowerCase()))
+                    );
+                    const isSequentialLocked = lFlatIndex > 0 && isLessonSequentiallyLocked(lFlatIndex);
+                    const isLessonLocked = isInstructor ? false : (Boolean(l.is_locked) || isSequentialLocked);
                     const isLessonPreview = Number(l.include_in_preview) === 1;
                     const isCompleted = isLessonComplete({
                       lessonName: l.name,
@@ -1300,44 +1349,47 @@ export default function LessonPage() {
 
                     return (
                       <li key={l.name || lIndex}>
-                        <Link 
-                          href={`/course/${courseId}/${encodeURIComponent(chapter.name)}/${encodeURIComponent(l.name)}`}
-                          className={`flex items-start px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group relative ${
-                            isActive 
-                              ? 'bg-indigo-500/15 text-white font-semibold' 
-                              : isLessonLocked
-                              ? 'text-slate-500 hover:bg-slate-800/40 hover:text-slate-300 font-medium'
-                              : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 font-medium'
-                          }`}
-                        >
-                          {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-indigo-500 rounded-r-md shadow-[0_0_8px_rgba(99,102,241,0.8)]"></div>}
-                          
-                          {isLessonLocked ? (
+                        {isLessonLocked ? (
+                          <div 
+                            className="flex items-start px-3 py-2.5 rounded-lg text-sm select-none cursor-not-allowed opacity-60 text-slate-500 font-medium"
+                            title="Complete previous lessons to unlock this lesson"
+                          >
                             <Lock className="w-4 h-4 mt-0.5 mr-3 flex-shrink-0 text-amber-500/80" />
-                          ) : (
+                            <span className="line-clamp-2 leading-snug flex-1">
+                              {lIndex + 1}. {l.title || l.lesson_name || l.name}
+                            </span>
+                            <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-amber-500/10 text-amber-400/90 border border-amber-500/20 flex-shrink-0">
+                              Locked
+                            </span>
+                          </div>
+                        ) : (
+                          <Link 
+                            href={`/course/${courseId}/${encodeURIComponent(chapter.name)}/${encodeURIComponent(l.name)}`}
+                            className={`flex items-start px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group relative ${
+                              isActive 
+                                ? 'bg-indigo-500/15 text-white font-semibold' 
+                                : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 font-medium'
+                            }`}
+                          >
+                            {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-indigo-500 rounded-r-md shadow-[0_0_8px_rgba(99,102,241,0.8)]"></div>}
+                            
                             <CheckCircle className={`w-4 h-4 mt-0.5 mr-3 flex-shrink-0 transition-colors ${
                               isCompleted 
                                 ? 'text-emerald-500' 
                                 : isActive ? 'text-indigo-400' : 'text-slate-600 group-hover:text-slate-500'
                             }`} />
-                          )}
 
-                          <span className="line-clamp-2 leading-snug flex-1">
-                            {lIndex + 1}. {l.title || l.lesson_name || l.name}
-                          </span>
-
-                          {isLessonPreview && !courseData?.is_enrolled && !isInstructor && (
-                            <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex-shrink-0">
-                              Preview
+                            <span className="line-clamp-2 leading-snug flex-1">
+                              {lIndex + 1}. {l.title || l.lesson_name || l.name}
                             </span>
-                          )}
 
-                          {isLessonLocked && !isInstructor && (
-                            <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-amber-500/10 text-amber-400/90 border border-amber-500/20 flex-shrink-0">
-                              Locked
-                            </span>
-                          )}
-                        </Link>
+                            {isLessonPreview && !courseData?.is_enrolled && !isInstructor && (
+                              <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex-shrink-0">
+                                Preview
+                              </span>
+                            )}
+                          </Link>
+                        )}
                       </li>
                     );
                   })}
@@ -1370,8 +1422,8 @@ export default function LessonPage() {
                   <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-md border border-indigo-100">
                     {chapterId}
                   </span>
-                  {isPaywallLocked && !isInstructor && (
-                    <span className="bg-amber-50 text-amber-700 px-2.5 py-1 rounded-md border border-amber-200 flex items-center gap-1">
+                  {(isPaywallLocked || isCurrentLessonSequentiallyLocked) && !isInstructor && (
+                    <span className="bg-amber-50 text-amber-700 px-2.5 py-1 rounded-md border border-amber-200 flex items-center gap-1 font-semibold">
                       <Lock className="w-3 h-3 text-amber-600" /> Locked Lesson
                     </span>
                   )}
@@ -1403,6 +1455,30 @@ export default function LessonPage() {
                 >
                   <CheckCircle className="w-4 h-4 text-emerald-600" /> Course Completed
                 </button>
+              ) : isCurrentLessonSequentiallyLocked ? (
+                <span className="px-3.5 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold rounded-lg flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-amber-600" /> Lesson Locked
+                </span>
+              ) : !currentLessonIsCompleted ? (
+                canCompleteCourse ? (
+                  <button
+                    onClick={handleCompleteCourse}
+                    disabled={updatingProgress}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg shadow-sm shadow-emerald-200 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
+                  >
+                    {updatingProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4" />}
+                    Complete Course
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleMarkComplete}
+                    disabled={updatingProgress}
+                    className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm transition-all shadow-sm shadow-indigo-200 flex items-center gap-2 cursor-pointer"
+                  >
+                    {updatingProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                    {updatingProgress ? 'Updating...' : 'Mark as Complete'}
+                  </button>
+                )
               ) : nextLesson ? (
                 <button 
                   onClick={() => router.push(`/course/${courseId}/${encodeURIComponent(nextLesson.chapterName)}/${encodeURIComponent(nextLesson.lessonName)}`)}
@@ -1410,7 +1486,7 @@ export default function LessonPage() {
                 >
                   Next Lesson <ChevronRight className="w-4 h-4" />
                 </button>
-              ) : (
+              ) : canCompleteCourse ? (
                 <button
                   onClick={handleCompleteCourse}
                   disabled={updatingProgress}
@@ -1419,6 +1495,10 @@ export default function LessonPage() {
                   {updatingProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4" />}
                   Complete Course
                 </button>
+              ) : (
+                <div className="px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-sm rounded-lg flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600" /> Lesson Completed
+                </div>
               )}
 
               {isCourseComplete && nextLesson && (
@@ -1432,8 +1512,56 @@ export default function LessonPage() {
             </div>
           </div>
 
-          {/* Conditional Rendering: Paywall Card VS Unlocked Content */}
-          {isPaywallLocked && !isInstructor ? (
+          {/* Conditional Rendering: Sequential Locked Card VS Paywall Card VS Unlocked Content */}
+          {isCurrentLessonSequentiallyLocked && !isInstructor ? (
+            <div className="max-w-3xl mx-auto p-4 md:p-8 w-full flex-grow flex items-center justify-center">
+              <div className="relative w-full bg-white rounded-3xl shadow-[0_20px_50px_rgba(8,112,184,0.08)] border border-slate-200/80 p-8 md:p-12 text-center overflow-hidden">
+                <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-500 via-indigo-600 to-purple-600"></div>
+
+                <div className="relative z-10">
+                  <div className="relative mx-auto w-20 h-20 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-indigo-500/10 to-violet-500/20 border border-amber-500/30 flex items-center justify-center mb-6 shadow-[0_0_35px_rgba(245,158,11,0.25)] ring-8 ring-amber-500/5">
+                    <Lock className="w-9 h-9 text-amber-500" />
+                  </div>
+
+                  <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold uppercase tracking-wider mb-4">
+                    <Lock className="w-3.5 h-3.5 text-amber-500" />
+                    Locked Lesson
+                  </div>
+
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight mb-3">
+                    This Lesson is Locked
+                  </h2>
+                  <p className="text-slate-600 text-sm md:text-base max-w-lg mx-auto mb-8 leading-relaxed">
+                    Please complete the previous lessons in this course first. Lessons unlock sequentially as you progress.
+                  </p>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    {firstIncompleteLesson && (
+                      <button
+                        onClick={() => router.push(`/course/${courseId}/${encodeURIComponent(firstIncompleteLesson.chapterName)}/${encodeURIComponent(firstIncompleteLesson.lessonName)}`)}
+                        className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold text-sm md:text-base rounded-xl shadow-lg shadow-indigo-600/25 transition-all transform hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <Play className="w-4 h-4 fill-current" />
+                        Go to Current Lesson ({firstIncompleteLesson.title || firstIncompleteLesson.lessonName})
+                      </button>
+                    )}
+
+                    <Link
+                      href={`/course/${encodeURIComponent(courseId)}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigateBack(router, `/course/${encodeURIComponent(courseId)}`);
+                      }}
+                      className="w-full sm:w-auto px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Course Overview
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : isPaywallLocked && !isInstructor ? (
             <div className="max-w-3xl mx-auto p-4 md:p-8 w-full flex-grow flex items-center justify-center">
               <div className="relative w-full bg-white rounded-3xl shadow-[0_20px_50px_rgba(8,112,184,0.08)] border border-slate-200/80 p-8 md:p-12 text-center overflow-hidden">
                 {/* Top decorative gradient bar */}
@@ -1755,7 +1883,7 @@ export default function LessonPage() {
                         >
                           Next Lesson <ChevronRight className="w-4 h-4" />
                         </button>
-                      ) : (
+                      ) : canCompleteCourse ? (
                         <button 
                           onClick={handleCompleteCourse}
                           disabled={updatingProgress}
@@ -1764,20 +1892,22 @@ export default function LessonPage() {
                           {updatingProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4" />}
                           Complete Course
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   ) : (
                     <button 
-                      onClick={handleMarkComplete}
+                      onClick={canCompleteCourse ? handleCompleteCourse : handleMarkComplete}
                       disabled={updatingProgress}
-                      className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
+                      className={`px-6 py-2.5 ${canCompleteCourse ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'} text-white font-bold text-sm rounded-xl shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95`}
                     >
                       {updatingProgress ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : canCompleteCourse ? (
+                        <Award className="w-4 h-4" />
                       ) : (
                         <CheckCircle className="w-4 h-4" />
                       )}
-                      {updatingProgress ? 'Updating...' : isLastLesson ? 'Complete Course' : 'Mark as Complete'}
+                      {updatingProgress ? 'Updating...' : canCompleteCourse ? 'Complete Course' : 'Mark as Complete'}
                     </button>
                   )}
                 </div>
