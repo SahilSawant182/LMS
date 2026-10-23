@@ -147,14 +147,20 @@ export default function AssignmentDetailPage() {
         submissionsList.push(...assignmentsData.submissions);
       }
 
-      // Find the user's submission - strictly check that member/owner matches currentUserEmail
+      // Find the user's submission - check that member/owner matches currentUserEmail
       let mySub = submissionsList.find((s: any) => {
         const sAssignment = String(s.assignment || '').trim().toLowerCase();
         const sTitle = String(s.assignment_title || '').trim().toLowerCase();
-        const matchesAssignment = sAssignment === targetName || sAssignment === targetDataName || sAssignment === decodedName || (targetTitle && sTitle === targetTitle);
+        const matchesAssignment =
+          !sAssignment ||
+          sAssignment === targetName ||
+          sAssignment === targetDataName ||
+          sAssignment === decodedName ||
+          (targetTitle && sTitle === targetTitle) ||
+          (targetTitle && sAssignment === targetTitle);
         if (!matchesAssignment) return false;
 
-        if (!currentUserEmail) return false;
+        if (!currentUserEmail) return true;
         const sMember = String(s.member || s.owner || s.member_name || s.user || '').trim().toLowerCase();
         return Boolean(sMember && (sMember === currentUserEmail || sMember.includes(currentUserEmail) || currentUserEmail.includes(sMember)));
       }) || localSub;
@@ -264,52 +270,8 @@ export default function AssignmentDetailPage() {
 
     try {
       const memberEmail = getCurrentUserEmail().trim();
-      const assignmentId = assignment?.name || name || '';
+      const assignmentId = assignment?.name || (name ? decodeURIComponent(name) : '');
       const assignmentTitle = assignment?.title || assignment?.assignment_title || assignmentId;
-
-      // Instant local persistence to ensure student's answer and status are never lost across reload or reopen
-      if (typeof window !== "undefined") {
-        try {
-          const payloadCache = {
-            assignment: assignmentId,
-            assignment_title: assignmentTitle,
-            member: memberEmail,
-            content: submissionAnswer,
-            answer: submissionAnswer,
-            submission_url: submissionUrl,
-            status: 'Submitted',
-            submitted_at: new Date().toISOString()
-          };
-
-          const keysToStore = [
-            memberEmail ? `lms_submission_${memberEmail.toLowerCase()}_${assignmentId}` : '',
-            memberEmail && name ? `lms_submission_${memberEmail.toLowerCase()}_${name}` : '',
-            memberEmail && assignment?.name ? `lms_submission_${memberEmail.toLowerCase()}_${assignment.name}` : '',
-            memberEmail && assignmentTitle ? `lms_submission_${memberEmail.toLowerCase()}_${assignmentTitle}` : '',
-            `lms_submission_${assignmentId}`,
-            name ? `lms_submission_${name}` : '',
-            assignment?.name ? `lms_submission_${assignment.name}` : '',
-            assignmentTitle ? `lms_submission_${assignmentTitle}` : '',
-          ].filter(Boolean);
-
-          keysToStore.forEach(k => {
-            localStorage.setItem(k, JSON.stringify(payloadCache));
-          });
-
-          // Also save raw answer
-          const answerKeys = [
-            `lms_assignment_answer_${assignmentId}`,
-            name ? `lms_assignment_answer_${name}` : '',
-            assignment?.name ? `lms_assignment_answer_${assignment.name}` : '',
-            assignmentTitle ? `lms_assignment_answer_${assignmentTitle}` : '',
-            memberEmail ? `lms_assignment_answer_${memberEmail.toLowerCase()}_${assignmentId}` : '',
-          ].filter(Boolean);
-
-          answerKeys.forEach(k => {
-            localStorage.setItem(k, submissionAnswer);
-          });
-        } catch (e) {}
-      }
 
       const formData = new FormData();
       formData.append('assignment', assignmentId);
@@ -320,7 +282,7 @@ export default function AssignmentDetailPage() {
         formData.append('answer', submissionAnswer);
       }
       if (file) formData.append('attachment', file);
-      
+
       let response;
       if (assignment?._is_submitted && assignment?.submission_name) {
         formData.append('name', assignment.submission_name);
@@ -328,9 +290,36 @@ export default function AssignmentDetailPage() {
       } else {
         response = await createAssignmentSubmission(formData);
       }
-      
+
       const resData = response?.data?.message?.data || response?.data?.data || response?.message?.data || response?.data || response;
       const subName = resData?.name || assignment?.submission_name;
+
+      // Persistence in localStorage so draft and answer are preserved
+      if (typeof window !== "undefined") {
+        try {
+          const payloadCache = {
+            assignment: assignmentId,
+            assignment_title: assignmentTitle,
+            member: memberEmail,
+            name: subName,
+            content: submissionAnswer,
+            answer: submissionAnswer,
+            submission_url: submissionUrl,
+            status: 'Submitted',
+            submitted_at: new Date().toISOString()
+          };
+
+          const keysToStore = [
+            memberEmail ? `lms_submission_${memberEmail.toLowerCase()}_${assignmentId}` : '',
+            memberEmail && name ? `lms_submission_${memberEmail.toLowerCase()}_${name}` : '',
+            `lms_submission_${assignmentId}`,
+          ].filter(Boolean);
+
+          keysToStore.forEach(k => {
+            localStorage.setItem(k, JSON.stringify(payloadCache));
+          });
+        } catch (e) {}
+      }
 
       setAssignment((prev: any) => ({
         ...prev,
@@ -341,10 +330,17 @@ export default function AssignmentDetailPage() {
         answer: submissionAnswer,
         submission_url: submissionUrl
       }));
-      
+
       setSubmitSuccess(true);
-      
+      setError(null);
+
+      // Re-fetch assignment data in background to ensure latest server state is loaded
+      if (assignmentId) {
+        fetchAssignment(assignmentId).catch(() => {});
+      }
+
     } catch (err: any) {
+      console.error("Assignment submission error:", err);
       setError(err.message || 'Failed to submit assignment');
     } finally {
       setSubmitting(false);

@@ -174,12 +174,21 @@ export default function BatchesPage() {
           ) : visibleBatches.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {visibleBatches.map((batch: any, idx: number) => {
-                const seatsLeft = batch.seats_left !== undefined && batch.seats_left !== null
-                  ? Number(batch.seats_left)
-                  : (batch.seat_count !== undefined && batch.seat_count !== null
-                      ? Math.max(0, Number(batch.seat_count) - Number(batch.enrollment?.total_enrolled || batch.enrolled_students || batch.total_enrolled || 0))
-                      : (batch.seats !== undefined ? Number(batch.seats) : 0));
-                const hasSeats = seatsLeft > 0;
+                const rawSeatCount = batch.seat_count !== undefined && batch.seat_count !== null
+                  ? Number(batch.seat_count)
+                  : (batch.seats !== undefined && batch.seats !== null 
+                      ? Number(batch.seats) 
+                      : (batch.enrollment?.seat_count !== undefined && batch.enrollment.seat_count !== null ? Number(batch.enrollment.seat_count) : 0));
+                const isUnlimited = rawSeatCount === 0;
+
+                const enrolledCount = Number(batch.enrollment?.total_enrolled || batch.enrolled_students || batch.total_enrolled || 0);
+                const seatsLeft = !isUnlimited
+                  ? (batch.seats_left !== undefined && batch.seats_left !== null
+                      ? Number(batch.seats_left)
+                      : Math.max(0, rawSeatCount - enrolledCount))
+                  : null;
+
+                const hasSeats = isUnlimited || (seatsLeft !== null && seatsLeft > 0);
 
                 const isPaid = Boolean(
                   batch.paid_batch === 1 || 
@@ -220,7 +229,11 @@ export default function BatchesPage() {
                       <span className="inline-block px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 rounded-md">
                         {batch.category || 'General'}
                       </span>
-                      {hasSeats ? (
+                      {isUnlimited ? (
+                        <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+                          Unlimited seats
+                        </span>
+                      ) : hasSeats ? (
                         <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
                           {seatsLeft} seats left
                         </span>
