@@ -2120,6 +2120,15 @@ export const createAssignmentSubmission = async (data: FormData | Record<string,
   throw lastError || new Error("Failed to submit assignment. Please try again.");
 };
 
+export interface GradeAssignmentSubmissionPayload {
+  name: string;
+  status: 'Pass' | 'Fail' | 'Not Graded' | 'Not Applicable' | string;
+  marks?: number | string;
+  comments?: string;
+  feedback?: string;
+  [key: string]: any;
+}
+
 export const updateAssignmentSubmission = async (data: FormData | Record<string, any>, submissionName?: string) => {
   const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
   const currentUser = getCurrentUserEmail();
@@ -2157,8 +2166,12 @@ export const updateAssignmentSubmission = async (data: FormData | Record<string,
   }
 
   let subName = submissionName || payloadObj.name || (isFormData ? (data as FormData).get('name') as string : undefined);
+  if (subName) {
+    payloadObj.name = subName;
+  }
 
-  if (!payloadObj.member && currentUser) {
+  // Only assign currentUser as member if member is absent and this is NOT an instructor grading/updating a student submission
+  if (!payloadObj.member && currentUser && !payloadObj.status && !subName) {
     payloadObj.member = currentUser;
   }
 
@@ -2192,7 +2205,22 @@ export const updateAssignmentSubmission = async (data: FormData | Record<string,
 
   let lastError: any = null;
 
-  // 1. Primary update: update_assignment_submission method with FormData
+  // 1. Direct JSON call to update_assignment_submission (Preferred when no file attachment)
+  if (!fileToUpload) {
+    try {
+      const res = await apiService.post(
+        `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.update_assignment_submission`,
+        payloadObj,
+        { headers: authHeaders }
+      );
+      if (res && res.status !== 'failed' && res.message !== 'failed') return res;
+    } catch (err) {
+      lastError = err;
+      console.warn("update_assignment_submission JSON call failed, trying FormData:", err);
+    }
+  }
+
+  // 2. FormData call to update_assignment_submission
   try {
     const res = await apiService.post(
       `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.update_assignment_submission`,
@@ -2202,14 +2230,14 @@ export const updateAssignmentSubmission = async (data: FormData | Record<string,
     if (res && res.status !== 'failed' && res.message !== 'failed') return res;
   } catch (err) {
     lastError = err;
-    console.warn("update_assignment_submission method failed:", err);
+    console.warn("update_assignment_submission FormData failed:", err);
   }
 
-  // 2. Secondary update: update_assignment method with FormData
+  // 3. Fallback: update_assignment method with FormData or JSON
   try {
     const res = await apiService.post(
       `method/lms.lms.doctype.lms_assignment_submission.lms_assignment_submission.update_assignment`,
-      fdToSend,
+      !fileToUpload ? payloadObj : fdToSend,
       { headers: authHeaders }
     );
     if (res && res.status !== 'failed' && res.message !== 'failed') return res;
@@ -2218,8 +2246,19 @@ export const updateAssignmentSubmission = async (data: FormData | Record<string,
     console.warn("update_assignment method failed:", err);
   }
 
-  // 3. Fallback to resource/LMS Assignment Submission/${subName}
+  // 4. Fallback to resource/LMS Assignment Submission/${subName}
   const frappeDoc: Record<string, any> = {};
+  if (payloadObj.status !== undefined) {
+    frappeDoc.status = payloadObj.status;
+  }
+  if (payloadObj.marks !== undefined) {
+    frappeDoc.marks = payloadObj.marks;
+    frappeDoc.score = payloadObj.marks;
+  }
+  if (payloadObj.comments !== undefined || payloadObj.feedback !== undefined) {
+    frappeDoc.comments = payloadObj.comments || payloadObj.feedback;
+    frappeDoc.feedback = payloadObj.feedback || payloadObj.comments;
+  }
   if (payloadObj.answer !== undefined) {
     frappeDoc.answer = payloadObj.answer;
   }
@@ -2242,6 +2281,10 @@ export const updateAssignmentSubmission = async (data: FormData | Record<string,
   }
 
   throw lastError || new Error("Failed to update assignment submission. Please try again.");
+};
+
+export const gradeAssignmentSubmission = async (payload: GradeAssignmentSubmissionPayload) => {
+  return await updateAssignmentSubmission(payload, payload.name);
 };
 
 export const updateAssignment = async (data: FormData | Record<string, any>) => {

@@ -649,20 +649,29 @@ export default function Sidebar({
                         onMouseEnter={() => !isExpanded && handleFlyoutMouseEnter(item.id)}
                         onMouseLeave={handleFlyoutMouseLeave}
                       >
-                        {/* Parent Accordion Header */}
-                        {visibleChildren.length <= 1 ? (
-                          <Link
-                            href={visibleChildren[0]?.href || '#'}
-                            onClick={() => onCloseMobile?.()}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative ${
-                              isGroupActive
-                                ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-md shadow-indigo-600/20'
-                                : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/70'
-                            } ${!isExpanded ? 'justify-center' : ''}`}
-                          >
+                        {/* Parent Accordion Header - Toggles accordion without navigating */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isExpanded) {
+                              setInternalExpanded(true);
+                              externalOnToggleExpand?.();
+                            }
+                            toggleAccordion(item.id);
+                          }}
+                          className={`w-full flex items-center justify-between rounded-xl text-sm font-medium transition-all duration-200 group relative px-3 py-2.5 cursor-pointer text-left ${
+                            isGroupActive && !isOpen
+                              ? 'bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80'
+                              : isGroupActive && isOpen
+                              ? 'bg-indigo-50/60 text-indigo-700 font-semibold'
+                              : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-100/70'
+                          } ${!isExpanded ? 'justify-center' : ''}`}
+                          title={isExpanded ? (isOpen ? `Collapse ${item.name}` : `Expand ${item.name}`) : item.name}
+                        >
+                          <div className={`flex items-center gap-3 flex-1 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
                             <div
                               className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${
-                                isGroupActive ? 'text-white' : 'text-slate-500 group-hover:text-indigo-600'
+                                isGroupActive ? 'text-indigo-600' : 'text-slate-500 group-hover:text-indigo-600'
                               }`}
                             >
                               <Icon className="w-5 h-5" />
@@ -673,10 +682,8 @@ export default function Sidebar({
                                 <span className="truncate">{item.name}</span>
                                 {item.badge && (
                                   <span
-                                    className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
-                                      isGroupActive
-                                        ? 'bg-white/20 text-white'
-                                        : item.badgeColor || 'bg-indigo-100 text-indigo-700'
+                                    className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full mr-2 ${
+                                      item.badgeColor || 'bg-indigo-100 text-indigo-700'
                                     }`}
                                   >
                                     {item.badge}
@@ -684,75 +691,24 @@ export default function Sidebar({
                                 )}
                               </div>
                             )}
-
-                            {!isExpanded && isGroupActive && (
-                              <div className="absolute left-0 top-2 bottom-2 w-1 bg-indigo-600 rounded-r-full" />
-                            )}
-                          </Link>
-                        ) : (
-                          <div
-                            className={`w-full flex items-center justify-between rounded-xl text-sm font-medium transition-all duration-200 group relative ${
-                              isGroupActive && !isOpen
-                                ? 'bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80'
-                                : isGroupActive && isOpen
-                                ? 'bg-indigo-50/60 text-indigo-700 font-semibold'
-                                : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-100/70'
-                            }`}
-                          >
-                            <Link
-                              href={visibleChildren[0]?.href || '#'}
-                              onClick={() => onCloseMobile?.()}
-                              className={`flex items-center gap-3 px-3 py-2.5 flex-1 truncate ${
-                                !isExpanded ? 'justify-center' : ''
-                              }`}
-                            >
-                              <div
-                                className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${
-                                  isGroupActive ? 'text-indigo-600' : 'text-slate-500 group-hover:text-indigo-600'
-                                }`}
-                              >
-                                <Icon className="w-5 h-5" />
-                              </div>
-
-                              {isExpanded && (
-                                <div className="flex items-center justify-between flex-1 truncate">
-                                  <span className="truncate">{item.name}</span>
-                                  {item.badge && (
-                                    <span
-                                      className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
-                                        item.badgeColor || 'bg-indigo-100 text-indigo-700'
-                                      }`}
-                                    >
-                                      {item.badge}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </Link>
-
-                            {isExpanded && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleAccordion(item.id);
-                                }}
-                                className="p-2 text-slate-400 hover:text-indigo-600 transition-colors mr-1 rounded-lg hover:bg-slate-200/50"
-                                title={isOpen ? 'Collapse submenu' : 'Expand submenu'}
-                              >
-                                <ChevronDown
-                                  className={`w-4 h-4 transition-transform duration-200 ${
-                                    isOpen ? 'rotate-180 text-indigo-600' : ''
-                                  }`}
-                                />
-                              </button>
-                            )}
-
-                            {!isExpanded && isGroupActive && (
-                              <div className="absolute left-0 top-2 bottom-2 w-1 bg-indigo-600 rounded-r-full" />
-                            )}
                           </div>
-                        )}
+
+                          {isExpanded && (
+                            <div
+                              className="p-1 text-slate-400 group-hover:text-indigo-600 transition-colors rounded-lg ml-1 shrink-0"
+                            >
+                              <ChevronDown
+                                className={`w-4 h-4 transition-transform duration-200 ${
+                                  isOpen ? 'rotate-180 text-indigo-600' : ''
+                                }`}
+                              />
+                            </div>
+                          )}
+
+                          {!isExpanded && isGroupActive && (
+                            <div className="absolute left-0 top-2 bottom-2 w-1 bg-indigo-600 rounded-r-full" />
+                          )}
+                        </button>
 
                         {/* Accordion Sub-items (When Expanded) */}
                         {isExpanded && isOpen && (
