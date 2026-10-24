@@ -277,6 +277,13 @@ export default function Dropdown({
     return () => clearTimeout(delayDebounce);
   }, [searchTerm, endpoint, isOpen, paramsKey]);
 
+  useEffect(() => {
+    const hasInitialValue = Array.isArray(value) ? value.length > 0 : Boolean(value);
+    if (endpoint && !fetched && !loading && !fetchError && hasInitialValue) {
+      fetchOptions(1, "");
+    }
+  }, [endpoint, value, fetched, loading, fetchError]);
+
   const handleClick = () => {
     if (disabled) return;
     if (!fetched && !loading && !fetchError && endpoint) {

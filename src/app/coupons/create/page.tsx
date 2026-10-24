@@ -26,16 +26,15 @@ import {
   Loader2,
   Users
 } from 'lucide-react';
+import Dropdown from '@/components/ui/Dropdown';
 import {
   createLMSCoupon,
   updateLMSCoupon,
   getLMSCoupon,
-  getCourses,
   Course,
   CreateLMSCouponPayload
 } from '@/services/lms.services';
-import { getInstructorDashboard } from '@/services/payment.services';
-import { getCurrentUserEmail } from '@/services/api.services';
+import { apiService, getCurrentUserEmail } from '@/services/api.services';
 import { navigateBack } from '@/utils/navigation';
 
 const generateCouponCode = (): string => {
@@ -65,9 +64,18 @@ function CouponFormContent() {
   const [usageLimit, setUsageLimit] = useState<string>('');
   const [enabled, setEnabled] = useState<number>(1);
 
+  // Compute today's date in YYYY-MM-DD local format to disable past dates
+  const getTodayDateString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const todayDate = getTodayDateString();
+
   // Applicable items / courses
   const [applicableCourses, setApplicableCourses] = useState<string[]>([]);
-  const [customCourseInput, setCustomCourseInput] = useState('');
 
   // Available LMS courses from backend
   const [allCourses, setAllCourses] = useState<Course[]>([]);
@@ -78,18 +86,32 @@ function CouponFormContent() {
   const [error, setError] = useState<string | null>(null);
   const [successCouponCode, setSuccessCouponCode] = useState<string | null>(null);
 
+  const [currentUserEmail, setCurrentUserEmail] = useState('');
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const apiKey = localStorage.getItem('apiKey');
       const roles = localStorage.getItem('roles') || '';
+      const email = getCurrentUserEmail();
+      setCurrentUserEmail(email);
+
       if (!apiKey) {
         setIsInstructor(false);
       } else {
-        setIsInstructor(roles.includes('Instructor'));
+        setIsInstructor(
+          roles.includes('Instructor') ||
+          roles.includes('Administrator') ||
+          roles.includes('System Manager')
+        );
       }
     }
-    fetchCourseCatalog();
   }, []);
+
+  const userParam = searchParams.get('user');
+  const instructorForCourseDropdown =
+    userParam ||
+    currentUserEmail ||
+    (typeof window !== 'undefined' ? getCurrentUserEmail() : '');
 
   // If in edit mode, fetch existing coupon details
   useEffect(() => {
@@ -131,115 +153,78 @@ function CouponFormContent() {
     loadCouponData();
   }, [editId]);
 
-  const fetchCourseCatalog = async () => {
+  // Fetch only courses belonging to this instructor for the course display and Select All action
+  const fetchInstructorCourses = async () => {
     try {
       setCoursesLoading(true);
-      const userEmail = getCurrentUserEmail().toLowerCase().trim();
-      const rolesStr = typeof window !== 'undefined' ? (localStorage.getItem('roles') || '') : '';
-      const isAdmin = rolesStr.includes('Administrator') || rolesStr.includes('System Manager');
+      const email = instructorForCourseDropdown;
+      const res = await apiService.get('method/lms.lms.stride_lms.get_courses', {
+        params: {
+          doctype: 'LMS Course',
+          ...(email ? { user: email } : {})
+        }
+      });
+      let rawList: any[] = [];
+      if (res?.message?.data && Array.isArray(res.message.data)) rawList = res.message.data;
+      else if (res?.message && Array.isArray(res.message)) rawList = res.message;
+      else if (res?.data && Array.isArray(res.data)) rawList = res.data;
+      else if (Array.isArray(res)) rawList = res;
 
-      // 1. If instructor, try fetching dedicated instructor dashboard courses
-      let instructorDashboardCourses: any[] = [];
-      if (!isAdmin) {
-        try {
-          const iData = await getInstructorDashboard();
-          if (iData && Array.isArray(iData.courses) && iData.courses.length > 0) {
-            instructorDashboardCourses = iData.courses;
-          }
-        } catch (e) {
-          console.warn('Could not load instructor dashboard courses:', e);
+      if (email && rawList.length > 0) {
+        const targetUser = email.toLowerCase().trim();
+        const hasInstructorInfo = rawList.some((item: any) =>
+          (Array.isArray(item?.instructors) && item.instructors.length > 0) || item?.instructor || item?.owner || item?.created_by
+        );
+        if (hasInstructorInfo) {
+          rawList = rawList.filter((item: any) => {
+            const ownerField = item?.owner ? String(item.owner).toLowerCase().trim() : '';
+            if (ownerField === targetUser) return true;
+            const createdByField = item?.created_by ? String(item.created_by).toLowerCase().trim() : '';
+            if (createdByField === targetUser) return true;
+            const instField = item?.instructor ? String(item.instructor).toLowerCase().trim() : '';
+            if (instField === targetUser) return true;
+            if (Array.isArray(item?.instructors) && item.instructors.length > 0) {
+              return item.instructors.some((inst: any) => {
+                if (typeof inst === 'string') return inst.toLowerCase().trim() === targetUser;
+                const instName = String(inst?.name || '').toLowerCase().trim();
+                const instEmail = String(inst?.email || '').toLowerCase().trim();
+                const instUsername = String(inst?.username || '').toLowerCase().trim();
+                const instInstructor = String(inst?.instructor || '').toLowerCase().trim();
+                return instName === targetUser || instEmail === targetUser || instUsername === targetUser || instInstructor === targetUser;
+              });
+            }
+            return false;
+          });
         }
       }
 
-      // 2. Fetch full catalog
-      const allCoursesRes = await getCourses({ all: isAdmin ? 1 : 0 });
-      const rawCatalog = Array.isArray(allCoursesRes) ? allCoursesRes : [];
-
-      let filtered: Course[] = [];
-      if (isAdmin) {
-        filtered = rawCatalog;
-      } else if (instructorDashboardCourses.length > 0) {
-        const iCourseNames = new Set(instructorDashboardCourses.map((c) => c.name));
-        filtered = rawCatalog.filter((c) => iCourseNames.has(c.name));
-        if (filtered.length === 0) {
-          filtered = instructorDashboardCourses.map((c: any) => ({
-            name: c.name,
-            title: c.title,
-            image: c.image || null,
-            tags: null,
-            video_link: null,
-            card_gradient: null,
-            short_introduction: c.short_introduction || null,
-            description: null,
-            published: c.published ? 1 : 0,
-            upcoming: 0,
-            featured: 0,
-            disable_self_learning: 0,
-            published_on: null,
-            category: c.category || null,
-            status: null,
-            paid_course: c.paid_course ? 1 : 0,
-            paid_certificate: 0,
-            course_price: c.price || 0,
-            currency: c.currency || 'USD',
-            amount_usd: c.price || 0,
-            enable_certification: 0,
-            lessons: c.lessons_count || 0,
-            enrollments: c.enrollments_count || 0,
-            rating: c.rating || 0,
-            instructors: []
-          }));
-        }
-      } else if (userEmail) {
-        filtered = rawCatalog.filter((c: any) => {
-          if (Array.isArray(c.instructors) && c.instructors.length > 0) {
-            const hasMatch = c.instructors.some((inst: any) => {
-              const iUser = String(inst?.instructor || inst?.user || inst?.email || inst?.username || inst?.name || '').toLowerCase().trim();
-              return iUser && iUser === userEmail;
-            });
-            if (hasMatch) return true;
-          }
-          const cInst = String(c.instructor || '').toLowerCase().trim();
-          const cOwner = String(c.owner || '').toLowerCase().trim();
-          return (cInst && cInst === userEmail) || (cOwner && cOwner === userEmail);
-        });
-      } else {
-        filtered = rawCatalog;
-      }
-
-      setAllCourses(filtered);
+      setAllCourses(rawList.map((c: any) => ({
+        name: c.name || String(c),
+        title: c.title || c.course_title || c.name || String(c)
+      })) as any);
     } catch (err) {
-      console.error('Failed to load courses catalog for coupon selector:', err);
+      console.warn('Failed to load instructor courses:', err);
     } finally {
       setCoursesLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (instructorForCourseDropdown) {
+      fetchInstructorCourses();
+    }
+  }, [instructorForCourseDropdown]);
 
   const getCourseDisplayName = (identifier: string) => {
     const match = allCourses.find((c) => c.name === identifier || c.title === identifier);
     return match?.title || identifier;
   };
 
-  const handleToggleCourse = (courseName: string) => {
-    const isCurrentlySelected = applicableCourses.some(
-      (c) => c === courseName || allCourses.find((ac) => ac.name === c)?.title === courseName
-    );
-    if (isCurrentlySelected) {
-      setApplicableCourses(
-        applicableCourses.filter(
-          (c) => c !== courseName && allCourses.find((ac) => ac.name === c)?.title !== courseName
-        )
-      );
+  const handleToggleSelectAll = () => {
+    if (applicableCourses.length === allCourses.length && allCourses.length > 0) {
+      setApplicableCourses([]);
     } else {
-      setApplicableCourses([...applicableCourses, courseName]);
-    }
-  };
-
-  const handleAddCustomCourse = () => {
-    const trimmed = customCourseInput.trim();
-    if (trimmed && !applicableCourses.includes(trimmed)) {
-      setApplicableCourses([...applicableCourses, trimmed]);
-      setCustomCourseInput('');
+      setApplicableCourses(allCourses.map((c) => c.name));
     }
   };
 
@@ -276,7 +261,7 @@ function CouponFormContent() {
     }
 
     if (applicableCourses.length === 0) {
-      setError('Please select at least one course for this coupon, or click "Select All Courses" to apply to all your courses.');
+      setError('Please select at least one course for this coupon, or click "Select All My Courses" to apply across all your courses.');
       return;
     }
 
@@ -284,21 +269,22 @@ function CouponFormContent() {
       ? code.trim().toUpperCase()
       : (code.trim().toUpperCase() || generateCouponCode());
 
-    // Build payload matching Frappe lms_coupon structure
+    // Build payload matching Frappe lms_coupon child table structure
+    const applicableItemsPayload = applicableCourses.map((cIdentifier) => {
+      const matched = allCourses.find((c) => c.title === cIdentifier || c.name === cIdentifier);
+      const actualName = matched ? matched.name : cIdentifier;
+      return {
+        doctype: "LMS Coupon Item",
+        reference_doctype: "LMS Course",
+        reference_name: actualName
+      };
+    });
+
     const payload: CreateLMSCouponPayload = {
       code: finalCode,
       discount_type: discountType,
       enabled: enabled ? 1 : 0,
-      applicable_items: applicableCourses.map((cIdentifier) => {
-        const matched = allCourses.find((c) => c.title === cIdentifier || c.name === cIdentifier);
-        const actualName = matched ? matched.name : cIdentifier;
-        return {
-          reference_doctype: "LMS Course",
-          reference_name: actualName,
-          item: actualName,
-          course: actualName
-        };
-      })
+      applicable_items: applicableItemsPayload
     };
 
     if (discountType === 'Percentage') {
@@ -308,6 +294,10 @@ function CouponFormContent() {
     }
 
     if (expiresOn) {
+      if (expiresOn < todayDate) {
+        setError('Expiry date cannot be in the past. Please select today or a future date.');
+        return;
+      }
       payload.expires_on = expiresOn;
     }
 
@@ -647,12 +637,13 @@ function CouponFormContent() {
                   <div className="relative">
                     <input
                       type="date"
+                      min={todayDate}
                       value={expiresOn}
                       onChange={(e) => setExpiresOn(e.target.value)}
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-xs font-medium text-slate-800 bg-white"
                     />
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1">Leave empty if the coupon never expires.</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Leave empty if the coupon never expires (past dates are disabled).</p>
                 </div>
 
                 <div>
@@ -678,22 +669,16 @@ function CouponFormContent() {
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                  <BookOpen className="w-3.5 h-3.5 text-emerald-500" /> Applicable Courses
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-500" /> Applicable Courses <span className="text-rose-500">*</span>
                 </h3>
                 <div className="flex items-center gap-2">
                   {allCourses.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (applicableCourses.length === allCourses.length) {
-                          setApplicableCourses([]);
-                        } else {
-                          setApplicableCourses(allCourses.map((c) => c.name));
-                        }
-                      }}
+                      onClick={handleToggleSelectAll}
                       className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
                     >
-                      {applicableCourses.length === allCourses.length ? 'Deselect All' : 'Select All Courses'}
+                      {applicableCourses.length === allCourses.length ? 'Deselect All' : 'Select All My Courses'}
                     </button>
                   )}
                   <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
@@ -705,15 +690,47 @@ function CouponFormContent() {
                   </span>
                 </div>
               </div>
-              <p className="text-xs text-slate-500">
-                Select which of your courses this coupon applies to. At least one course is required. You can click &quot;Select All Courses&quot; to make this voucher valid across all your courses.
-              </p>
 
-              {/* Selected tags */}
+              {/* Requirement notice clarifying universal voucher backend constraint */}
+              <div className="p-3 bg-amber-50/80 border border-amber-200/80 rounded-2xl text-xs text-amber-900 flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-amber-950">Course Selection Requirement</p>
+                  <p className="text-amber-800 text-[11px] leading-relaxed">
+                    The LMS backend requires at least one applicable course to be selected (submitting with no course results in &quot;Add at least one Applicable Item&quot; from the server). To apply this discount across all of your courses, click <strong className="text-amber-950">&quot;Select All My Courses&quot;</strong>.
+                  </p>
+                </div>
+              </div>
+
+              {/* Course Selection Dropdown with doctype and user query params */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Select Your Courses <span className="text-rose-500">*</span>
+                </label>
+                <Dropdown
+                  id="applicable-courses"
+                  value={applicableCourses}
+                  onChange={(selected: string[]) => {
+                    const list = Array.isArray(selected) ? selected : selected ? [selected] : [];
+                    setApplicableCourses(list);
+                  }}
+                  endpoint="https://devlms.stridenex.ai/api/method/lms.lms.stride_lms.get_courses"
+                  params={{
+                    doctype: "LMS Course",
+                    ...(instructorForCourseDropdown ? { user: instructorForCourseDropdown } : {})
+                  }}
+                  placeholder="Select courses from your catalog..."
+                  multiSelect={true}
+                  searchable={true}
+                  modalTitle="Select Your Courses"
+                />
+              </div>
+
+              {/* Selected tags preview */}
               {applicableCourses.length > 0 && (
                 <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2">
                   <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block">
-                    Active Coupon Applicability:
+                    Selected Courses ({applicableCourses.length}):
                   </span>
                   <div className="flex flex-wrap gap-2">
                     {applicableCourses.map((cName) => (
@@ -722,11 +739,12 @@ function CouponFormContent() {
                         className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white text-indigo-800 text-xs font-bold border border-indigo-200 shadow-2xs"
                       >
                         <Check className="w-3 h-3 text-indigo-600 shrink-0" />
-                        <span className="truncate max-w-[220px]">{getCourseDisplayName(cName)}</span>
+                        <span className="truncate max-w-[240px]">{getCourseDisplayName(cName)}</span>
                         <button
                           type="button"
                           onClick={() => handleRemoveCourse(cName)}
                           className="text-slate-400 hover:text-rose-600 transition-colors ml-1 cursor-pointer"
+                          aria-label={`Remove ${getCourseDisplayName(cName)}`}
                         >
                           ✕
                         </button>
@@ -735,78 +753,6 @@ function CouponFormContent() {
                   </div>
                 </div>
               )}
-
-              {/* Courses Catalog Selector */}
-              {coursesLoading ? (
-                <div className="flex items-center justify-center p-6 border border-slate-200 rounded-2xl bg-slate-50">
-                  <Loader2 className="w-5 h-5 text-emerald-600 animate-spin mr-2" />
-                  <span className="text-xs font-medium text-slate-600">Loading your courses...</span>
-                </div>
-              ) : allCourses.length > 0 ? (
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-slate-700 block">
-                    Select from Your Courses:
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1 border border-slate-200 rounded-2xl">
-                    {allCourses.map((course) => {
-                      const isSelected = applicableCourses.includes(course.name) ||
-                        (course.title ? applicableCourses.includes(course.title) : false);
-                      return (
-                        <button
-                          type="button"
-                          key={course.name}
-                          onClick={() => handleToggleCourse(course.name)}
-                          className={`text-left p-2.5 rounded-xl border text-xs transition-all flex items-center justify-between gap-2 cursor-pointer ${
-                            isSelected
-                              ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-bold'
-                              : 'bg-white border-slate-100 text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span className="truncate">{course.title || course.name}</span>
-                          {isSelected ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                          ) : (
-                            <Plus className="w-4 h-4 text-slate-400 shrink-0" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-xs text-amber-800">
-                  No published courses found under your account. You can manually enter course IDs below.
-                </div>
-              )}
-
-              {/* Custom Course Name Input fallback */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Or Add Custom Course Title:
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="e.g. Introduction to Python"
-                    value={customCourseInput}
-                    onChange={(e) => setCustomCourseInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddCustomCourse();
-                      }
-                    }}
-                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-xs font-medium text-slate-800"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddCustomCourse}
-                    className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors cursor-pointer"
-                  >
-                    Add Course
-                  </button>
-                </div>
-              </div>
             </div>
 
             {/* Action Submission Buttons */}

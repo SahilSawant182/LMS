@@ -3298,6 +3298,7 @@ export interface LMSCouponItem {
   reference_doctype?: string;
   reference_name?: string;
   course?: string;
+  [key: string]: any;
 }
 
 export interface LMSCoupon {
@@ -3314,6 +3315,7 @@ export interface LMSCoupon {
   creation?: string;
   modified?: string;
   applicable_items?: LMSCouponItem[];
+  [key: string]: any;
 }
 
 export interface CreateLMSCouponPayload {
@@ -3325,6 +3327,7 @@ export interface CreateLMSCouponPayload {
   usage_limit?: number;
   enabled?: number;
   applicable_items?: LMSCouponItem[];
+  [key: string]: any;
 }
 
 export const getLMSCouponList = async (filters?: Record<string, any>): Promise<LMSCoupon[]> => {
@@ -3373,11 +3376,28 @@ export const createLMSCoupon = async (payload: CreateLMSCouponPayload) => {
   if (!headers["Authorization"] && API_TOKEN) {
     headers["Authorization"] = `token ${API_TOKEN}`;
   }
-  return apiService.post(
-    "method/lms.lms.doctype.lms_coupon.lms_coupon.create_lms_coupon",
-    payload,
-    { headers }
-  );
+
+  try {
+    return await apiService.post(
+      "method/lms.lms.doctype.lms_coupon.lms_coupon.create_lms_coupon",
+      payload,
+      { headers }
+    );
+  } catch (err: any) {
+    console.warn("create_lms_coupon method failed, falling back to resource/LMS Coupon:", err);
+    try {
+      return await apiService.post(
+        "resource/LMS Coupon",
+        payload,
+        { headers }
+      );
+    } catch (resourceErr: any) {
+      console.error("resource/LMS Coupon also failed:", resourceErr);
+      throw (resourceErr?.response?.data?._server_messages || resourceErr?.response?.data?.message)
+        ? resourceErr
+        : err;
+    }
+  }
 };
 
 export const updateLMSCoupon = async (name: string, payload: Partial<CreateLMSCouponPayload>): Promise<any> => {

@@ -615,7 +615,7 @@ export default function CouponsPage() {
                 </h4>
                 {(!selectedCoupon.applicable_items || selectedCoupon.applicable_items.length === 0) ? (
                   <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    This coupon can be applied towards all courses across the LMS catalog.
+                    No specific course restrictions recorded. (Note: standard coupons require at least one course assigned by backend rules).
                   </p>
                 ) : (
                   <div className="space-y-1.5 max-h-48 overflow-y-auto">
