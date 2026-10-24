@@ -96,6 +96,30 @@ export const isCourseApi = (url?: string): boolean => {
   );
 };
 
+// Helper to determine if user has the Instructor role only (and not Admin)
+export const isInstructorOnlyUser = (): boolean => {
+  if (typeof window === "undefined") return false;
+  try {
+    const rolesStr = localStorage.getItem("roles") || "";
+    const isInst = localStorage.getItem("isInstructor") === "true" || rolesStr.includes("Instructor");
+    const isAdmin = rolesStr.includes("Administrator") || rolesStr.includes("System Manager");
+    return isInst && !isAdmin;
+  } catch {
+    return false;
+  }
+};
+
+// Helper to determine if a URL points to any coupon-related GET API
+export const isCouponApi = (url?: string): boolean => {
+  if (typeof url !== "string") return false;
+  return (
+    url.includes("get_lms_coupon_list") ||
+    url.includes("get_lms_coupon") ||
+    url.includes("lms_coupon") ||
+    url.includes("resource/LMS Coupon")
+  );
+};
+
 // Helper to check whether user param should NOT be automatically attached
 const shouldBypassUserParam = (url?: string, params?: any): boolean => {
   if (
@@ -108,6 +132,10 @@ const shouldBypassUserParam = (url?: string, params?: any): boolean => {
   }
   // For student role, remove user from query params on batch and course APIs
   if ((isBatchApi(url) || isCourseApi(url)) && isStudentUser()) {
+    return true;
+  }
+  // For coupon API, only attach user param for instructor role (bypass for admins and other roles)
+  if (isCouponApi(url) && !isInstructorOnlyUser()) {
     return true;
   }
   if (!params) return false;
@@ -140,7 +168,8 @@ api.interceptors.request.use((reqConfig) => {
 
     const isBatchForStudent = isBatchApi(reqConfig.url) && isStudentUser();
     const isCourseForStudent = isCourseApi(reqConfig.url) && isStudentUser();
-    const shouldStripUser = isDropdownOrResource || isBatchForStudent || isCourseForStudent;
+    const isCouponForNonInstructor = isCouponApi(reqConfig.url) && !isInstructorOnlyUser();
+    const shouldStripUser = isDropdownOrResource || isBatchForStudent || isCourseForStudent || isCouponForNonInstructor;
 
     if (shouldStripUser && typeof reqConfig.url === "string" && reqConfig.url.includes("user=")) {
       reqConfig.url = reqConfig.url.replace(/([?&])user=[^&]*(&|$)/, (_, p1, p2) => (p2 === "&" ? p1 : "")).replace(/[?&]$/, "");

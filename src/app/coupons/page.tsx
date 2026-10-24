@@ -32,6 +32,7 @@ import {
   Edit3
 } from 'lucide-react';
 import { getLMSCouponList, getLMSCoupon, LMSCoupon } from '@/services/lms.services';
+import { apiService, getCurrentUserEmail } from '@/services/api.services';
 
 const formatDateDDMMYYYY = (dateStr?: string | null): string => {
   if (!dateStr) return '';
@@ -84,8 +85,89 @@ export default function CouponsPage() {
     try {
       setLoading(true);
       setError(null);
-      const data = await getLMSCouponList();
-      setCoupons(Array.isArray(data) ? data : []);
+
+      const rolesStr = typeof window !== 'undefined' ? (localStorage.getItem('roles') || '') : '';
+      const isInst = typeof window !== 'undefined'
+        ? (localStorage.getItem('isInstructor') === 'true' || rolesStr.includes('Instructor'))
+        : false;
+      const isAdmin = rolesStr.includes('Administrator') || rolesStr.includes('System Manager');
+      const userEmail = getCurrentUserEmail();
+
+      // Ensure get coupon API has user as query params for the role instructor only
+      const filters: Record<string, any> = {};
+      if (isInst && !isAdmin && userEmail) {
+        filters.user = userEmail;
+      }
+
+      // For instructors, load their managed courses to verify course ownership on coupons
+      let myCourseNames = new Set<string>();
+      if (isInst && !isAdmin && userEmail) {
+        try {
+          const res = await apiService.get('method/lms.lms.stride_lms.get_courses', {
+            params: {
+              doctype: 'LMS Course',
+              user: userEmail
+            }
+          });
+          let rawCourses: any[] = [];
+          if (res?.message?.data && Array.isArray(res.message.data)) rawCourses = res.message.data;
+          else if (res?.message && Array.isArray(res.message)) rawCourses = res.message;
+          else if (res?.data && Array.isArray(res.data)) rawCourses = res.data;
+          else if (Array.isArray(res)) rawCourses = res;
+
+          const targetUser = userEmail.toLowerCase().trim();
+          rawCourses.forEach((c: any) => {
+            const ownerField = c?.owner ? String(c.owner).toLowerCase().trim() : '';
+            const createdByField = c?.created_by ? String(c.created_by).toLowerCase().trim() : '';
+            const instField = c?.instructor ? String(c.instructor).toLowerCase().trim() : '';
+            let matches = ownerField === targetUser || createdByField === targetUser || instField === targetUser;
+            if (!matches && Array.isArray(c?.instructors)) {
+              matches = c.instructors.some((inst: any) => {
+                if (typeof inst === 'string') return inst.toLowerCase().trim() === targetUser;
+                const instName = String(inst?.name || '').toLowerCase().trim();
+                const instEmail = String(inst?.email || '').toLowerCase().trim();
+                const instUsername = String(inst?.username || '').toLowerCase().trim();
+                const instInstructor = String(inst?.instructor || '').toLowerCase().trim();
+                return instName === targetUser || instEmail === targetUser || instUsername === targetUser || instInstructor === targetUser;
+              });
+            }
+            if (matches) {
+              if (c.name) myCourseNames.add(String(c.name).toLowerCase().trim());
+              if (c.title) myCourseNames.add(String(c.title).toLowerCase().trim());
+            }
+          });
+        } catch (e) {
+          console.warn('Could not load instructor courses for coupon filtering:', e);
+        }
+      }
+
+      const data = await getLMSCouponList(filters);
+      let list = Array.isArray(data) ? data : [];
+
+      // For instructors only: ensure coupons created for specific courses are only visible if the course was created or managed by this instructor
+      if (isInst && !isAdmin && userEmail) {
+        const targetUser = userEmail.toLowerCase().trim();
+        list = list.filter((coupon) => {
+          // If the instructor is the creator/owner of the coupon, visible
+          const cOwner = String(coupon.owner || '').toLowerCase().trim();
+          if (cOwner === targetUser) return true;
+
+          // If coupon is assigned to specific courses, ensure at least one course belongs to this instructor
+          if (Array.isArray(coupon.applicable_items) && coupon.applicable_items.length > 0) {
+            return coupon.applicable_items.some((item: any) => {
+              const cName = typeof item === 'string'
+                ? item.toLowerCase().trim()
+                : String(item?.reference_name || item?.item || item?.course || '').toLowerCase().trim();
+              return myCourseNames.has(cName);
+            });
+          }
+
+          // If coupon is not owned by this instructor and has no courses belonging to this instructor, do not show
+          return false;
+        });
+      }
+
+      setCoupons(list);
     } catch (err: any) {
       console.error('Failed to fetch coupons:', err);
       setError(err?.response?.data?.message || err?.message || 'Failed to load coupons list.');

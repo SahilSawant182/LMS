@@ -3355,13 +3355,41 @@ export interface CreateLMSCouponPayload {
 }
 
 export const getLMSCouponList = async (filters?: Record<string, any>): Promise<LMSCoupon[]> => {
+  const queryParams: Record<string, any> = { ...(filters || {}) };
+
+  if (typeof window !== "undefined") {
+    const rolesStr = localStorage.getItem("roles") || "";
+    const isInst = localStorage.getItem("isInstructor") === "true" || rolesStr.includes("Instructor");
+    const isAdmin = rolesStr.includes("Administrator") || rolesStr.includes("System Manager");
+
+    // Ensure get coupon API has user as query params for the role instructor only
+    if (isInst && !isAdmin) {
+      const email = getCurrentUserEmail();
+      if (email && !queryParams.user) {
+        queryParams.user = email;
+      }
+    } else if (isAdmin && "user" in queryParams) {
+      delete queryParams.user;
+    }
+  }
+
+  const headers: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
+    }
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+
   const response = await apiService.get(
     "method/lms.lms.doctype.lms_coupon.lms_coupon.get_lms_coupon_list",
     {
-      params: filters,
-      headers: {
-        Authorization: `token ${API_TOKEN}`,
-      },
+      params: queryParams,
+      headers,
     }
   );
   if (Array.isArray(response)) return response;
