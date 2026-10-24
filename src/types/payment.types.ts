@@ -89,6 +89,7 @@ export interface VerifyPaymentPayload {
   razorpay_payment_id: string;
   razorpay_order_id: string;
   razorpay_signature: string;
+  coupon_code?: string;
 }
 
 export interface VerifyPaymentResponse {

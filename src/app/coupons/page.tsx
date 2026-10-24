@@ -31,7 +31,7 @@ import {
   ShieldAlert,
   Edit3
 } from 'lucide-react';
-import { getLMSCouponList, getLMSCoupon, LMSCoupon } from '@/services/lms.services';
+import { getLMSCouponList, getLMSCoupon, LMSCoupon, getCouponRedeemedCount } from '@/services/lms.services';
 import { apiService, getCurrentUserEmail } from '@/services/api.services';
 
 const formatDateDDMMYYYY = (dateStr?: string | null): string => {
@@ -57,6 +57,7 @@ const formatDateDDMMYYYY = (dateStr?: string | null): string => {
 export default function CouponsPage() {
   const [coupons, setCoupons] = useState<LMSCoupon[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isInstructor, setIsInstructor] = useState<boolean | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -79,11 +80,20 @@ export default function CouponsPage() {
       }
     }
     fetchCoupons();
+
+    const handleFocus = () => {
+      fetchCoupons(true);
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
-  const fetchCoupons = async () => {
+  const fetchCoupons = async (silent: boolean = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
+      else setRefreshing(true);
       setError(null);
 
       const rolesStr = typeof window !== 'undefined' ? (localStorage.getItem('roles') || '') : '';
@@ -173,6 +183,7 @@ export default function CouponsPage() {
       setError(err?.response?.data?.message || err?.message || 'Failed to load coupons list.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -181,6 +192,10 @@ export default function CouponsPage() {
       setDetailLoading(true);
       const detail = await getLMSCoupon(name);
       setSelectedCoupon(detail);
+      // Synchronize full fetched detail into local state so grid card immediately updates
+      setCoupons((prev) =>
+        prev.map((c) => (c.name === name ? { ...c, ...detail } : c))
+      );
     } catch (err) {
       console.error('Error fetching coupon detail:', err);
       // Fallback to local match
@@ -228,6 +243,7 @@ export default function CouponsPage() {
 
   const activeCount = coupons.filter((c) => Number(c.enabled) === 1).length;
   const percentageCount = coupons.filter((c) => c.discount_type === 'Percentage').length;
+  const totalRedemptions = coupons.reduce((sum, c) => sum + getCouponRedeemedCount(c), 0);
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
@@ -260,6 +276,16 @@ export default function CouponsPage() {
 
             {/* Instructor Quick Action button */}
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => fetchCoupons()}
+                disabled={loading || refreshing}
+                title="Refresh coupon lists and redemption counts"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs transition-all border border-white/15 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+
               {isInstructor && (
                 <Link
                   href="/coupons/create"
@@ -283,8 +309,8 @@ export default function CouponsPage() {
               <p className="text-xl font-bold mt-0.5 text-emerald-400">{activeCount}</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-3 backdrop-blur-md">
-              <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Percentage Off</span>
-              <p className="text-xl font-bold mt-0.5 text-teal-300">{percentageCount}</p>
+              <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Total Redeemed</span>
+              <p className="text-xl font-bold mt-0.5 text-cyan-300">{totalRedemptions} uses</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-3 backdrop-blur-md">
               <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Instructor Access</span>
@@ -355,7 +381,7 @@ export default function CouponsPage() {
 
               {/* Refresh Button */}
               <button
-                onClick={fetchCoupons}
+                onClick={() => fetchCoupons()}
                 title="Refresh list"
                 className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
               >
@@ -401,7 +427,7 @@ export default function CouponsPage() {
             <h3 className="text-base font-bold text-slate-900">Unable to load coupons</h3>
             <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-4">{error}</p>
             <button
-              onClick={fetchCoupons}
+              onClick={() => fetchCoupons()}
               className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors"
             >
               Try Again
@@ -438,6 +464,12 @@ export default function CouponsPage() {
                 : `$${coupon.amount || 0} OFF`;
 
               const applicableList = coupon.applicable_items || [];
+              const redeemedCount = getCouponRedeemedCount(coupon);
+              const hasLimit = typeof coupon.usage_limit === 'number' && coupon.usage_limit > 0;
+              const isLimitReached = hasLimit && redeemedCount >= (coupon.usage_limit as number);
+              const usagePercent = hasLimit
+                ? Math.min(100, Math.round((redeemedCount / (coupon.usage_limit as number)) * 100))
+                : 0;
 
               return (
                 <div
@@ -452,23 +484,29 @@ export default function CouponsPage() {
                   <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-5 text-white relative">
                     {/* Top status & badge */}
                     <div className="flex items-center justify-between gap-2 mb-3">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          isEnabled
-                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                            : 'bg-slate-500/20 text-slate-300 border border-slate-500/40'
-                        }`}
-                      >
-                        {isEnabled ? (
-                          <>
-                            <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Active
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="w-3 h-3 text-slate-400" /> Disabled
-                          </>
-                        )}
-                      </span>
+                      {isLimitReached ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/25 text-amber-300 border border-amber-500/40">
+                          <AlertCircle className="w-3 h-3 text-amber-400" /> Limit Reached
+                        </span>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            isEnabled
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : 'bg-slate-500/20 text-slate-300 border border-slate-500/40'
+                          }`}
+                        >
+                          {isEnabled ? (
+                            <>
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Active
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="w-3 h-3 text-slate-400" /> Disabled
+                            </>
+                          )}
+                        </span>
+                      )}
 
                       <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1">
                         <Tag className="w-3 h-3 text-emerald-400" />
@@ -486,7 +524,7 @@ export default function CouponsPage() {
                           <button
                             onClick={() => handleCopyCode(coupon.code)}
                             title="Copy voucher code"
-                            className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors"
+                            className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors cursor-pointer"
                           >
                             {copiedCode === coupon.code ? (
                               <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -511,7 +549,7 @@ export default function CouponsPage() {
 
                   {/* Body Content */}
                   <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                    {/* Expiry & Usage limit */}
+                    {/* Expiry & Redeemed Count */}
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2">
                         <Clock className="w-4 h-4 text-slate-400 shrink-0" />
@@ -523,16 +561,46 @@ export default function CouponsPage() {
                         </div>
                       </div>
 
-                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2">
-                        <Users className="w-4 h-4 text-slate-400 shrink-0" />
+                      <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${
+                        isLimitReached
+                          ? 'bg-amber-50/70 border-amber-200'
+                          : 'bg-slate-50 border-slate-100'
+                      }`}>
+                        <Users className={`w-4 h-4 shrink-0 ${isLimitReached ? 'text-amber-500' : 'text-slate-400'}`} />
                         <div className="min-w-0">
-                          <p className="text-[10px] text-slate-400 uppercase font-bold">Usage Limit</p>
-                          <p className="font-semibold text-slate-700 truncate">
-                            {coupon.usage_limit ? `${coupon.usage_limit} uses` : 'Unlimited'}
+                          <p className="text-[10px] text-slate-400 uppercase font-bold">Redeemed</p>
+                          <p className={`font-bold truncate ${isLimitReached ? 'text-amber-700' : 'text-slate-800'}`}>
+                            {hasLimit
+                              ? `${redeemedCount} / ${coupon.usage_limit} uses`
+                              : `${redeemedCount} uses`}
                           </p>
                         </div>
                       </div>
                     </div>
+
+                    {/* Usage progress bar if limit is set */}
+                    {hasLimit && (
+                      <div className="space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-500 font-medium">Usage Limit</span>
+                          <span className={`font-bold ${isLimitReached ? 'text-amber-600' : 'text-slate-700'}`}>
+                            {redeemedCount} of {coupon.usage_limit} ({usagePercent}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-200/70 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              isLimitReached
+                                ? 'bg-amber-500'
+                                : redeemedCount > 0
+                                ? 'bg-emerald-500'
+                                : 'bg-slate-300'
+                            }`}
+                            style={{ width: `${usagePercent}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     {/* Applicable Courses list preview */}
                     <div>
@@ -645,49 +713,92 @@ export default function CouponsPage() {
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-              {/* Top Summary Banner */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Discount Value</p>
-                  <p className="text-xl font-black text-slate-900 mt-0.5">
-                    {selectedCoupon.discount_type === 'Percentage'
-                      ? `${selectedCoupon.percentage_discount || 0}% Off`
-                      : `$${selectedCoupon.amount || 0} Off`}
-                  </p>
-                </div>
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                    Number(selectedCoupon.enabled) === 1
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-slate-200 text-slate-600'
-                  }`}
-                >
-                  {Number(selectedCoupon.enabled) === 1 ? 'Enabled' : 'Disabled'}
-                </span>
-              </div>
+            {(() => {
+              const selectedRedeemed = getCouponRedeemedCount(selectedCoupon);
+              const selectedHasLimit = typeof selectedCoupon.usage_limit === 'number' && selectedCoupon.usage_limit > 0;
+              const selectedLimitReached = selectedHasLimit && selectedRedeemed >= (selectedCoupon.usage_limit as number);
+              const selectedUsagePercent = selectedHasLimit
+                ? Math.min(100, Math.round((selectedRedeemed / (selectedCoupon.usage_limit as number)) * 100))
+                : 0;
 
-              {/* Attributes Grid */}
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Discount Type</span>
-                  <span className="font-bold text-slate-800">{selectedCoupon.discount_type || 'Percentage'}</span>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Expires On</span>
-                  <span className="font-bold text-slate-800">{selectedCoupon.expires_on ? formatDateDDMMYYYY(selectedCoupon.expires_on) : 'Never'}</span>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Usage Limit</span>
-                  <span className="font-bold text-slate-800">
-                    {selectedCoupon.usage_limit ? `${selectedCoupon.usage_limit} redemptions` : 'Unlimited'}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Redeemed Count</span>
-                  <span className="font-bold text-slate-800">{selectedCoupon.used_count || 0} times</span>
-                </div>
-              </div>
+              return (
+                <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                  {/* Top Summary Banner */}
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-slate-500 font-medium">Discount Value</p>
+                      <p className="text-xl font-black text-slate-900 mt-0.5">
+                        {selectedCoupon.discount_type === 'Percentage'
+                          ? `${selectedCoupon.percentage_discount || 0}% Off`
+                          : `$${selectedCoupon.amount || 0} Off`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {selectedLimitReached && (
+                        <span className="px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+                          Limit Reached
+                        </span>
+                      )}
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                          Number(selectedCoupon.enabled) === 1
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-slate-200 text-slate-600'
+                        }`}
+                      >
+                        {Number(selectedCoupon.enabled) === 1 ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Attributes Grid */}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Discount Type</span>
+                      <span className="font-bold text-slate-800">{selectedCoupon.discount_type || 'Percentage'}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Expires On</span>
+                      <span className="font-bold text-slate-800">{selectedCoupon.expires_on ? formatDateDDMMYYYY(selectedCoupon.expires_on) : 'Never'}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Usage Limit</span>
+                      <span className="font-bold text-slate-800">
+                        {selectedCoupon.usage_limit ? `${selectedCoupon.usage_limit} redemptions` : 'Unlimited'}
+                      </span>
+                    </div>
+                    <div className={`p-3 rounded-xl border ${selectedLimitReached ? 'bg-amber-50/70 border-amber-200' : 'bg-slate-50 border-slate-100'}`}>
+                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Redeemed Count</span>
+                      <span className={`font-bold ${selectedLimitReached ? 'text-amber-800' : 'text-slate-800'}`}>
+                        {selectedRedeemed} times
+                        {selectedHasLimit ? ` (of ${selectedCoupon.usage_limit})` : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Utilization Progress in Modal */}
+                  {selectedHasLimit && (
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-600">Redemption Utilization</span>
+                        <span className={`font-bold ${selectedLimitReached ? 'text-amber-700' : 'text-slate-800'}`}>
+                          {selectedRedeemed} / {selectedCoupon.usage_limit} ({selectedUsagePercent}%)
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            selectedLimitReached
+                              ? 'bg-amber-500'
+                              : selectedRedeemed > 0
+                              ? 'bg-emerald-500'
+                              : 'bg-slate-300'
+                          }`}
+                          style={{ width: `${selectedUsagePercent}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
 
               {/* Applicable Courses list */}
               <div>
@@ -717,6 +828,8 @@ export default function CouponsPage() {
                 )}
               </div>
             </div>
+          );
+        })()}
 
             {/* Footer */}
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">

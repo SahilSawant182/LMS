@@ -3334,6 +3334,15 @@ export interface LMSCoupon {
   expires_on?: string;
   usage_limit?: number;
   used_count?: number;
+  redeemed_count?: number;
+  redemptions?: number;
+  usage_count?: number;
+  times_used?: number;
+  times_redeemed?: number;
+  total_redeemed?: number;
+  total_uses?: number;
+  usages?: any[];
+  coupon_usages?: any[];
   enabled?: number;
   owner?: string;
   creation?: string;
@@ -3341,6 +3350,43 @@ export interface LMSCoupon {
   applicable_items?: LMSCouponItem[];
   [key: string]: any;
 }
+
+/**
+ * Safely calculates the redeemed count across all possible backend field representations:
+ * e.g., used_count, redeemed_count, redemptions, usage_count, times_used, or child usage tables.
+ */
+export const getCouponRedeemedCount = (coupon?: LMSCoupon | any): number => {
+  if (!coupon) return 0;
+
+  const possibleFields = [
+    'used_count',
+    'redeemed_count',
+    'redemption_count',
+    'redemptions',
+    'usage_count',
+    'times_used',
+    'times_redeemed',
+    'total_redeemed',
+    'total_uses',
+    'uses_count',
+  ];
+
+  for (const field of possibleFields) {
+    if (coupon[field] !== undefined && coupon[field] !== null && coupon[field] !== '') {
+      const num = Number(coupon[field]);
+      if (!isNaN(num)) return num;
+    }
+  }
+
+  const possibleArrays = ['usages', 'coupon_usages', 'redemptions', 'redemption_history', 'history'];
+  for (const arrField of possibleArrays) {
+    if (Array.isArray(coupon[arrField])) {
+      return coupon[arrField].length;
+    }
+  }
+
+  return 0;
+};
 
 export interface CreateLMSCouponPayload {
   code: string;
@@ -3400,18 +3446,39 @@ export const getLMSCouponList = async (filters?: Record<string, any>): Promise<L
 };
 
 export const getLMSCoupon = async (name: string): Promise<LMSCoupon> => {
-  const response = await apiService.get(
-    "method/lms.lms.doctype.lms_coupon.lms_coupon.get_lms_coupon",
-    {
-      params: { name },
-      headers: {
-        Authorization: `token ${API_TOKEN}`,
-      },
+  const headers: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("apiKey");
+    const apiSecret = localStorage.getItem("apiSecret");
+    if (apiKey && apiSecret) {
+      headers["Authorization"] = `token ${apiKey}:${apiSecret}`;
     }
-  );
-  if (response?.message) return response.message;
-  if (response?.data) return response.data;
-  return response;
+  }
+  if (!headers["Authorization"] && API_TOKEN) {
+    headers["Authorization"] = `token ${API_TOKEN}`;
+  }
+
+  try {
+    const response = await apiService.get(
+      "method/lms.lms.doctype.lms_coupon.lms_coupon.get_lms_coupon",
+      {
+        params: { name },
+        headers,
+      }
+    );
+    const result = response?.message?.data || response?.message || response?.data || response;
+    if (result && typeof result === "object" && (result.name || result.code)) {
+      return result;
+    }
+  } catch (err) {
+    console.warn("get_lms_coupon method failed, falling back to resource/LMS Coupon:", err);
+  }
+
+  // Fallback to Frappe REST resource endpoint which returns the full document
+  const res = await apiService.get(`resource/LMS Coupon/${encodeURIComponent(name)}`, {
+    headers,
+  });
+  return res?.data || res?.message || res;
 };
 
 export const createLMSCoupon = async (payload: CreateLMSCouponPayload) => {
