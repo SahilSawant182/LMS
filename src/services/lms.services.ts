@@ -2698,6 +2698,10 @@ export interface ProgramCourse {
   course: string;
   course_title: string;
   idx?: number;
+  progress?: number;
+  completed?: boolean;
+  eligible?: boolean;
+  is_locked?: boolean;
 }
 
 export interface ProgramMember {
@@ -2732,10 +2736,30 @@ export const getProgramList = async (payload?: any): Promise<Program[]> => {
 };
 
 export const getProgramDetail = async (program_title: string, payload?: any): Promise<Program> => {
-  const params = getInstructorFilterParams({
+  let userParam: string | undefined;
+  let extraParams: Record<string, any> = {};
+
+  if (typeof payload === 'string') {
+    userParam = payload;
+  } else if (payload && typeof payload === 'object') {
+    userParam = payload.user;
+    extraParams = { ...payload };
+    delete extraParams.user;
+  }
+
+  if (!userParam) {
+    userParam = getCurrentUserEmail() || undefined;
+  }
+
+  const params: Record<string, any> = {
     program_title,
-    ...(payload || {})
-  });
+    ...extraParams,
+  };
+
+  if (userParam) {
+    params.user = userParam;
+  }
+
   return apiService.get(`method/lms.lms.doctype.lms_program.lms_program.get_program_detail`, {
     params,
     headers: { 'Authorization': `token ${API_TOKEN}` }
