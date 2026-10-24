@@ -411,10 +411,20 @@ export function DashboardContent() {
             getAdminLiveClasses(4),
           ]);
           if (myClassesRes.status === "fulfilled" && Array.isArray(myClassesRes.value)) {
-            setMyLiveClasses(myClassesRes.value);
+            // Defensively exclude any classes that have already ended
+            setMyLiveClasses(
+              myClassesRes.value.filter(
+                (cls: any) => !cls.is_ended && cls.status !== "ended"
+              )
+            );
           }
           if (adminClassesRes.status === "fulfilled" && Array.isArray(adminClassesRes.value)) {
-            setAdminLiveClasses(adminClassesRes.value);
+            // Defensively exclude any classes that have already ended
+            setAdminLiveClasses(
+              adminClassesRes.value.filter(
+                (cls: any) => !cls.is_ended && cls.status !== "ended"
+              )
+            );
           }
         } catch (lcErr) {
           console.warn("Live classes fetch error:", lcErr);
@@ -938,7 +948,7 @@ export function DashboardContent() {
             </div>
 
             {/* ── SECTION: UPCOMING COHORT SESSIONS TO HOST (INSTRUCTOR VIEW) ── */}
-            {adminLiveClasses.length > 0 && (
+            {adminLiveClasses.filter((c) => !c.is_ended && c.status !== "ended").length > 0 && (
               <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 sm:p-7 mb-8">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
                   <div className="flex items-center gap-3">
@@ -951,7 +961,7 @@ export function DashboardContent() {
                           Upcoming Cohort Sessions to Host
                         </h2>
                         <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                          {adminLiveClasses.length} Scheduled
+                          {adminLiveClasses.filter((c) => !c.is_ended && c.status !== "ended").length} Scheduled
                         </span>
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
@@ -962,7 +972,9 @@ export function DashboardContent() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {adminLiveClasses.map((cls) => {
+                  {adminLiveClasses
+                    .filter((c) => !c.is_ended && c.status !== "ended")
+                    .map((cls) => {
                     const isLive = cls.status === "live" || cls.is_live;
                     const providerBg =
                       cls.conferencing_provider === "Zoom"
@@ -1867,7 +1879,7 @@ export function DashboardContent() {
             </div>
 
             {/* ── UPCOMING LIVE CLASSES WIDGET (STUDENT VIEW) ── */}
-            {myLiveClasses.length > 0 && (
+            {myLiveClasses.filter((c) => !c.is_ended && c.status !== "ended").length > 0 && (
               <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 sm:p-7 mb-8">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
                   <div className="flex items-center gap-3">
@@ -1879,7 +1891,7 @@ export function DashboardContent() {
                         <h2 className="text-lg font-bold text-slate-900 tracking-tight">
                           Upcoming Live Classes
                         </h2>
-                        {myLiveClasses.some((c) => c.status === "live" || c.is_live) && (
+                        {myLiveClasses.filter((c) => !c.is_ended && c.status !== "ended").some((c) => c.status === "live" || c.is_live) && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 animate-pulse">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-600" />
                             Live In Progress
@@ -1894,7 +1906,9 @@ export function DashboardContent() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {myLiveClasses.map((cls) => {
+                  {myLiveClasses
+                    .filter((c) => !c.is_ended && c.status !== "ended")
+                    .map((cls) => {
                     const isLive = cls.status === "live" || cls.is_live;
                     const canJoin = cls.can_join || isLive;
                     const providerBg =
