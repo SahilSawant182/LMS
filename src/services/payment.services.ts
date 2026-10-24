@@ -211,21 +211,16 @@ export const getBatchWithEnrollment = async (name: string, payload?: any): Promi
 };
 
 export const getCoursesWithEnrollment = async (payload?: any): Promise<CourseWithEnrollment[]> => {
-  const isInstructor = isAuthorizedInstructor();
   const currentUser = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
-  const params: Record<string, any> = { ...(payload || {}) };
-
-  if (!isInstructor) {
-    delete params.user;
-    params.no_user = true;
-  } else if (params.all || params.user === "" || params.user === null || params.no_user) {
-    delete params.all;
-    delete params.user;
-    params.no_user = true;
-  } else if (!params.user && currentUser) {
+  const params: Record<string, any> = {
+    limit: 0,
+    all: 1,
+    ...(payload || {})
+  };
+  if (currentUser && !params.member) {
+    params.member = currentUser;
     params.user = currentUser;
   }
-
   const res = await apiService.get(`${METHOD_PREFIX}.get_courses_with_enrollment`, {
     params,
     headers: authHeaders(),
@@ -241,21 +236,16 @@ export const getCoursesWithEnrollment = async (payload?: any): Promise<CourseWit
 };
 
 export const getBatchesWithEnrollment = async (payload?: any): Promise<BatchWithEnrollment[]> => {
-  const isInstructor = isAuthorizedInstructor();
   const currentUser = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
-  const params: Record<string, any> = { ...(payload || {}) };
-
-  if (!isInstructor) {
-    delete params.user;
-    params.no_user = true;
-  } else if (params.all || params.user === "" || params.user === null || params.no_user) {
-    delete params.all;
-    delete params.user;
-    params.no_user = true;
-  } else if (!params.user && currentUser) {
+  const params: Record<string, any> = {
+    limit: 0,
+    all: 1,
+    ...(payload || {})
+  };
+  if (currentUser && !params.member) {
+    params.member = currentUser;
     params.user = currentUser;
   }
-
   const res = await apiService.get(`${METHOD_PREFIX}.get_batches_with_enrollment`, {
     params,
     headers: authHeaders(),
