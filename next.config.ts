@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
         source: '/api/:path*',
         destination: 'https://devlms.stridenex.ai/api/:path*',
       },
+      {
+        source: '/courses/:slug',
+        destination: '/course/:slug',
+      },
     ];
   },
 };

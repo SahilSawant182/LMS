@@ -19,7 +19,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { getProgramDetail, deleteProgram, Program, ProgramCourse } from '@/services/lms.services';
-import { getImageUrl } from '@/services/api.services';
+import { getImageUrl, getCurrentUserEmail } from '@/services/api.services';
 import { navigateBack } from '@/utils/navigation';
 
 export default function ProgramDetailPage() {
@@ -41,17 +41,26 @@ export default function ProgramDetailPage() {
     const fetchProgram = async () => {
       setLoading(true);
       try {
-        const rawResponse = await getProgramDetail(programTitle);
+        const userEmail =
+          getCurrentUserEmail() ||
+          (typeof window !== 'undefined'
+            ? localStorage.getItem('userEmail') || localStorage.getItem('user')
+            : '') ||
+          '';
+
+        const rawResponse = await getProgramDetail(programTitle, { user: userEmail });
         const data: Program =
           (rawResponse as any)?.data ||
+          (rawResponse as any)?.message?.data ||
           (rawResponse as any)?.message ||
           rawResponse;
         setProgram(data);
 
         // Check if current logged-in user is a member
-        const email = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
-        if (email && data.program_members) {
-          const member = data.program_members.find((m) => m.member === email);
+        if (userEmail && data.program_members) {
+          const member = data.program_members.find(
+            (m) => m.member?.toLowerCase() === userEmail.toLowerCase()
+          );
           setUserMember(member || null);
         }
       } catch (err: any) {
@@ -133,6 +142,21 @@ export default function ProgramDetailPage() {
   const isEnrolled = !!userMember;
   const userProgress = userMember?.progress ?? 0;
   const imageUrl = getImageUrl(program.image);
+
+  // Find next active (unlocked & incomplete) course for continuing the path
+  const nextActiveCourse =
+    courses.find((c) => {
+      const isLocked =
+        program.enforce_course_order === 1
+          ? c.is_locked !== undefined
+            ? Boolean(c.is_locked)
+            : c.eligible !== undefined
+            ? !c.eligible
+            : false
+          : false;
+      const isCompleted = Boolean(c.completed || (c.progress !== undefined && c.progress >= 100));
+      return !isLocked && !isCompleted;
+    }) || courses[0];
 
   return (
     <>
@@ -272,9 +296,9 @@ export default function ProgramDetailPage() {
                             />
                           </div>
                         </div>
-                        {courses[0] && (
+                        {nextActiveCourse && (
                           <Link
-                            href={`/course/${courses[0].course}`}
+                            href={`/course/${encodeURIComponent(nextActiveCourse.course)}`}
                             className="block w-full text-center py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors"
                           >
                             Continue Learning
@@ -323,16 +347,25 @@ export default function ProgramDetailPage() {
 
               {courses.length > 0 ? (
                 <div className="space-y-3">
-                  {courses.map((course, index) => (
-                    <CourseStep
-                      key={course.name}
-                      course={course}
-                      index={index}
-                      isLocked={
-                        program.enforce_course_order === 1 && index > 0 && userProgress < (index / totalCourses) * 100
-                      }
-                    />
-                  ))}
+                  {courses.map((course, index) => {
+                    const isOrderEnforced = program.enforce_course_order === 1;
+                    const isLocked = isOrderEnforced
+                      ? (course.is_locked !== undefined
+                          ? Boolean(course.is_locked)
+                          : course.eligible !== undefined
+                          ? !course.eligible
+                          : (index > 0 && userProgress < (index / totalCourses) * 100))
+                      : false;
+
+                    return (
+                      <CourseStep
+                        key={course.name || course.course || index}
+                        course={course}
+                        index={index}
+                        isLocked={isLocked}
+                      />
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-12 bg-white rounded-xl border border-dashed border-slate-200">
@@ -431,40 +464,104 @@ function CourseStep({
   index: number;
   isLocked: boolean;
 }) {
-  const card = (
+  const isCompleted = Boolean(course.completed || (course.progress !== undefined && course.progress >= 100));
+  const progressPercent = typeof course.progress === 'number' ? Math.round(course.progress) : 0;
+
+  const cardContent = (
     <div
-      className={`flex items-center gap-4 bg-white border rounded-xl p-4 transition-all duration-200 ${
+      className={`course-card flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border rounded-xl p-4 transition-all duration-200 ${
         isLocked
-          ? 'opacity-60 cursor-not-allowed border-slate-200'
-          : 'border-slate-200 hover:border-indigo-300 hover:shadow-md cursor-pointer group'
+          ? 'locked opacity-70 pointer-events-none cursor-not-allowed border-slate-200 bg-slate-50/60'
+          : 'unlocked border-slate-200 hover:border-indigo-300 hover:shadow-md cursor-pointer group'
       }`}
     >
-      {/* Step Number */}
-      <div
-        className={`w-10 h-10 rounded-full font-extrabold text-sm flex items-center justify-center flex-shrink-0 ${
-          isLocked ? 'bg-slate-100 text-slate-400' : 'bg-indigo-100 text-indigo-700'
-        }`}
-      >
-        {isLocked ? <Lock className="w-4 h-4" /> : index + 1}
+      <div className="flex items-start sm:items-center gap-4 flex-1 min-w-0">
+        {/* Step Number / Status Icon */}
+        <div
+          className={`w-10 h-10 rounded-full font-extrabold text-sm flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-0 transition-colors ${
+            isLocked
+              ? 'bg-slate-100 text-slate-400'
+              : isCompleted
+              ? 'bg-emerald-100 text-emerald-700'
+              : 'bg-indigo-100 text-indigo-700 group-hover:bg-indigo-600 group-hover:text-white'
+          }`}
+        >
+          {isLocked ? (
+            <Lock className="w-4 h-4" />
+          ) : isCompleted ? (
+            <CheckCircle className="w-5 h-5 text-emerald-600" />
+          ) : (
+            index + 1
+          )}
+        </div>
+
+        {/* Info & Badges */}
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className="text-xs font-semibold text-indigo-500 uppercase tracking-wide">
+              Course {index + 1}
+            </span>
+
+            {/* Badges */}
+            {isLocked ? (
+              <span className="badge-locked inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                <Lock className="w-3 h-3" /> Locked
+              </span>
+            ) : isCompleted ? (
+              <span className="badge-progress inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <CheckCircle className="w-3 h-3" /> 100% Completed
+              </span>
+            ) : (
+              <span className="badge-progress inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                {progressPercent}% Completed
+              </span>
+            )}
+          </div>
+
+          <h4
+            className={`font-bold text-sm leading-snug truncate ${
+              isLocked
+                ? 'text-slate-400'
+                : 'text-slate-900 group-hover:text-indigo-600 transition-colors'
+            }`}
+          >
+            {course.course_title || course.course}
+          </h4>
+
+          {/* Subtext when locked */}
+          {isLocked ? (
+            <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5">
+              <span>Please complete the previous course to unlock this one.</span>
+            </p>
+          ) : (
+            <div className="w-full max-w-xs bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  isCompleted ? 'bg-emerald-500' : 'bg-indigo-600'
+                }`}
+                style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-0.5">
-          Course {index + 1}
-        </p>
-        <h3 className={`font-bold text-sm leading-snug truncate ${isLocked ? 'text-slate-400' : 'text-slate-900 group-hover:text-indigo-600 transition-colors'}`}>
-          {course.course_title || course.course}
-        </h3>
-      </div>
-
-      {/* Arrow */}
+      {/* Action / Arrow */}
       {!isLocked && (
-        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 transition-colors flex-shrink-0" />
+        <div className="flex items-center justify-end sm:pl-2">
+          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+        </div>
       )}
     </div>
   );
 
-  if (isLocked) return card;
-  return <Link href={`/course/${course.course}`}>{card}</Link>;
+  if (isLocked) {
+    return cardContent;
+  }
+
+  return (
+    <Link href={`/course/${encodeURIComponent(course.course)}`} className="block">
+      {cardContent}
+    </Link>
+  );
 }
