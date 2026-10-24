@@ -3,7 +3,9 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, BookOpen, Plus, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
-import { getCourses, createChapter } from "@/services/lms.services";
+import { createChapter } from "@/services/lms.services";
+import { getCurrentUserEmail } from "@/services/api.services";
+import Dropdown from "@/components/ui/Dropdown";
 import { showToast } from "@/components/ui/Toast";
 
 interface CreateChapterModalProps {
@@ -13,11 +15,6 @@ interface CreateChapterModalProps {
   onSuccess?: (courseId: string, chapterTitle: string) => void;
 }
 
-interface CourseOption {
-  name: string;
-  title: string;
-}
-
 export default function CreateChapterModal({
   isOpen,
   onClose,
@@ -25,46 +22,31 @@ export default function CreateChapterModal({
   onSuccess,
 }: CreateChapterModalProps) {
   const router = useRouter();
-  const [courses, setCourses] = useState<CourseOption[]>([]);
-  const [loadingCourses, setLoadingCourses] = useState<boolean>(false);
-  const [selectedCourse, setSelectedCourse] = useState<string>("");
+  const [selectedCourse, setSelectedCourse] = useState<string>(defaultCourseId);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
   const [chapterTitle, setChapterTitle] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      setCurrentUserEmail(getCurrentUserEmail());
+    }
+  }, []);
+
+  useEffect(() => {
     if (isOpen) {
       setError(null);
       setSuccess(false);
       setChapterTitle("");
-      fetchCoursesList();
-    }
-  }, [isOpen]);
-
-  const fetchCoursesList = async () => {
-    setLoadingCourses(true);
-    try {
-      const res = await getCourses();
-      const rawList = Array.isArray(res) ? res : (res as any)?.message || (res as any)?.data || [];
-      const formatted = rawList.map((c: any) => ({
-        name: c.name || "",
-        title: c.title || c.course_name || c.name || "Untitled Course",
-      }));
-      setCourses(formatted);
-
-      if (defaultCourseId && formatted.some((c: CourseOption) => c.name === defaultCourseId)) {
+      if (defaultCourseId) {
         setSelectedCourse(defaultCourseId);
-      } else if (formatted.length > 0 && !selectedCourse) {
-        setSelectedCourse(formatted[0].name);
       }
-    } catch (err: any) {
-      console.error("Failed to load courses for chapter creation:", err);
-      setError("Unable to load course list. Please try again.");
-    } finally {
-      setLoadingCourses(false);
     }
-  };
+  }, [isOpen, defaultCourseId]);
+
+  const instructorForCourseDropdown = currentUserEmail || (typeof window !== 'undefined' ? getCurrentUserEmail() : '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,29 +143,19 @@ export default function CreateChapterModal({
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
               Target Course <span className="text-red-500">*</span>
             </label>
-            {loadingCourses ? (
-              <div className="flex items-center gap-2 text-xs text-slate-500 py-2.5 px-3 bg-slate-50 rounded-xl border border-slate-200">
-                <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                <span>Loading available courses...</span>
-              </div>
-            ) : courses.length > 0 ? (
-              <select
-                value={selectedCourse}
-                onChange={(e) => setSelectedCourse(e.target.value)}
-                required
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-all"
-              >
-                {courses.map((course) => (
-                  <option key={course.name} value={course.name}>
-                    {course.title} ({course.name})
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <p className="text-xs text-amber-600 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
-                No courses found. Please create a course first.
-              </p>
-            )}
+            <Dropdown
+              id="target-course"
+              value={selectedCourse}
+              onChange={(value: string) => setSelectedCourse(value)}
+              endpoint="https://devlms.stridenex.ai/api/method/lms.lms.stride_lms.get_courses"
+              params={{
+                doctype: "LMS Course",
+                ...(instructorForCourseDropdown ? { user: instructorForCourseDropdown } : {})
+              }}
+              placeholder="Select Target Course"
+              searchable
+              required
+            />
           </div>
 
           {/* Chapter Title */}
@@ -214,7 +186,7 @@ export default function CreateChapterModal({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || loadingCourses || success || !selectedCourse}
+              disabled={isSubmitting || success || !selectedCourse}
               className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (

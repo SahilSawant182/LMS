@@ -215,14 +215,15 @@ export const getCoursesWithEnrollment = async (payload?: any): Promise<CourseWit
   const currentUser = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
   const params: Record<string, any> = { ...(payload || {}) };
 
-  if (params.all || params.user === "" || params.user === null || params.no_user) {
+  if (!isInstructor) {
+    delete params.user;
+    params.no_user = true;
+  } else if (params.all || params.user === "" || params.user === null || params.no_user) {
     delete params.all;
     delete params.user;
     params.no_user = true;
-  } else if (!params.user && isInstructor && currentUser) {
+  } else if (!params.user && currentUser) {
     params.user = currentUser;
-  } else if (!isInstructor && !params.user) {
-    params.no_user = true;
   }
 
   const res = await apiService.get(`${METHOD_PREFIX}.get_courses_with_enrollment`, {

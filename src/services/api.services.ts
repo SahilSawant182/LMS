@@ -84,6 +84,18 @@ export const isBatchApi = (url?: string): boolean => {
   );
 };
 
+// Helper to determine if a URL points to any course-related GET API
+export const isCourseApi = (url?: string): boolean => {
+  if (typeof url !== "string") return false;
+  return (
+    url.includes("get_courses") ||
+    url.includes("get_course") ||
+    url.includes("get_courses_with_enrollment") ||
+    url.includes("resource/LMS Course") ||
+    url.includes("LMS Course")
+  );
+};
+
 // Helper to check whether user param should NOT be automatically attached
 const shouldBypassUserParam = (url?: string, params?: any): boolean => {
   if (
@@ -94,8 +106,8 @@ const shouldBypassUserParam = (url?: string, params?: any): boolean => {
   ) {
     return true;
   }
-  // For student role, remove user from query params on batch APIs
-  if (isBatchApi(url) && isStudentUser()) {
+  // For student role, remove user from query params on batch and course APIs
+  if ((isBatchApi(url) || isCourseApi(url)) && isStudentUser()) {
     return true;
   }
   if (!params) return false;
@@ -127,7 +139,8 @@ api.interceptors.request.use((reqConfig) => {
         reqConfig.url.includes("master.get_dropdown_options"));
 
     const isBatchForStudent = isBatchApi(reqConfig.url) && isStudentUser();
-    const shouldStripUser = isDropdownOrResource || isBatchForStudent;
+    const isCourseForStudent = isCourseApi(reqConfig.url) && isStudentUser();
+    const shouldStripUser = isDropdownOrResource || isBatchForStudent || isCourseForStudent;
 
     if (shouldStripUser && typeof reqConfig.url === "string" && reqConfig.url.includes("user=")) {
       reqConfig.url = reqConfig.url.replace(/([?&])user=[^&]*(&|$)/, (_, p1, p2) => (p2 === "&" ? p1 : "")).replace(/[?&]$/, "");

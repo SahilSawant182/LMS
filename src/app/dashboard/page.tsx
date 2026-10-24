@@ -40,7 +40,9 @@ import {
   Award,
   ExternalLink,
   Loader2,
-  Globe
+  Globe,
+  Search,
+  X
 } from "lucide-react";
 import {
   getStudentDashboard,
@@ -51,13 +53,14 @@ import {
   InstructorDashboardData
 } from "@/services/payment.services";
 import { getInstructorSalesReport } from "@/services/billing.services";
-import { getCourseProgressBar, parseProgressBarValue, updateCourse } from "@/services/lms.services";
+import { getCourseProgressBar, parseProgressBarValue, updateCourse, getCourses } from "@/services/lms.services";
 import { showToast } from "@/components/ui/Toast";
 import { MonthlyBreakdownItem } from "@/types/billing.types";
 import { getImageUrl } from "@/services/api.services";
 import { formatDate } from "@/utils/formatters";
 import { getMyLiveClasses, getAdminLiveClasses, recordLiveClassJoin } from "@/services/live_class.services";
 import { LMSLiveClass } from "@/types/live_class.types";
+import { isAuthorizedInstructor } from "@/services/auth.services";
 
 type StudentTab = "courses" | "batches" | "programs";
 
@@ -178,16 +181,13 @@ export function DashboardContent() {
 
       // Check roles from localStorage
       try {
+        const isInst = isAuthorizedInstructor();
+        setIsInstructorRole(isInst);
+
         const rolesStr = localStorage.getItem("roles");
         if (rolesStr) {
-          const roles = JSON.parse(rolesStr);
-          const hasRole = roles.some((r: string) =>
-            ["Instructor", "Course Creator", "Moderator", "Administrator", "System Manager"].includes(r)
-          );
-          if (hasRole) {
-            setIsInstructorRole(true);
-          }
-          const isAdmin = roles.some((r: string) =>
+          const roles = typeof rolesStr === "string" && rolesStr.startsWith("[") ? JSON.parse(rolesStr) : [rolesStr];
+          const isAdmin = Array.isArray(roles) && roles.some((r: string) =>
             ["Administrator", "System Manager"].includes(r)
           );
           setIsAdminRole(isAdmin);
@@ -317,26 +317,90 @@ export function DashboardContent() {
           }
         }
 
-        // Fetch instructor dashboard
-        try {
-          const iData = await getInstructorDashboard();
-          if (iData && iData.is_instructor) {
-            setInstructorData(iData);
-            setIsInstructorRole(true);
-          }
-        } catch (iErr: any) {
-          if (handleAuthError(iErr)) return;
-          console.warn("Instructor dashboard fetch error:", iErr);
-        }
+        // Fetch instructor dashboard and all authored courses ONLY if the user is an authorized instructor
+        if (isAuthorizedInstructor()) {
+          try {
+            const [iDataRes, authoredCoursesRes] = await Promise.allSettled([
+              getInstructorDashboard(),
+              getCourses(),
+            ]);
 
-        // Fetch monthly sales report for revenue breakdown
-        try {
-          const reportRes = await getInstructorSalesReport({ period: "this_year" });
-          if (reportRes && Array.isArray(reportRes.monthly_breakdown) && reportRes.monthly_breakdown.length > 0) {
-            setMonthlyRevenue(reportRes.monthly_breakdown);
+            let finalInstructorData: any = null;
+            if (iDataRes.status === "fulfilled" && iDataRes.value && iDataRes.value.is_instructor) {
+              finalInstructorData = { ...iDataRes.value };
+              setIsInstructorRole(true);
+            } else if (isAuthorizedInstructor()) {
+              finalInstructorData = {
+                is_instructor: true,
+                courses: [],
+                stats: {
+                  total_courses: 0,
+                  published_courses: 0,
+                  draft_courses: 0,
+                },
+              };
+              setIsInstructorRole(true);
+            }
+
+            if (finalInstructorData && authoredCoursesRes.status === "fulfilled" && Array.isArray(authoredCoursesRes.value)) {
+              const authored = authoredCoursesRes.value;
+              const existingCourses = finalInstructorData?.courses || [];
+              const courseMap = new Map<string, any>();
+
+              // 1. Index all authored courses from getCourses
+              authored.forEach((c: any) => {
+                const id = c.name || c.course || c.course_name;
+                if (id) {
+                  courseMap.set(id, {
+                    name: id,
+                    title: c.title || c.course_name || id,
+                    image: c.image || "",
+                    published: c.published !== undefined ? c.published : 1,
+                    category: c.category || "",
+                    revenue: 0,
+                    enrollments_count: 0,
+                    ...c,
+                  });
+                }
+              });
+
+              // 2. Augment with revenue & enrollment numbers from instructor dashboard
+              existingCourses.forEach((ec: any) => {
+                const id = ec.name || ec.course;
+                if (id) {
+                  const base = courseMap.get(id) || {};
+                  courseMap.set(id, {
+                    ...base,
+                    ...ec,
+                    revenue: Number(ec.revenue !== undefined ? ec.revenue : base.revenue || 0),
+                    enrollments_count: Number(ec.enrollments_count !== undefined ? ec.enrollments_count : base.enrollments_count || 0),
+                  });
+                }
+              });
+
+              const mergedCourses = Array.from(courseMap.values());
+              finalInstructorData.courses = mergedCourses;
+              if (!finalInstructorData.stats) finalInstructorData.stats = {};
+              finalInstructorData.stats.total_courses = mergedCourses.length;
+            }
+
+            if (finalInstructorData) {
+              setInstructorData(finalInstructorData);
+            }
+          } catch (iErr: any) {
+            if (handleAuthError(iErr)) return;
+            console.warn("Instructor dashboard fetch error:", iErr);
           }
-        } catch (rErr: any) {
-          console.warn("Instructor sales report fetch error:", rErr);
+
+          // Fetch monthly sales report for revenue breakdown
+          try {
+            const reportRes = await getInstructorSalesReport({ period: "this_year" });
+            if (reportRes && Array.isArray(reportRes.monthly_breakdown) && reportRes.monthly_breakdown.length > 0) {
+              setMonthlyRevenue(reportRes.monthly_breakdown);
+            }
+          } catch (rErr: any) {
+            console.warn("Instructor sales report fetch error:", rErr);
+          }
         }
 
         // Fetch live classes for students and instructors
@@ -514,8 +578,8 @@ export function DashboardContent() {
     return `₹${val}`;
   };
 
-  // Top 5 Performing Courses Leaderboard
-  const topCourses = useMemo(() => {
+  // Sorted instructor courses
+  const sortedInstructorCourses = useMemo(() => {
     const list = [...instructorCourses];
     list.sort((a, b) => {
       if (leaderboardMetric === "revenue") {
@@ -523,18 +587,24 @@ export function DashboardContent() {
       }
       return Number(b.enrollments_count || 0) - Number(a.enrollments_count || 0);
     });
-    return list.slice(0, 5);
+    return list;
   }, [instructorCourses, leaderboardMetric]);
 
+  // Top 5 Performing Courses Leaderboard
+  const topCourses = useMemo(() => {
+    return sortedInstructorCourses.slice(0, 5);
+  }, [sortedInstructorCourses]);
+
+
   const maxLeaderboardVal = useMemo(() => {
-    if (topCourses.length === 0) return 1;
-    const top = topCourses[0];
+    if (sortedInstructorCourses.length === 0) return 1;
+    const top = sortedInstructorCourses[0];
     const val =
       leaderboardMetric === "revenue"
         ? Number(top.revenue || 0)
         : Number(top.enrollments_count || 0);
     return Math.max(val, 1);
-  }, [topCourses, leaderboardMetric]);
+  }, [sortedInstructorCourses, leaderboardMetric]);
 
   // Student Enrollment Velocity
   const velocityData = useMemo(() => {
@@ -1296,7 +1366,7 @@ export function DashboardContent() {
 
             {/* ── SECTION 3: 60/40 SPLIT — TOP 5 LEADERBOARD (60%) + ENROLLMENT VELOCITY (40%) ── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mb-8">
-              {/* ── LEFT (60% / col-span-7): TOP 5 PERFORMING COURSES LEADERBOARD ── */}
+              {/* ── LEFT (60% / col-span-7): COURSES PERFORMANCE LEADERBOARD (TOP 5 / ALL) ── */}
               <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 sm:p-7 flex flex-col justify-between">
                 <div>
                   {/* Leaderboard Header */}
@@ -1316,34 +1386,46 @@ export function DashboardContent() {
                       </p>
                     </div>
 
-                    {/* Metric Switcher Toggle */}
-                    <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 self-start sm:self-auto border border-slate-200/70">
-                      <button
-                        type="button"
-                        onClick={() => setLeaderboardMetric("revenue")}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          leaderboardMetric === "revenue"
-                            ? "bg-white text-slate-900 shadow-xs"
-                            : "text-slate-600 hover:text-slate-900"
-                        }`}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Metric Switcher Toggle */}
+                      <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200/70">
+                        <button
+                          type="button"
+                          onClick={() => setLeaderboardMetric("revenue")}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            leaderboardMetric === "revenue"
+                              ? "bg-white text-slate-900 shadow-xs"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          By Revenue
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLeaderboardMetric("enrollments")}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            leaderboardMetric === "enrollments"
+                              ? "bg-white text-slate-900 shadow-xs"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          By Learners
+                        </button>
+                      </div>
+
+                      {/* View All Courses Page Link */}
+                      <Link
+                        href="/courses"
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/60"
+                        title="View all courses under Courses in sidebar"
                       >
-                        By Revenue
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setLeaderboardMetric("enrollments")}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          leaderboardMetric === "enrollments"
-                            ? "bg-white text-slate-900 shadow-xs"
-                            : "text-slate-600 hover:text-slate-900"
-                        }`}
-                      >
-                        By Learners
-                      </button>
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>All Courses ({instructorCourses.length})</span>
+                      </Link>
                     </div>
                   </div>
 
-                  {/* Top 5 Course Rows */}
+                  {/* Course Rows */}
                   {topCourses.length > 0 ? (
                     <div className="divide-y divide-slate-100 mt-2">
                       {topCourses.map((c, idx) => {
@@ -1508,17 +1590,37 @@ export function DashboardContent() {
                 </div>
 
                 {/* Card Footer */}
-                <div className="pt-4 mt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                  <span>
-                    Showing top {topCourses.length} of {instructorCourses.length} authored courses
-                  </span>
-                  <Link
-                    href="/sales-earnings?tab=reports"
-                    className="font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1"
-                  >
-                    <span>Full Analytics</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </Link>
+                <div className="pt-4 mt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <span>
+                      Showing top {topCourses.length} of {instructorCourses.length} authored courses
+                    </span>
+                    {instructorCourses.length > 5 && (
+                      <Link
+                        href="/courses"
+                        className="font-bold text-indigo-600 hover:text-indigo-800 transition-colors underline flex items-center gap-0.5"
+                      >
+                        View all {instructorCourses.length} courses
+                      </Link>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Link
+                      href="/courses"
+                      className="font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1.5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200/60"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>View All Courses</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                    <Link
+                      href="/sales-earnings?tab=reports"
+                      className="font-bold text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1"
+                    >
+                      <span>Full Analytics</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
                 </div>
               </div>
 
@@ -2239,6 +2341,8 @@ export function DashboardContent() {
             )}
           </div>
         )}
+
+
       </main>
     </div>
   );

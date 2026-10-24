@@ -44,7 +44,7 @@ export default function CoursesPage() {
     try {
       const [enrollRes, catalogRes] = await Promise.allSettled([
         getCoursesWithEnrollment(),
-        getCourses({ all: 1 }),
+        getCourses(),
       ]);
 
       const enrollList = enrollRes.status === "fulfilled" && Array.isArray(enrollRes.value) ? enrollRes.value : [];

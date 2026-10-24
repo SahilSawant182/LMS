@@ -73,6 +73,13 @@ const getInstructorFilterParams = (payload?: any) => {
   const currentUser = getCurrentUserEmail();
   const params: Record<string, any> = { ...(payload || {}) };
 
+  // For students, NEVER pass user as a query param so all published courses in catalog are retrieved
+  if (!isInstructor) {
+    delete params.user;
+    params.no_user = true;
+    return params;
+  }
+
   // If caller specifically requested all items or bypassed instructor filter (e.g. global search)
   if (params.all || params.user === "" || params.user === null || params.no_user) {
     delete params.all;
@@ -82,11 +89,8 @@ const getInstructorFilterParams = (payload?: any) => {
   }
 
   // Only filter by user/instructor if user is an authorized instructor AND caller hasn't passed a custom user
-  if (!params.user && isInstructor && currentUser) {
+  if (!params.user && currentUser) {
     params.user = currentUser;
-  } else if (!isInstructor && !params.user) {
-    // Non-instructor students should NOT have user filter attached
-    params.no_user = true;
   }
 
   return params;
@@ -111,19 +115,36 @@ export const getCourses = async (payload?: any): Promise<Course[]> => {
   }
 
   const filterUser = params?.user || payload?.user;
-  if (filterUser && !params?.all) {
+  if (filterUser && isAuthorizedInstructor() && !params?.all && !params?.no_user) {
     const target = String(filterUser).toLowerCase().trim();
     rawList = rawList.filter((c: any) => {
+      // Check if user created the course
+      const ownerField = c.owner ? String(c.owner).toLowerCase().trim() : '';
+      if (ownerField === target) return true;
+
+      const createdByField = c.created_by ? String(c.created_by).toLowerCase().trim() : '';
+      if (createdByField === target) return true;
+
+      const instField = c.instructor ? String(c.instructor).toLowerCase().trim() : '';
+      if (instField === target) return true;
+
+      // Check if user is among assigned instructors
       if (Array.isArray(c.instructors) && c.instructors.length > 0) {
         return c.instructors.some((inst: any) => {
+          if (typeof inst === 'string') return inst.toLowerCase().trim() === target;
           const instName = String(inst?.name || '').toLowerCase().trim();
           const instEmail = String(inst?.email || '').toLowerCase().trim();
           const instUsername = String(inst?.username || '').toLowerCase().trim();
-          return instName === target || instEmail === target || (instUsername && instUsername === target);
+          const instInstructor = String(inst?.instructor || '').toLowerCase().trim();
+          return (
+            instName === target ||
+            instEmail === target ||
+            (instUsername && instUsername === target) ||
+            (instInstructor && instInstructor === target)
+          );
         });
       }
-      if (c.instructor && String(c.instructor).toLowerCase().trim() === target) return true;
-      if (c.owner && String(c.owner).toLowerCase().trim() === target) return true;
+
       return false;
     });
   }

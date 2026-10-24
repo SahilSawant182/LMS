@@ -175,20 +175,39 @@ export default function Dropdown({
       if (queryParams.user && Array.isArray(data) && data.length > 0) {
         const targetUser = String(queryParams.user).toLowerCase().trim();
         const hasInstructorInfo = data.some((item: any) =>
-          (Array.isArray(item?.instructors) && item.instructors.length > 0) || item?.instructor || item?.owner
+          (Array.isArray(item?.instructors) && item.instructors.length > 0) || item?.instructor || item?.owner || item?.created_by
         );
         if (hasInstructorInfo) {
           data = data.filter((item: any) => {
+            // Check if user created the course
+            const ownerField = item?.owner ? String(item.owner).toLowerCase().trim() : '';
+            if (ownerField === targetUser) return true;
+
+            const createdByField = item?.created_by ? String(item.created_by).toLowerCase().trim() : '';
+            if (createdByField === targetUser) return true;
+
+            const instField = item?.instructor ? String(item.instructor).toLowerCase().trim() : '';
+            if (instField === targetUser) return true;
+
+            // Check if user is among assigned instructors
             if (Array.isArray(item?.instructors) && item.instructors.length > 0) {
               return item.instructors.some((inst: any) => {
+                if (typeof inst === 'string') {
+                  return inst.toLowerCase().trim() === targetUser;
+                }
                 const instName = String(inst?.name || '').toLowerCase().trim();
                 const instEmail = String(inst?.email || '').toLowerCase().trim();
                 const instUsername = String(inst?.username || '').toLowerCase().trim();
-                return instName === targetUser || instEmail === targetUser || (instUsername && instUsername === targetUser);
+                const instInstructor = String(inst?.instructor || '').toLowerCase().trim();
+                return (
+                  instName === targetUser ||
+                  instEmail === targetUser ||
+                  (instUsername && instUsername === targetUser) ||
+                  (instInstructor && instInstructor === targetUser)
+                );
               });
             }
-            if (item?.instructor && String(item.instructor).toLowerCase().trim() === targetUser) return true;
-            if (item?.owner && String(item.owner).toLowerCase().trim() === targetUser) return true;
+
             return false;
           });
         }

@@ -4,13 +4,14 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createAssignment, getCourses } from '@/services/lms.services';
+import { createAssignment } from '@/services/lms.services';
+import { getCurrentUserEmail } from '@/services/api.services';
+import Dropdown from '@/components/ui/Dropdown';
 import { navigateBack } from '@/utils/navigation';
-import { ArrowLeft, BookOpen, Save, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle } from 'lucide-react';
 
 function CreateAssignmentForm() {
   const router = useRouter();
-  const [courses, setCourses] = useState<any[]>([]);
   
   // Form states
   const [title, setTitle] = useState('');
@@ -18,6 +19,7 @@ function CreateAssignmentForm() {
   const [question, setQuestion] = useState('');
   const searchParams = useSearchParams();
   const [course, setCourse] = useState(searchParams.get('course') || '');
+  const [currentUserEmail, setCurrentUserEmail] = useState('');
   const [gradeAssignment, setGradeAssignment] = useState(true);
   const [showAnswer, setShowAnswer] = useState(false);
   const [answer, setAnswer] = useState('');
@@ -33,24 +35,19 @@ function CreateAssignmentForm() {
         router.push("/login");
         return;
       }
+      setCurrentUserEmail(getCurrentUserEmail());
     }
-    fetchCourses();
   }, [router]);
 
-  const fetchCourses = async () => {
-    try {
-      const res = await getCourses();
-      const data = Array.isArray(res) ? res : (res as any)?.data?.message || (res as any)?.message || (res as any)?.data || [];
-      if (Array.isArray(data)) {
-        setCourses(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch courses:", err);
-    }
-  };
+  const userParam = searchParams.get('user');
+  const instructorForCourseDropdown = userParam || currentUserEmail || (typeof window !== 'undefined' ? getCurrentUserEmail() : '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!course) {
+      setError('Please select a course');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setSubmitSuccess(false);
@@ -176,33 +173,18 @@ function CreateAssignmentForm() {
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Course
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <BookOpen className="w-5 h-5 text-slate-400" />
-                </div>
-                {courses.length > 0 ? (
-                  <select
-                    required
-                    value={course}
-                    onChange={(e) => setCourse(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-shadow bg-white appearance-none"
-                  >
-                    <option value="" disabled>Select a course</option>
-                    {courses.map((c: any) => (
-                      <option key={c.name} value={c.name}>{c.title || c.name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. advanced-python-development"
-                    value={course}
-                    onChange={(e) => setCourse(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-shadow"
-                  />
-                )}
-              </div>
+              <Dropdown
+                id="course"
+                value={course}
+                onChange={(value: string) => setCourse(value)}
+                endpoint="https://devlms.stridenex.ai/api/method/lms.lms.stride_lms.get_courses"
+                params={{
+                  doctype: "LMS Course",
+                  ...(instructorForCourseDropdown ? { user: instructorForCourseDropdown } : {})
+                }}
+                placeholder="Select a course"
+                searchable
+              />
             </div>
 
             <div>
