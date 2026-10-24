@@ -58,7 +58,10 @@ export default function CoursesPage() {
       // 1. Index all catalog courses
       catalogList.forEach((c: any) => {
         const id = c.name || c.course || c.course_name;
-        if (id) courseMap.set(id, { ...c });
+        if (id) {
+          const isEnrolled = Boolean(c.is_enrolled || c.membership);
+          courseMap.set(id, { ...c, is_enrolled: isEnrolled });
+        }
       });
 
       // 2. Augment with enrollment data
@@ -66,16 +69,17 @@ export default function CoursesPage() {
         const id = e.name || e.course || e.course_name;
         if (id) {
           const existing = courseMap.get(id);
+          const isEnrolled = Boolean(e.is_enrolled || existing?.is_enrolled || e.membership);
           if (existing) {
             courseMap.set(id, {
               ...existing,
               ...e,
               title: existing.title || e.title,
               published: existing.published !== undefined ? existing.published : e.published,
-              is_enrolled: Boolean(e.is_enrolled || existing.is_enrolled),
+              is_enrolled: isEnrolled,
             });
           } else {
-            courseMap.set(id, { ...e });
+            courseMap.set(id, { ...e, is_enrolled: isEnrolled });
           }
         }
       });
@@ -147,10 +151,15 @@ export default function CoursesPage() {
         selectedCategory === "all" || c.category === selectedCategory;
 
       let matchesType = true;
+      const isEnrolled = Boolean(
+        c.is_enrolled ||
+        c.membership ||
+        (c.price && c.price.toString().trim().toLowerCase() === "enrolled")
+      );
       if (selectedFilter === "enrolled") {
-        matchesType = Boolean(c.is_enrolled);
+        matchesType = isEnrolled;
       } else if (selectedFilter === "free") {
-        matchesType = !c.paid_course && !c.is_paid && !c.is_enrolled;
+        matchesType = !c.paid_course && !c.is_paid && !isEnrolled;
       } else if (selectedFilter === "paid") {
         matchesType = Boolean(c.paid_course || c.is_paid);
       }
