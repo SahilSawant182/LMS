@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   getCourse, getCourseDetails, getChapters, getLessons, getReviews, 
   createChapter, createLesson, getCourseProgress, getCourseProgressBar, parseProgressBarValue, getAssignments, 
   getAssignmentSubmissions, enrollInCourse, updateCourse,
-  getCourseReviewList, createCourseReview, deleteCourseReview, LMSCourseReview
+  getCourseReviewList, createCourseReview, deleteCourseReview, LMSCourseReview,
+  getQuizSubmissions
 } from '@/services/lms.services';
 import { getCourseWithEnrollment } from '@/services/payment.services';
 import { getImageUrl, getCurrentUserEmail } from '@/services/api.services';
@@ -79,6 +80,8 @@ export default function CourseDetailPage() {
   const [isInstructor, setIsInstructor] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
   const [currentUserName, setCurrentUserName] = useState<string>('');
+  const [allLessonsList, setAllLessonsList] = useState<any[]>([]);
+  const [userQuizSubmissions, setUserQuizSubmissions] = useState<any[]>([]);
   const [publishingLoading, setPublishingLoading] = useState(false);
 
   const handleTogglePublish = async (newPublishedStatus: boolean) => {
@@ -163,7 +166,7 @@ export default function CourseDetailPage() {
       try {
         const isAuth = isAuthorizedInstructor();
         setIsInstructor(isAuth);
-        const email = localStorage.getItem("userEmail") || "";
+        const email = getCurrentUserEmail() || localStorage.getItem("userEmail") || "";
         const name = localStorage.getItem("fullName") || "";
         setCurrentUserEmail(email);
         setCurrentUserName(name);
@@ -172,18 +175,40 @@ export default function CourseDetailPage() {
     checkRoles();
     fetchCourseData();
 
-    const handleChapterCreated = () => {
-      fetchCourseData();
+    const handleDataChanged = () => {
+      fetchCourseData(true);
     };
-    window.addEventListener("chapter-created", handleChapterCreated);
-    return () => window.removeEventListener("chapter-created", handleChapterCreated);
+    window.addEventListener("chapter-created", handleDataChanged);
+    window.addEventListener("lesson-completed", handleDataChanged);
+    window.addEventListener("storage", handleDataChanged);
+
+    const refreshQuizzes = async () => {
+      const email = getCurrentUserEmail() || (typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "");
+      try {
+        const subs: any = await getQuizSubmissions({ member: email });
+        const raw = Array.isArray(subs) ? subs : (subs?.message?.data || subs?.data?.message || subs?.data || subs?.message || []);
+        if (Array.isArray(raw)) {
+          setUserQuizSubmissions(raw);
+        }
+      } catch (err) {
+        console.warn("Could not refresh quiz submissions on focus/storage:", err);
+      }
+    };
+    window.addEventListener('focus', refreshQuizzes);
+
+    return () => {
+      window.removeEventListener("chapter-created", handleDataChanged);
+      window.removeEventListener("lesson-completed", handleDataChanged);
+      window.removeEventListener("storage", handleDataChanged);
+      window.removeEventListener('focus', refreshQuizzes);
+    };
   }, [courseId]);
 
   const fetchCourseData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
       const email = typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
-      const [detailsRes, outlineRes, reviewsRes, lessonsRes, progressRes, progressBarRes, assignmentsRes, submissionsRes, courseReviewsRes, enrollRes] = await Promise.allSettled([
+      const [detailsRes, outlineRes, reviewsRes, lessonsRes, progressRes, progressBarRes, assignmentsRes, submissionsRes, courseReviewsRes, enrollRes, quizSubmissionsRes] = await Promise.allSettled([
         getCourse(courseId),
         getChapters({ course: courseId }),
         getReviews({ course: courseId }),
@@ -193,11 +218,20 @@ export default function CourseDetailPage() {
         getAssignments(),
         getAssignmentSubmissions(),
         getCourseReviewList({ course: courseId }),
-        getCourseWithEnrollment(courseId)
+        getCourseWithEnrollment(courseId),
+        getQuizSubmissions({ member: email })
       ]);
 
       const currentIsInstructor = isAuthorizedInstructor();
       setIsInstructor(currentIsInstructor);
+
+      if (quizSubmissionsRes.status === 'fulfilled' && quizSubmissionsRes.value) {
+        const rawSubs: any = quizSubmissionsRes.value;
+        const unwrappedSubs = Array.isArray(rawSubs)
+          ? rawSubs
+          : (rawSubs?.message?.data || rawSubs?.data?.message || rawSubs?.data || rawSubs?.message || []);
+        setUserQuizSubmissions(Array.isArray(unwrappedSubs) ? unwrappedSubs : []);
+      }
 
       if (enrollRes.status === 'fulfilled' && enrollRes.value) {
         const enrollData = enrollRes.value;
@@ -251,6 +285,7 @@ export default function CourseDetailPage() {
           ? rawLessons
           : (rawLessons?.message?.data || rawLessons?.data?.message || rawLessons?.data || rawLessons?.message || []);
         lessonsArray = Array.isArray(unwrapped) ? unwrapped : [];
+        setAllLessonsList(lessonsArray);
       }
 
       const enrollLessonsMap = new Map<string, any>();
@@ -286,24 +321,24 @@ export default function CourseDetailPage() {
       const hasLessons = (arr: any[]) => Array.isArray(arr) && arr.some((ch: any) => Array.isArray(ch?.lessons) && ch.lessons.length > 0);
 
       let baseChapters: any[] = [];
-      if (hasLessons(outlineChapters)) {
-        baseChapters = outlineChapters;
+      if (hasLessons(enrollChapters)) {
+        baseChapters = enrollChapters;
       } else if (hasLessons(courseChapters)) {
         baseChapters = courseChapters;
-      } else if (hasLessons(enrollChapters)) {
-        baseChapters = enrollChapters;
-      } else if (outlineChapters.length > 0) {
+      } else if (hasLessons(outlineChapters)) {
         baseChapters = outlineChapters;
-      } else if (courseChapters.length > 0) {
-        baseChapters = courseChapters;
       } else if (enrollChapters.length > 0) {
         baseChapters = enrollChapters;
+      } else if (courseChapters.length > 0) {
+        baseChapters = courseChapters;
+      } else if (outlineChapters.length > 0) {
+        baseChapters = outlineChapters;
       }
 
       if (baseChapters.length > 0) {
         // Sort chapters consistently using sequence numbers, creation timestamp, and title numbering
         const sortedChapters = [...baseChapters].sort(compareCurriculumItems);
-        const allSourceChapters = [...outlineChapters, ...courseChapters, ...enrollChapters];
+        const allSourceChapters = [...enrollChapters, ...courseChapters, ...outlineChapters];
 
         const mergedOutline = sortedChapters.map(chapter => {
           let chLessons: any[] = Array.isArray(chapter.lessons) && chapter.lessons.length > 0 ? chapter.lessons : [];
@@ -340,14 +375,25 @@ export default function CourseDetailPage() {
               const lKey = String(lesson.name || '').trim().toLowerCase();
               const lTitleKey = String(lesson.title || lesson.lesson_name || '').trim().toLowerCase();
               const fromEnroll = enrollLessonsMap.get(lKey) || (lTitleKey ? enrollLessonsMap.get(lTitleKey) : null);
+              const lFull = lessonsArray.find((la: any) => {
+                const laName = String(la?.name || '').trim().toLowerCase();
+                const laTitle = String(la?.title || la?.lesson_name || '').trim().toLowerCase();
+                return (lKey && (laName === lKey || laTitle === lKey)) || (lTitleKey && (laName === lTitleKey || laTitle === lTitleKey));
+              });
+              const isComp = Boolean(
+                (fromEnroll && (fromEnroll.is_complete === 1 || fromEnroll.is_complete === true || fromEnroll.completed === 1 || fromEnroll.completed === true || fromEnroll.status === 'Complete' || fromEnroll.status === 'Completed')) ||
+                (lesson && (lesson.is_complete === 1 || lesson.is_complete === true || lesson.completed === 1 || lesson.completed === true || lesson.status === 'Complete' || lesson.status === 'Completed')) ||
+                (lFull && (lFull.is_complete === 1 || lFull.is_complete === true || lFull.completed === 1 || lFull.completed === true || lFull.status === 'Complete' || lFull.status === 'Completed'))
+              );
               return {
                 ...lesson,
+                ...(lFull || {}),
                 chapter: lesson.chapter || chapter.name,
                 is_locked: currentIsInstructor ? false : (fromEnroll?.is_locked !== undefined ? fromEnroll.is_locked : lesson.is_locked),
                 include_in_preview: fromEnroll?.include_in_preview !== undefined ? fromEnroll.include_in_preview : lesson.include_in_preview,
-                is_complete: fromEnroll?.is_complete !== undefined ? fromEnroll.is_complete : (lesson.is_complete !== undefined ? lesson.is_complete : 0),
-                completed: fromEnroll?.completed !== undefined ? fromEnroll.completed : (lesson.completed !== undefined ? lesson.completed : 0),
-                status: fromEnroll?.status || lesson.status,
+                is_complete: isComp ? 1 : (fromEnroll?.is_complete !== undefined ? fromEnroll.is_complete : (lesson.is_complete !== undefined ? lesson.is_complete : 0)),
+                completed: isComp ? 1 : (fromEnroll?.completed !== undefined ? fromEnroll.completed : (lesson.completed !== undefined ? lesson.completed : 0)),
+                status: isComp ? 'Complete' : (fromEnroll?.status || lesson.status),
               };
             })
           };
@@ -681,36 +727,7 @@ export default function CourseDetailPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col font-sans bg-gray-50">
-        <Navbar />
-        <div className="flex-grow flex justify-center items-center">
-          <div className="relative">
-            <div className="w-16 h-16 border-4 border-indigo-200 border-dashed rounded-full animate-spin"></div>
-            <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent border-solid rounded-full animate-spin absolute inset-0"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
-  if (error || !details) {
-    return (
-      <div className="min-h-screen flex flex-col font-sans bg-gray-50">
-        <Navbar />
-        <div className="flex-grow flex flex-col justify-center items-center p-8 text-center">
-          <div className="bg-white p-10 rounded-3xl shadow-xl max-w-md w-full">
-            <h2 className="text-3xl font-extrabold text-gray-900 mb-4">Oops!</h2>
-            <p className="text-gray-500 mb-8">{error || 'Course not found'}</p>
-            <button onClick={() => navigateBack(router, '/courses')} className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white font-bold rounded-xl shadow-lg shadow-indigo-200 cursor-pointer">
-              Back to Previous Screen
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const isPaid = enrollmentData?.is_paid !== undefined
     ? Boolean(enrollmentData.is_paid)
@@ -763,7 +780,122 @@ export default function CourseDetailPage() {
     localStorage.getItem(`lms_course_completed_${courseId}`) === 'true'
   );
 
-  const courseLevelComplete = pbIsComplete || enrollIsComplete || localIsComplete;
+  const getLessonQuizIds = (lesson: any): string[] => {
+    if (!lesson) return [];
+    const ids = new Set<string>();
+
+    const directQuiz = lesson.quiz || lesson.quiz_id || lesson.lms_quiz || (lesson as any).quiz_name;
+    if (directQuiz && typeof directQuiz === 'string' && directQuiz.trim()) {
+      ids.add(directQuiz.trim());
+    }
+
+    let content = lesson.content;
+    if (!content && Array.isArray(allLessonsList) && allLessonsList.length > 0) {
+      const lName = String(lesson.name || '').trim().toLowerCase();
+      const lTitle = String(lesson.title || lesson.lesson_name || '').trim().toLowerCase();
+      const matched = allLessonsList.find((al: any) => {
+        const alName = String(al?.name || '').trim().toLowerCase();
+        const alTitle = String(al?.title || al?.lesson_name || '').trim().toLowerCase();
+        return (lName && (alName === lName || alTitle === lName)) || (lTitle && (alName === lTitle || alTitle === lTitle));
+      });
+      if (matched) {
+        if (!directQuiz && (matched.quiz || matched.quiz_id || matched.lms_quiz)) {
+          ids.add(String(matched.quiz || matched.quiz_id || matched.lms_quiz).trim());
+        }
+        content = matched.content;
+      }
+    }
+
+    if (content) {
+      let parsedContent: any = null;
+      if (typeof content === 'string') {
+        try {
+          parsedContent = JSON.parse(content);
+        } catch {
+          parsedContent = null;
+        }
+      } else if (typeof content === 'object') {
+        parsedContent = content;
+      }
+
+      if (parsedContent && Array.isArray(parsedContent.blocks)) {
+        parsedContent.blocks.forEach((b: any) => {
+          if (b && (b.type === 'quiz' || b.type === 'Quiz')) {
+            const qId = b.data?.quiz || b.data?.quiz_id || b.data?.id || b.data?.name;
+            if (qId && typeof qId === 'string' && qId.trim()) {
+              ids.add(qId.trim());
+            }
+          }
+        });
+      }
+
+      if (typeof content === 'string') {
+        const matchQuizBlock = content.match(/class=["'][^"']*quiz-block[^"']*["'][^>]*data-id=["']([^"']+)["']/i);
+        if (matchQuizBlock && matchQuizBlock[1]) {
+          ids.add(matchQuizBlock[1].trim());
+        }
+      }
+    }
+
+    return Array.from(ids);
+  };
+
+  const isQuizCompleted = (quizId: string) => {
+    if (!quizId) return false;
+    const cleanQId = String(quizId).trim().toLowerCase();
+    const email = (currentUserEmail || (typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "")).trim().toLowerCase();
+
+    if (typeof window !== 'undefined' && email) {
+      if (
+        localStorage.getItem(`lms_quiz_completed_${email}_${cleanQId}`) === 'true' ||
+        localStorage.getItem(`lms_quiz_${email}_${cleanQId}_completed`) === 'true' ||
+        localStorage.getItem(`lms_quiz_completed_${cleanQId}`) === 'true'
+      ) {
+        return true;
+      }
+    }
+
+    if (Array.isArray(userQuizSubmissions) && userQuizSubmissions.length > 0) {
+      return userQuizSubmissions.some((sub: any) => {
+        const subQuiz = String(sub?.quiz || sub?.quiz_id || sub?.name || '').trim().toLowerCase();
+        const subStatus = String(sub?.status || '').trim().toLowerCase();
+        const subScore = Number(sub?.score ?? sub?.percentage ?? 0);
+        const subPassing = Number(sub?.passing_percentage ?? 0);
+        const isPassed = subStatus === 'passed' || subStatus === 'completed' || subStatus === 'submitted' || (subScore >= subPassing && subScore > 0);
+        return subQuiz === cleanQId && isPassed;
+      });
+    }
+
+    return false;
+  };
+
+  const isLessonQuizComplete = (lessonItem: any): boolean => {
+    if (!lessonItem) return true;
+    const quizIds = getLessonQuizIds(lessonItem);
+    if (quizIds.length === 0) return true;
+    return quizIds.every(qId => isQuizCompleted(qId));
+  };
+
+  const hasIncompleteQuizzesInCourse = !isInstructor && allOutlineLessons.some(l => !isLessonQuizComplete(l));
+
+  useEffect(() => {
+    if (hasIncompleteQuizzesInCourse && typeof window !== 'undefined') {
+      const email = currentUserEmail || localStorage.getItem("userEmail") || "";
+      if (email) {
+        localStorage.removeItem(`lms_course_completed_${email}_${courseId}`);
+      }
+      localStorage.removeItem(`lms_course_completed_${courseId}`);
+      try {
+        localStorage.setItem(`lms_course_has_incomplete_quizzes_${courseId}`, 'true');
+      } catch {}
+    } else if (!hasIncompleteQuizzesInCourse && typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(`lms_course_has_incomplete_quizzes_${courseId}`);
+      } catch {}
+    }
+  }, [hasIncompleteQuizzesInCourse, currentUserEmail, courseId]);
+
+  const courseLevelComplete = !hasIncompleteQuizzesInCourse && (pbIsComplete || enrollIsComplete || localIsComplete);
 
   const enrollLessonsLookupMap = (() => {
     const map = new Map<string, any>();
@@ -782,8 +914,81 @@ export default function CourseDetailPage() {
     return map;
   })();
 
+  const getAllUserIdentifiers = (): string[] => {
+    if (typeof window === 'undefined') return [];
+    const list = new Set<string>();
+    const add = (val: any) => {
+      if (!val || typeof val !== 'string') return;
+      const s = val.trim();
+      if (!s) return;
+      list.add(s);
+      list.add(s.toLowerCase());
+    };
+    add(getCurrentUserEmail());
+    add(currentUserEmail);
+    add(localStorage.getItem("userEmail"));
+    add(localStorage.getItem("user"));
+    add(localStorage.getItem("email"));
+    add(localStorage.getItem("user_email"));
+    add(sessionStorage.getItem("userEmail"));
+    add(sessionStorage.getItem("user"));
+    try {
+      const rawUser = localStorage.getItem("user");
+      if (rawUser && rawUser.startsWith("{")) {
+        const parsed = JSON.parse(rawUser);
+        add(parsed.email);
+        add(parsed.name);
+        add(parsed.username);
+      }
+    } catch {}
+    return Array.from(list);
+  };
+
+  const getLessonAllIdentifiers = (lesson: any, allLessons: any[] = []): string[] => {
+    if (!lesson) return [];
+    const set = new Set<string>();
+    const add = (val: any) => {
+      if (!val || typeof val !== 'string') return;
+      const s = val.trim();
+      if (!s) return;
+      set.add(s);
+      set.add(s.toLowerCase());
+      const slug = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      if (slug) set.add(slug);
+    };
+
+    add(lesson.name);
+    add(lesson.title);
+    add(lesson.lesson_name);
+    add(lesson.id);
+    add(lesson.lessonName);
+
+    if (Array.isArray(allLessons) && allLessons.length > 0) {
+      const lName = String(lesson.name || '').trim().toLowerCase();
+      const lTitle = String(lesson.title || lesson.lesson_name || '').trim().toLowerCase();
+      const full = allLessons.find((item: any) => {
+        const iName = String(item?.name || '').trim().toLowerCase();
+        const iTitle = String(item?.title || item?.lesson_name || '').trim().toLowerCase();
+        return (lName && (iName === lName || iTitle === lName)) ||
+               (lTitle && (iName === lTitle || iTitle === lTitle));
+      });
+      if (full) {
+        add(full.name);
+        add(full.title);
+        add(full.lesson_name);
+        add(full.id);
+      }
+    }
+    return Array.from(set);
+  };
+
   const checkOutlineLessonComplete = (l: any) => {
     if (!l) return false;
+    // 0. A student cannot complete a lesson if its quiz is not completed
+    if (!isInstructor && !isLessonQuizComplete(l)) {
+      return false;
+    }
+
     // 1. If course is complete at course-level, every syllabus lesson is completed
     if (courseLevelComplete) return true;
 
@@ -799,6 +1004,7 @@ export default function CourseDetailPage() {
       return true;
     }
 
+    const identifiers = getLessonAllIdentifiers(l, allLessonsList);
     const lName = String(l.name || '').trim().toLowerCase();
     const lTitle = String(l.title || l.lesson_name || '').trim().toLowerCase();
 
@@ -816,39 +1022,100 @@ export default function CourseDetailPage() {
       return true;
     }
 
-    // 4. Check localStorage for local completion flag
+    // 4. Check localStorage for local completion flag across all identifier & email permutations
     if (typeof window !== 'undefined') {
-      const email = currentUserEmail || localStorage.getItem("userEmail") || "";
-      if (email) {
-        if (
-          (l.name && localStorage.getItem(`lms_lesson_${email}_${l.name}_completed`) === 'true') ||
-          (l.name && localStorage.getItem(`lms_lesson_${email}_${courseId}_${l.name}_completed`) === 'true') ||
-          (l.title && localStorage.getItem(`lms_lesson_${email}_${l.title}_completed`) === 'true')
-        ) {
-          return true;
-        }
+      // 4a. Check generic keys (no email required)
+      const genericMatch = identifiers.some(id => 
+        localStorage.getItem(`lms_lesson_${id}_completed`) === 'true' ||
+        localStorage.getItem(`lms_lesson_${courseId}_${id}_completed`) === 'true'
+      );
+      if (genericMatch) return true;
+
+      // 4b. Check email-scoped keys across all user identifiers
+      const userEmails = getAllUserIdentifiers();
+      for (const em of userEmails) {
+        const emailMatch = identifiers.some(id =>
+          localStorage.getItem(`lms_lesson_${em}_${id}_completed`) === 'true' ||
+          localStorage.getItem(`lms_lesson_${em}_${courseId}_${id}_completed`) === 'true'
+        );
+        if (emailMatch) return true;
       }
+
+      // 4c. Scan localStorage keys for any lesson completion match
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('lms_lesson_') && k.endsWith('_completed')) {
+            if (localStorage.getItem(k) === 'true') {
+              const kLower = k.toLowerCase();
+              if (identifiers.some(id => id.length > 2 && kLower.includes(id))) {
+                return true;
+              }
+            }
+          }
+        }
+      } catch {}
     }
 
     // 5. Check progress records returned by API
     if (Array.isArray(progressRecords) && progressRecords.length > 0) {
-      return progressRecords.some((r: any) => {
-        const rLesson = String(r.lesson || '').trim().toLowerCase();
-        const rLessonName = String(r.lesson_name || '').trim().toLowerCase();
-        const rTitle = String(r.title || '').trim().toLowerCase();
+      const recordMatch = progressRecords.some((r: any) => {
+        if (!r) return false;
+        if (typeof r === 'string') {
+          const rStr = r.trim().toLowerCase();
+          return identifiers.includes(rStr);
+        }
         const isCompleteStatus =
           r.status === 'Complete' ||
           r.status === 'Completed' ||
           r.completed === 1 ||
           r.completed === '1' ||
           r.is_complete === 1 ||
-          r.is_complete === true;
+          r.is_complete === true ||
+          r.is_completed === 1 ||
+          !r.status;
         if (!isCompleteStatus) return false;
-        return (
-          (lName && (rLesson === lName || rLessonName === lName || rTitle === lName)) ||
-          (lTitle && (rLesson === lTitle || rLessonName === lTitle || rTitle === lTitle))
-        );
+
+        const rIds = [
+          String(r.lesson || '').trim().toLowerCase(),
+          String(r.lesson_name || '').trim().toLowerCase(),
+          String(r.title || '').trim().toLowerCase(),
+          String(r.name || '').trim().toLowerCase(),
+          String(r.id || '').trim().toLowerCase(),
+          String(r.lesson_title || '').trim().toLowerCase(),
+        ].filter(Boolean);
+
+        return identifiers.some(id => rIds.includes(id));
       });
+      if (recordMatch) return true;
+    }
+
+    // 6. Sequential completed count fallback from backend progress bar or enrollment
+    const backendCompleted = Math.max(
+      parsedPB?.completedLessons || 0,
+      Number(enrollmentData?.completed_lessons || 0),
+      Number(details?.membership?.completed_lessons || 0),
+      Number(normalizedProgress?.completed_lessons || 0)
+    );
+    const backendPercent = Math.max(
+      parsedPB?.percent || 0,
+      Number(enrollmentData?.progress || 0),
+      Number(details?.membership?.progress || 0),
+      Number(normalizedProgress?.progress || 0)
+    );
+    const percentCount = allOutlineLessons.length > 0 && backendPercent > 0
+      ? Math.floor((backendPercent / 100) * allOutlineLessons.length)
+      : 0;
+    const effectiveCompletedCount = Math.max(backendCompleted, percentCount);
+
+    if (effectiveCompletedCount > 0 && allOutlineLessons.length > 0) {
+      const lessonIdx = allOutlineLessons.findIndex((ol: any) => {
+        const olIds = getLessonAllIdentifiers(ol, allLessonsList);
+        return identifiers.some(id => olIds.includes(id));
+      });
+      if (lessonIdx >= 0 && lessonIdx < effectiveCompletedCount) {
+        return true;
+      }
     }
 
     return false;
@@ -920,7 +1187,7 @@ export default function CourseDetailPage() {
     ? allOutlineLessons.length
     : allOutlineLessons.filter(l => checkOutlineLessonComplete(l)).length;
 
-  const isAllOutlineLessonsComplete = allOutlineLessons.length > 0 && (courseLevelComplete || allOutlineLessons.every(l => checkOutlineLessonComplete(l)));
+  const isAllOutlineLessonsComplete = allOutlineLessons.length > 0 && !hasIncompleteQuizzesInCourse && (courseLevelComplete || allOutlineLessons.every(l => checkOutlineLessonComplete(l)));
 
   const isCourseComplete = Boolean(courseLevelComplete || isAllOutlineLessonsComplete);
 
@@ -940,7 +1207,7 @@ export default function CourseDetailPage() {
 
   const progressPercent = isCourseComplete
     ? 100
-    : Math.max(calculatedPercent, pbPercent, enrollPercent);
+    : Math.min(99, Math.max(calculatedPercent, pbPercent, enrollPercent));
 
   const isUserEnrolled = Boolean(
     isEnrolled ||
@@ -957,13 +1224,10 @@ export default function CourseDetailPage() {
     if (isCourseComplete) return false;
     if (!isUserEnrolled) return false; // Non-enrolled users are handled by preview/paywall logic
 
+    const itemIds = getLessonAllIdentifiers(lessonItem, allLessonsList);
     const lessonIdx = allOutlineLessons.findIndex((ol: any) => {
-      const olName = String(ol.name || '').trim().toLowerCase();
-      const olTitle = String(ol.title || ol.lesson_name || '').trim().toLowerCase();
-      const lName = String(lessonItem?.name || '').trim().toLowerCase();
-      const lTitle = String(lessonItem?.title || lessonItem?.lesson_name || '').trim().toLowerCase();
-      return (lName && (olName === lName || olTitle === lName)) ||
-             (lTitle && (olName === lTitle || olTitle === lTitle));
+      const olIds = getLessonAllIdentifiers(ol, allLessonsList);
+      return itemIds.some(id => olIds.includes(id));
     });
 
     if (lessonIdx <= 0) return false; // First lesson is always unlocked
@@ -998,6 +1262,37 @@ export default function CourseDetailPage() {
   const heroGradientClass = ((details?.card_gradient || details?.color) && (gradientMap[details?.card_gradient] || gradientMap[details?.color]))
     ? (gradientMap[details?.card_gradient] || gradientMap[details?.color])
     : "from-slate-900 via-indigo-950 to-slate-900";
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col font-sans bg-gray-50">
+        <Navbar />
+        <div className="flex-grow flex justify-center items-center">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-indigo-200 border-dashed rounded-full animate-spin"></div>
+            <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent border-solid rounded-full animate-spin absolute inset-0"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !details) {
+    return (
+      <div className="min-h-screen flex flex-col font-sans bg-gray-50">
+        <Navbar />
+        <div className="flex-grow flex flex-col justify-center items-center p-8 text-center">
+          <div className="bg-white p-10 rounded-3xl shadow-xl max-w-md w-full">
+            <h2 className="text-3xl font-extrabold text-gray-900 mb-4">Oops!</h2>
+            <p className="text-gray-500 mb-8">{error || 'Course not found'}</p>
+            <button onClick={() => navigateBack(router, '/courses')} className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white font-bold rounded-xl shadow-lg shadow-indigo-200 cursor-pointer">
+              Back to Previous Screen
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
@@ -1257,11 +1552,16 @@ export default function CourseDetailPage() {
                             const isSequentialLocked = isLessonSequentiallyLocked(lesson);
                             const isLocked = isPaywallLocked || isSequentialLocked;
                             const isPreview = !isInstructor && !isUserEnrolled && Boolean(lesson.include_in_preview === 1 || lesson.include_in_preview === true);
-                            const isLessonCompleted = isUserEnrolled && (isCourseComplete || checkOutlineLessonComplete(lesson));
+                            const isLessonQuizDone = isLessonQuizComplete(lesson);
+                            const isLessonCompleted = isUserEnrolled && (isInstructor || isLessonQuizDone) && (isCourseComplete || checkOutlineLessonComplete(lesson));
+                            const lessonQuizIds = getLessonQuizIds(lesson);
+                            const hasQuiz = lessonQuizIds.length > 0;
+
+                            const lessonHref = `/course/${courseId}/${encodeURIComponent(chapter.name)}/${encodeURIComponent(lesson.name)}`;
 
                             return (
                               <li key={lesson.name || lIndex} className="py-3 flex justify-between items-center group/lesson">
-                                <div className="flex items-center gap-2.5">
+                                <div className="flex items-center gap-2.5 min-w-0 pr-3">
                                   {isLocked ? (
                                     <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
                                       <Lock className="w-3 h-3 text-slate-400" />
@@ -1271,22 +1571,35 @@ export default function CourseDetailPage() {
                                   ) : (
                                     <PlayCircle className="w-4 h-4 text-slate-300 group-hover/lesson:text-indigo-500 transition-colors shrink-0" />
                                   )}
-                                  <span className={`text-sm font-medium transition-colors ${isLocked ? "text-slate-400 cursor-not-allowed" : isLessonCompleted ? "text-slate-800 font-semibold" : "text-slate-700 group-hover/lesson:text-slate-900"}`}>
-                                    {lesson.title || lesson.lesson_name || lesson.name}
-                                  </span>
+                                  {isLocked ? (
+                                    <span className="text-sm font-medium text-slate-400 cursor-not-allowed truncate">
+                                      {lesson.title || lesson.lesson_name || lesson.name}
+                                    </span>
+                                  ) : (
+                                    <Link
+                                      href={lessonHref}
+                                      className={`text-sm font-medium transition-colors truncate hover:text-indigo-600 ${isLessonCompleted ? "text-slate-800 font-semibold" : "text-slate-700 hover:text-slate-900"}`}
+                                    >
+                                      {lesson.title || lesson.lesson_name || lesson.name}
+                                    </Link>
+                                  )}
                                   {isLessonCompleted && (
-                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full ml-1.5 shadow-2xs">
+                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full ml-1.5 shrink-0 shadow-2xs">
                                       Completed
                                     </span>
                                   )}
-                                  {isPreview && (
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full ml-1.5 shadow-xs">
-                                      Free Preview
+                                  {hasQuiz && !isInstructor && (
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ml-1.5 shrink-0 flex items-center gap-1 ${
+                                      isLessonQuizDone 
+                                        ? 'text-emerald-700 bg-emerald-50 border border-emerald-200/80 shadow-2xs' 
+                                        : 'text-amber-700 bg-amber-50 border border-amber-200/80 shadow-2xs'
+                                    }`}>
+                                      {isLessonQuizDone ? 'Quiz ✓' : 'Quiz Required'}
                                     </span>
                                   )}
-                                  {isLocked && (
-                                    <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded ml-1.5 hidden sm:inline-flex items-center gap-1">
-                                      <Lock className="w-2.5 h-2.5" /> Locked
+                                  {isPreview && (
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full ml-1.5 shrink-0 shadow-xs">
+                                      Free Preview
                                     </span>
                                   )}
                                 </div>
@@ -1294,22 +1607,22 @@ export default function CourseDetailPage() {
                                 {isPaywallLocked ? (
                                   <button
                                     onClick={() => router.push(`/checkout?item_type=course&item_id=${encodeURIComponent(courseId)}`)}
-                                    className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 text-xs font-bold transition-all px-2.5 py-1 rounded-md hover:bg-indigo-50 cursor-pointer"
+                                    className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 text-xs font-bold transition-all px-2.5 py-1 rounded-md hover:bg-indigo-50 cursor-pointer shrink-0"
                                     title="Unlock course to access this lesson"
                                   >
                                     <Lock className="w-3 h-3" /> Unlock
                                   </button>
                                 ) : isSequentialLocked ? (
                                   <div
-                                    className="flex items-center gap-1 text-slate-400 text-xs font-semibold px-2.5 py-1 rounded-md select-none cursor-not-allowed"
+                                    className="flex items-center gap-1 text-slate-400 text-xs font-semibold px-2.5 py-1 rounded-md select-none cursor-not-allowed shrink-0"
                                     title="Complete the previous lesson to unlock this lesson"
                                   >
                                     <Lock className="w-3 h-3 text-slate-400" /> Locked
                                   </div>
                                 ) : (
                                   <Link
-                                    href={`/course/${courseId}/${encodeURIComponent(chapter.name)}/${encodeURIComponent(lesson.name)}`}
-                                    className="flex items-center gap-1 text-indigo-600 text-xs font-bold opacity-0 group-hover/lesson:opacity-100 transition-all -translate-x-2 group-hover/lesson:translate-x-0"
+                                    href={lessonHref}
+                                    className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 text-xs font-bold transition-all px-2.5 py-1 rounded-md hover:bg-indigo-50 shrink-0"
                                   >
                                     {isInstructor ? "Start Lesson" : (isPreview ? "Preview" : (isLessonCompleted ? "Review" : "Start"))} <ChevronRight className="w-3 h-3" />
                                   </Link>

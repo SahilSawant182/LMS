@@ -1074,8 +1074,9 @@ export const getQuizSubmissions = async (filters?: {
     if (filters?.submission) {
       filtersArray.push(["LMS Quiz Submission", "name", "=", filters.submission]);
     }
-    if (filters?.member) {
-      filtersArray.push(["LMS Quiz Submission", "member", "=", filters.member]);
+    const memberToFilter = filters?.member || filters?.user || currentUser;
+    if (memberToFilter) {
+      filtersArray.push(["LMS Quiz Submission", "member", "=", memberToFilter]);
     }
     if (filtersArray.length > 0) {
       resourceParams.filters = JSON.stringify(filtersArray);

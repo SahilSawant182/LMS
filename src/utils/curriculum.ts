@@ -85,13 +85,6 @@ export const compareCurriculumItems = (a: any, b: any): number => {
   if (numA !== null && numB === null) return -1;
   if (numA === null && numB !== null) return 1;
 
-  // 4. Natural language alphanumeric title sorting (e.g. "Lesson 1" < "Lesson 2" < "Lesson 10")
-  if (titleA && titleB) {
-    const naturalDiff = titleA.localeCompare(titleB, undefined, { numeric: true, sensitivity: 'base' });
-    if (naturalDiff !== 0) {
-      return naturalDiff;
-    }
-  }
-
+  // 4. Preserve original syllabus order if no explicit sequence, creation date, or numbered title exists
   return 0;
 };

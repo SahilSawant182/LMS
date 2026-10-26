@@ -2,10 +2,10 @@
 
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getLesson, getChapters, getLessons, getCourseProgress, getCourseProgressBar, parseProgressBarValue, createCourseProgress, getCourse, getCourseOutline } from '@/services/lms.services';
+import { getLesson, getChapters, getLessons, getCourseProgress, getCourseProgressBar, parseProgressBarValue, createCourseProgress, getCourse, getCourseOutline, getQuizSubmissions } from '@/services/lms.services';
 import { compareCurriculumItems } from '@/utils/curriculum';
 import { getCourseWithEnrollment } from '@/services/payment.services';
-import { getImageUrl } from '@/services/api.services';
+import { getImageUrl, getCurrentUserEmail } from '@/services/api.services';
 import { isAuthorizedInstructor } from '@/services/auth.services';
 import { CourseWithEnrollment } from '@/types/payment.types';
 import Navbar from '@/components/Navbar';
@@ -44,7 +44,8 @@ import {
   CheckCircle2,
   RotateCcw,
   StickyNote,
-  MessageSquare
+  MessageSquare,
+  AlertCircle
 } from 'lucide-react';
 
 interface EditorBlock {
@@ -97,6 +98,46 @@ function parseBlocks(rawContent: any): EditorBlock[] {
   }
 
   return [];
+}
+
+function getLessonQuizIds(lesson: any): string[] {
+  if (!lesson) return [];
+  const quizIds = new Set<string>();
+
+  if (lesson.quiz && typeof lesson.quiz === 'string' && lesson.quiz.trim()) {
+    quizIds.add(lesson.quiz.trim());
+  } else if (lesson.quiz && typeof lesson.quiz === 'object' && (lesson.quiz.name || lesson.quiz.id)) {
+    quizIds.add(String(lesson.quiz.name || lesson.quiz.id).trim());
+  }
+  if (lesson.quiz_id && typeof lesson.quiz_id === 'string' && lesson.quiz_id.trim()) {
+    quizIds.add(lesson.quiz_id.trim());
+  }
+  if (lesson.lms_quiz && typeof lesson.lms_quiz === 'string' && lesson.lms_quiz.trim()) {
+    quizIds.add(lesson.lms_quiz.trim());
+  }
+
+  const rawBlocks = parseBlocks(lesson.content || lesson.body);
+  rawBlocks.forEach((b: any) => {
+    if (b.type === 'quiz') {
+      const qId = b.data?.quiz || b.data?.id || b.data?.name || b.content || b.data?.content;
+      if (qId && typeof qId === 'string' && qId.trim()) {
+        quizIds.add(qId.trim());
+      }
+    }
+  });
+
+  const textToSearch = `${typeof lesson.content === 'string' ? lesson.content : ''} ${typeof lesson.body === 'string' ? lesson.body : ''}`;
+  const regex1 = /class(?:Name)?=["'][^"']*quiz-block[^"']*["'][^>]*data-id=["']([^"']+)["']/gi;
+  const regex2 = /data-id=["']([^"']+)["'][^>]*class(?:Name)?=["'][^"']*quiz-block/gi;
+  let match;
+  while ((match = regex1.exec(textToSearch)) !== null) {
+    if (match[1]?.trim()) quizIds.add(match[1].trim());
+  }
+  while ((match = regex2.exec(textToSearch)) !== null) {
+    if (match[1]?.trim()) quizIds.add(match[1].trim());
+  }
+
+  return Array.from(quizIds);
 }
 
 function formatSimpleMarkdown(text: string): string {
@@ -233,7 +274,21 @@ function TableBlock({ data }: { data: any }) {
   );
 }
 
-function EditorBlockRenderer({ block, isInstructor }: { block: EditorBlock; isInstructor: boolean }) {
+function EditorBlockRenderer({
+  block,
+  isInstructor,
+  isQuizCompleted,
+  courseId,
+  chapterId,
+  lessonId
+}: {
+  block: EditorBlock;
+  isInstructor: boolean;
+  isQuizCompleted?: (quizId: string) => boolean;
+  courseId?: string;
+  chapterId?: string;
+  lessonId?: string;
+}) {
   if (!block || !block.type) return null;
 
   switch (block.type) {
@@ -371,32 +426,47 @@ function EditorBlockRenderer({ block, isInstructor }: { block: EditorBlock; isIn
     case 'quiz': {
       const quizId = block.data?.quiz || block.data?.id || '';
       if (!quizId) return null;
+      const isDone = isQuizCompleted ? isQuizCompleted(quizId) : false;
+      const returnParams = courseId && chapterId && lessonId
+        ? `?courseId=${encodeURIComponent(courseId)}&chapterId=${encodeURIComponent(chapterId)}&lessonId=${encodeURIComponent(lessonId)}`
+        : '';
       return (
-        <div className="my-6 p-5 md:p-6 bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/40 rounded-2xl border border-indigo-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div id="lesson-quiz-section" className="my-6 p-5 md:p-6 bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/40 rounded-2xl border border-indigo-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-start gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-600/20">
-              <HelpCircle className="w-5 h-5" />
+            <div className={`w-11 h-11 rounded-xl ${isDone ? 'bg-emerald-600 shadow-emerald-600/20' : 'bg-indigo-600 shadow-indigo-600/20'} text-white flex items-center justify-center shrink-0 shadow-md`}>
+              {isDone ? <CheckCircle2 className="w-5 h-5" /> : <HelpCircle className="w-5 h-5" />}
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
                   Lesson Quiz
                 </span>
+                {!isInstructor && (
+                  isDone ? (
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1 border border-emerald-200">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Completed
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 flex items-center gap-1 border border-amber-200">
+                      <AlertCircle className="w-3 h-3 text-amber-600" /> Quiz Required
+                    </span>
+                  )
+                )}
                 <h4 className="text-base font-bold text-slate-900">
                   {quizId}
                 </h4>
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Reinforce your understanding with interactive quiz questions.
+                {isDone ? "You have completed this quiz!" : "You must complete and submit this quiz to complete the lesson."}
               </p>
             </div>
           </div>
           <Link
-            href={`/quizzes/${encodeURIComponent(quizId)}`}
-            className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-1.5 shrink-0"
+            href={`/quizzes/${encodeURIComponent(quizId)}${returnParams}`}
+            className={`w-full sm:w-auto px-5 py-2.5 ${isDone ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20'} rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0`}
           >
             <Award className="w-4 h-4" />
-            {isInstructor ? "Manage Quiz" : "Start Quiz"}
+            {isInstructor ? "Manage Quiz" : isDone ? "Review Quiz" : "Start Quiz"}
           </Link>
         </div>
       );
@@ -581,6 +651,10 @@ export default function LessonPage() {
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [isCurriculumSidebarOpen, setIsCurriculumSidebarOpen] = useState(true);
 
+  // Lesson & quiz tracking state
+  const [allLessonsList, setAllLessonsList] = useState<any[]>([]);
+  const [userQuizSubmissions, setUserQuizSubmissions] = useState<any[]>([]);
+
   // ── LMS Lesson Notes state ──────────────────────────────────────────────
   const [lessonNotesData, setLessonNotesData] = useState<LessonNotesResponse | null>(null);
   const [activeTab, setActiveTab] = useState<'notes' | 'discussion'>('notes');
@@ -632,7 +706,7 @@ export default function LessonPage() {
   };
 
   useEffect(() => {
-    const currentEmail = localStorage.getItem('userEmail') || localStorage.getItem('user_email') || '';
+    const currentEmail = getCurrentUserEmail() || localStorage.getItem('userEmail') || localStorage.getItem('user') || localStorage.getItem('user_email') || '';
     setUserEmail(currentEmail);
     // Initialize instructor state conservatively to false to prevent premature instructor flash
     setIsInstructor(false);
@@ -644,7 +718,7 @@ export default function LessonPage() {
       setError(null);
       setIsPaywallLocked(false);
       try {
-        const [lessonRes, chaptersRes, lessonsRes, progressRes, progressBarRes, courseEnrollRes, courseRes, outlineRes] = await Promise.allSettled([
+        const [lessonRes, chaptersRes, lessonsRes, progressRes, progressBarRes, courseEnrollRes, courseRes, outlineRes, quizSubsRes] = await Promise.allSettled([
           getLesson({ course: courseId, chapter: chapterId, name: lessonId }),
           getChapters({ course: courseId }),
           getLessons({ course: courseId }),
@@ -652,8 +726,13 @@ export default function LessonPage() {
           getCourseProgressBar({ course: courseId, member: currentEmail }),
           getCourseWithEnrollment(courseId),
           getCourse(courseId),
-          getCourseOutline({ course: courseId })
+          getCourseOutline({ course: courseId }),
+          getQuizSubmissions({ member: currentEmail })
         ]);
+
+        if (quizSubsRes.status === 'fulfilled' && Array.isArray(quizSubsRes.value)) {
+          setUserQuizSubmissions(quizSubsRes.value);
+        }
 
         let cData: CourseWithEnrollment | null = null;
         if (courseEnrollRes.status === 'fulfilled' && courseEnrollRes.value) {
@@ -745,19 +824,20 @@ export default function LessonPage() {
             ? rawOutline
             : (rawOutline?.message?.data || rawOutline?.data?.message || rawOutline?.data || rawOutline?.message || []);
 
-          if (outlineChapters && Array.isArray(outlineChapters) && outlineChapters.length > 0) {
-            fallbackLesson = searchChapters(outlineChapters);
+          if (cData && Array.isArray((cData as any).chapters) && (cData as any).chapters.length > 0) {
+            fallbackLesson = searchChapters((cData as any).chapters);
           }
           if (!fallbackLesson && courseObj && Array.isArray(courseObj.chapters)) {
             fallbackLesson = searchChapters(courseObj.chapters);
           }
-          if (!fallbackLesson && cData && Array.isArray((cData as any).chapters)) {
-            fallbackLesson = searchChapters((cData as any).chapters);
+          if (!fallbackLesson && outlineChapters && Array.isArray(outlineChapters) && outlineChapters.length > 0) {
+            fallbackLesson = searchChapters(outlineChapters);
           }
-          if (!fallbackLesson && lessonsRes.status === 'fulfilled') {
+          if (lessonsRes.status === 'fulfilled') {
             const rawLe = lessonsRes.value;
             const leArray = Array.isArray(rawLe) ? rawLe : (rawLe?.message?.data || rawLe?.data || rawLe?.message || []);
             if (Array.isArray(leArray)) {
+              setAllLessonsList(leArray);
               fallbackLesson = leArray.find((l: any) => {
                 const lName = String(l?.name || '').trim().toLowerCase();
                 const lTitle = String(l?.title || l?.lesson_name || '').trim().toLowerCase();
@@ -794,7 +874,9 @@ export default function LessonPage() {
           (cData as any).chapters.forEach((ch: any) => {
             if (Array.isArray(ch.lessons)) {
               ch.lessons.forEach((l: any) => {
-                if (l.name) enrollLessonsMap.set(l.name, l);
+                if (l.name) enrollLessonsMap.set(String(l.name).trim().toLowerCase(), l);
+                if (l.title) enrollLessonsMap.set(String(l.title).trim().toLowerCase(), l);
+                if (l.lesson_name) enrollLessonsMap.set(String(l.lesson_name).trim().toLowerCase(), l);
               });
             }
           });
@@ -819,18 +901,18 @@ export default function LessonPage() {
         const hasLessons = (arr: any[]) => Array.isArray(arr) && arr.some((ch: any) => Array.isArray(ch?.lessons) && ch.lessons.length > 0);
 
         let baseChapters: any[] = [];
-        if (hasLessons(outlineChaptersList)) {
-          baseChapters = outlineChaptersList;
+        if (hasLessons(enrollChaptersList)) {
+          baseChapters = enrollChaptersList;
         } else if (hasLessons(courseChaptersList)) {
           baseChapters = courseChaptersList;
-        } else if (hasLessons(enrollChaptersList)) {
-          baseChapters = enrollChaptersList;
-        } else if (outlineChaptersList.length > 0) {
+        } else if (hasLessons(outlineChaptersList)) {
           baseChapters = outlineChaptersList;
-        } else if (courseChaptersList.length > 0) {
-          baseChapters = courseChaptersList;
         } else if (enrollChaptersList.length > 0) {
           baseChapters = enrollChaptersList;
+        } else if (courseChaptersList.length > 0) {
+          baseChapters = courseChaptersList;
+        } else if (outlineChaptersList.length > 0) {
+          baseChapters = outlineChaptersList;
         } else {
           baseChapters = listChapters;
         }
@@ -838,7 +920,7 @@ export default function LessonPage() {
         // Sort chapters consistently using sequence numbers, creation timestamp, and title numbering
         const sortedChArray = [...baseChapters].sort(compareCurriculumItems);
 
-        const allSourceChapters = [...outlineChaptersList, ...courseChaptersList, ...enrollChaptersList];
+        const allSourceChapters = [...enrollChaptersList, ...courseChaptersList, ...outlineChaptersList];
 
         const mapped = sortedChArray.map((c: any) => {
           let chLessons: any[] = Array.isArray(c.lessons) && c.lessons.length > 0 ? c.lessons : [];
@@ -872,7 +954,9 @@ export default function LessonPage() {
           return {
             ...c,
             lessons: sortedChLessons.map((l: any) => {
-              const fromEnroll = enrollLessonsMap.get(l.name);
+              const lKey = String(l.name || '').trim().toLowerCase();
+              const lTitleKey = String(l.title || l.lesson_name || '').trim().toLowerCase();
+              const fromEnroll = enrollLessonsMap.get(lKey) || (lTitleKey ? enrollLessonsMap.get(lTitleKey) : null);
               const isLessonLocked = instructorUser
                 ? false
                 : (fromEnroll?.is_locked !== undefined 
@@ -910,6 +994,32 @@ export default function LessonPage() {
 
     fetchLesson();
   }, [courseId, chapterId, lessonId]);
+
+  // ── Sync quiz submissions and local state on window focus or storage event ──
+  useEffect(() => {
+    const syncQuizStatus = async () => {
+      const email = userEmail || (typeof window !== 'undefined' ? (localStorage.getItem('userEmail') || localStorage.getItem('user') || '') : '');
+      if (!email) return;
+      try {
+        const subs = await getQuizSubmissions({ member: email });
+        if (Array.isArray(subs)) {
+          setUserQuizSubmissions(subs);
+        }
+      } catch (e) {}
+    };
+
+    const handleFocus = () => syncQuizStatus();
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key && e.key.includes('quiz')) syncQuizStatus();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [userEmail]);
 
   // ── Fetch + rehydrate highlights when lessonData resolves ────────────────
   useEffect(() => {
@@ -1026,27 +1136,184 @@ export default function LessonPage() {
   }, [highlightMenu, lessonData?.name]);
   // ─────────────────────────────────────────────────────────────────────────
 
+  // ── Quiz Completion Checking Helpers ─────────────────────────────────────
+  const isQuizCompleted = useCallback((quizId: string): boolean => {
+    if (!quizId) return true;
+    const cleanId = String(quizId).trim().toLowerCase();
+
+    // 1. Check local storage
+    if (typeof window !== 'undefined') {
+      const email = (userEmail || localStorage.getItem('userEmail') || localStorage.getItem('user') || '').trim().toLowerCase();
+      if (email) {
+        if (
+          localStorage.getItem(`lms_quiz_completed_${email}_${quizId}`) === 'true' ||
+          localStorage.getItem(`lms_quiz_${email}_${quizId}_completed`) === 'true' ||
+          localStorage.getItem(`lms_quiz_completed_${email}_${cleanId}`) === 'true' ||
+          localStorage.getItem(`lms_quiz_${email}_${cleanId}_completed`) === 'true'
+        ) {
+          return true;
+        }
+      }
+      if (
+        localStorage.getItem(`lms_quiz_completed_${quizId}`) === 'true' ||
+        localStorage.getItem(`lms_quiz_${quizId}_completed`) === 'true' ||
+        localStorage.getItem(`lms_quiz_completed_${cleanId}`) === 'true' ||
+        localStorage.getItem(`lms_quiz_${cleanId}_completed`) === 'true'
+      ) {
+        return true;
+      }
+    }
+
+    // 2. Check loaded user quiz submissions
+    if (Array.isArray(userQuizSubmissions) && userQuizSubmissions.length > 0) {
+      const hasValidSub = userQuizSubmissions.some((s: any) => {
+        const sQuiz = String(s.quiz || s.quiz_title || s.name || '').trim().toLowerCase();
+        if (sQuiz !== cleanId && sQuiz !== String(quizId).trim().toLowerCase()) return false;
+        const status = String(s.status || '').toLowerCase();
+        if (status === 'fail' || status === 'failed') return false;
+        return true;
+      });
+      if (hasValidSub) return true;
+    }
+
+    return false;
+  }, [userEmail, userQuizSubmissions]);
+
+  const currentLessonQuizIds = useMemo(() => {
+    return getLessonQuizIds(lessonData);
+  }, [lessonData]);
+
+  const hasUncompletedQuizInCurrentLesson = useMemo(() => {
+    if (isInstructor) return false;
+    if (!currentLessonQuizIds || currentLessonQuizIds.length === 0) return false;
+    return currentLessonQuizIds.some(qId => !isQuizCompleted(qId));
+  }, [currentLessonQuizIds, isInstructor, isQuizCompleted]);
+
+  const isCurrentLessonQuizCompleted = useMemo(() => {
+    if (!currentLessonQuizIds || currentLessonQuizIds.length === 0) return true;
+    return currentLessonQuizIds.every(qId => isQuizCompleted(qId));
+  }, [currentLessonQuizIds, isQuizCompleted]);
+
+  const isLessonQuizComplete = useCallback((lessonItem: any): boolean => {
+    if (isInstructor) return true;
+    const qIds = getLessonQuizIds(lessonItem);
+    if (qIds.length === 0) return true;
+    return qIds.every(qId => isQuizCompleted(qId));
+  }, [isInstructor, isQuizCompleted]);
+
+  // Derive flat lessons for navigation and quiz verification
+  const flatLessons = useMemo(() => {
+    return outline.flatMap(c => (c.lessons || []).map((l: any) => {
+      const lName = String(l?.name || '').trim().toLowerCase();
+      const lTitle = String(l?.title || l?.lesson_name || '').trim().toLowerCase();
+      const fullLe = allLessonsList.find((item: any) => {
+        const iName = String(item?.name || '').trim().toLowerCase();
+        const iTitle = String(item?.title || item?.lesson_name || '').trim().toLowerCase();
+        return (lName && iName === lName) || (lTitle && iTitle === lTitle);
+      });
+      const mergedLesson = { ...(fullLe || {}), ...l };
+      const isEnrolledStudent = Boolean(
+        isInstructor ||
+        courseData?.is_enrolled ||
+        (courseData as any)?.membership
+      );
+      return {
+        ...mergedLesson,
+        chapterName: c.name, 
+        chapterTitle: c.title || c.chapter_name || c.name,
+        lessonName: l.name,
+        title: l.title || l.lesson_name || l.name,
+        isLocked: isInstructor ? false : (isEnrolledStudent ? false : Boolean(l.is_locked)),
+        isPreview: Number(l.include_in_preview) === 1
+      };
+    }));
+  }, [outline, allLessonsList, isInstructor, courseData]);
+
+  const hasIncompleteQuizzesInCourse = useMemo(() => {
+    if (isInstructor) return false;
+    return flatLessons.some(l => !isLessonQuizComplete(l));
+  }, [flatLessons, isInstructor, isLessonQuizComplete]);
+
+  // Clean up any stale course completion flags in localStorage if incomplete quizzes exist
+  useEffect(() => {
+    if (typeof window !== 'undefined' && userEmail) {
+      if (hasIncompleteQuizzesInCourse) {
+        localStorage.removeItem(`lms_course_completed_${userEmail}_${courseId}`);
+        localStorage.removeItem(`lms_course_completed_${courseId}`);
+        localStorage.setItem(`lms_course_has_incomplete_quizzes_${courseId}`, 'true');
+      } else {
+        localStorage.removeItem(`lms_course_has_incomplete_quizzes_${courseId}`);
+      }
+    }
+  }, [hasIncompleteQuizzesInCourse, userEmail, courseId]);
+
   const handleMarkComplete = async () => {
     if (!lessonData) return;
+    if (!isInstructor && hasUncompletedQuizInCurrentLesson) {
+      showToast.error("Please complete the quiz inside this lesson before marking it as complete.");
+      const qElem = document.getElementById('lesson-quiz-section') || document.querySelector('.quiz-block');
+      if (qElem) qElem.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
     setUpdatingProgress(true);
     try {
+      const activeMember = getCurrentUserEmail() || userEmail || (typeof window !== 'undefined' ? (localStorage.getItem('userEmail') || localStorage.getItem('user') || '') : '');
       await createCourseProgress({
-        member: userEmail,
+        member: activeMember,
         lesson: lessonData.name || lessonId,
         status: "Complete"
       });
       setIsCompletedLocally(true);
-      if (typeof window !== "undefined" && userEmail) {
-        const normLesson = lessonData.name || lessonId;
-        localStorage.setItem(`lms_lesson_${userEmail}_${normLesson}_completed`, 'true');
-        localStorage.setItem(`lms_lesson_${userEmail}_${courseId}_${normLesson}_completed`, 'true');
-        if (lessonData.title) {
-          localStorage.setItem(`lms_lesson_${userEmail}_${lessonData.title}_completed`, 'true');
-        }
+
+      const allEmails = [
+        getCurrentUserEmail(),
+        userEmail,
+        typeof window !== 'undefined' ? localStorage.getItem('userEmail') : '',
+        typeof window !== 'undefined' ? localStorage.getItem('user') : '',
+        typeof window !== 'undefined' ? localStorage.getItem('email') : '',
+        typeof window !== 'undefined' ? localStorage.getItem('user_email') : '',
+      ].filter(Boolean).map(e => String(e).trim());
+
+      const normLesson = lessonData.name || lessonId;
+      const lessonTitle = lessonData.title || lessonData.lesson_name || '';
+
+      const idsToSave = Array.from(new Set([
+        normLesson,
+        lessonId,
+        lessonTitle,
+        String(normLesson).toLowerCase(),
+        String(lessonId).toLowerCase(),
+        String(lessonTitle).toLowerCase(),
+        String(normLesson).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
+        String(lessonId).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
+        String(lessonTitle).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
+      ].filter(Boolean)));
+
+      if (typeof window !== "undefined") {
+        // Save generic keys
+        idsToSave.forEach(id => {
+          localStorage.setItem(`lms_lesson_${id}_completed`, 'true');
+          localStorage.setItem(`lms_lesson_${courseId}_${id}_completed`, 'true');
+        });
+
+        // Save email-scoped keys for all email variants
+        allEmails.forEach(em => {
+          const cleanEm = em.toLowerCase();
+          idsToSave.forEach(id => {
+            localStorage.setItem(`lms_lesson_${em}_${id}_completed`, 'true');
+            localStorage.setItem(`lms_lesson_${em}_${courseId}_${id}_completed`, 'true');
+            localStorage.setItem(`lms_lesson_${cleanEm}_${id}_completed`, 'true');
+            localStorage.setItem(`lms_lesson_${cleanEm}_${courseId}_${id}_completed`, 'true');
+          });
+        });
+
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new CustomEvent('lesson-completed', { detail: { lessonId: normLesson, courseId } }));
       }
+
       const [progressRes, pbRes] = await Promise.allSettled([
-        getCourseProgress(courseId, userEmail),
-        getCourseProgressBar({ course: courseId, member: userEmail })
+        getCourseProgress(courseId, activeMember),
+        getCourseProgressBar({ course: courseId, member: activeMember })
       ]);
       const pVal = progressRes.status === 'fulfilled' ? progressRes.value : null;
       const updatedProgress = pVal?.message?.data || pVal?.data || pVal?.message || pVal;
@@ -1074,6 +1341,9 @@ export default function LessonPage() {
         if (lName === currName || lName === currTarget || lTitle === currName || lTitle === currTarget) {
           return true;
         }
+        if (checkLessonRecordedComplete(l)) {
+          return true;
+        }
         return updatedRecords.some((r: any) => {
           const rLesson = String(r.lesson || '').trim().toLowerCase();
           const rLessonName = String(r.lesson_name || '').trim().toLowerCase();
@@ -1091,12 +1361,16 @@ export default function LessonPage() {
         ? flatLessons.every(l => checkUpdatedLessonDone(l))
         : false;
 
-      const shouldCompleteCourse = allOutlineLessonsDone;
+      const shouldCompleteCourse = allOutlineLessonsDone && !hasIncompleteQuizzesInCourse;
 
       if (shouldCompleteCourse) {
         setIsCourseCompletedLocally(true);
-        if (typeof window !== "undefined" && userEmail) {
-          localStorage.setItem(`lms_course_completed_${userEmail}_${courseId}`, 'true');
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`lms_course_completed_${courseId}`, 'true');
+          allEmails.forEach(em => {
+            localStorage.setItem(`lms_course_completed_${em}_${courseId}`, 'true');
+            localStorage.setItem(`lms_course_completed_${em.toLowerCase()}_${courseId}`, 'true');
+          });
         }
         setShowCompletionModal(true);
         showToast.success('Course completed successfully! Congratulations!');
@@ -1116,6 +1390,19 @@ export default function LessonPage() {
       return;
     }
 
+    if (!isInstructor) {
+      if (hasUncompletedQuizInCurrentLesson) {
+        showToast.error("Please complete the quiz inside this lesson before completing the course.");
+        const qElem = document.getElementById('lesson-quiz-section') || document.querySelector('.quiz-block');
+        if (qElem) qElem.scrollIntoView({ behavior: 'smooth' });
+        return;
+      }
+      if (hasIncompleteQuizzesInCourse) {
+        showToast.error("Please complete all quizzes across the course before completing the course.");
+        return;
+      }
+    }
+
     // Verify all other lessons are completed before completing the course
     const otherLessonsDone = flatLessons.length > 0
       ? flatLessons.filter((_, idx) => idx !== currentIndex).every(l => checkLessonRecordedComplete(l))
@@ -1127,11 +1414,13 @@ export default function LessonPage() {
     }
 
     await handleMarkComplete();
-    setIsCourseCompletedLocally(true);
-    if (typeof window !== "undefined" && userEmail) {
-      localStorage.setItem(`lms_course_completed_${userEmail}_${courseId}`, 'true');
+    if (!hasIncompleteQuizzesInCourse) {
+      setIsCourseCompletedLocally(true);
+      if (typeof window !== "undefined" && userEmail) {
+        localStorage.setItem(`lms_course_completed_${userEmail}_${courseId}`, 'true');
+      }
+      setShowCompletionModal(true);
     }
-    setShowCompletionModal(true);
   };
 
   // Parse blocks from lessonData.content and lessonData.instructor_content
@@ -1177,39 +1466,8 @@ export default function LessonPage() {
     [contentBlocks]
   );
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <Navbar />
-        <div className="flex-grow flex justify-center items-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-        </div>
-      </div>
-    );
-  }
 
-  if (!isPaywallLocked && (error || !lessonData)) {
-    return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <Navbar />
-        <div className="flex-grow flex flex-col justify-center items-center p-8">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Lesson Error</h2>
-          <p className="text-gray-600">{error || 'Lesson not found.'}</p>
-          <button onClick={() => router.push(`/course/${encodeURIComponent(courseId)}`)} className="mt-6 px-6 py-2 bg-indigo-600 text-white rounded-full cursor-pointer hover:bg-indigo-700 transition-colors">Back to Course</button>
-        </div>
-      </div>
-    );
-  }
 
-  // Derive flat lessons for navigation
-  const flatLessons = outline.flatMap(c => (c.lessons || []).map((l: any) => ({ 
-    chapterName: c.name, 
-    lessonName: l.name,
-    title: l.title || l.lesson_name || l.name,
-    isLocked: isInstructor ? false : Boolean(l.is_locked),
-    isPreview: Number(l.include_in_preview) === 1
-  })));
-  
   const currentTargetId = lessonData?.name || lessonId;
   const targetChapter = chapterId ? decodeURIComponent(chapterId).toLowerCase().trim() : '';
   const targetLesson = currentTargetId ? decodeURIComponent(currentTargetId).toLowerCase().trim() : '';
@@ -1217,9 +1475,10 @@ export default function LessonPage() {
 
   const exactIdx = flatLessons.findIndex(l => {
     const lCh = decodeURIComponent(l.chapterName || '').toLowerCase().trim();
+    const lChTitle = decodeURIComponent((l as any).chapterTitle || '').toLowerCase().trim();
     const lName = decodeURIComponent(l.lessonName || '').toLowerCase().trim();
     const lTitle = decodeURIComponent(l.title || '').toLowerCase().trim();
-    const isChMatch = !targetChapter || lCh === targetChapter;
+    const isChMatch = !targetChapter || lCh === targetChapter || lChTitle === targetChapter || (targetChapter && (lCh.includes(targetChapter) || targetChapter.includes(lCh)));
     const isLMatch = lName === targetLesson || lName === altLesson || lTitle === targetLesson || lTitle === altLesson;
     return isChMatch && isLMatch;
   });
@@ -1264,15 +1523,92 @@ export default function LessonPage() {
     localStorage.getItem(`lms_course_completed_${courseId}`) === 'true'
   );
 
-  const courseLevelComplete = Boolean(isCourseCompletedLocally || pbIsComplete || enrollIsComplete || localIsComplete);
+  const courseLevelComplete = Boolean(
+    !hasIncompleteQuizzesInCourse && (isCourseCompletedLocally || pbIsComplete || enrollIsComplete || localIsComplete)
+  );
+
+  const getAllUserIdentifiers = (): string[] => {
+    if (typeof window === 'undefined') return [];
+    const list = new Set<string>();
+    const add = (val: any) => {
+      if (!val || typeof val !== 'string') return;
+      const s = val.trim();
+      if (!s) return;
+      list.add(s);
+      list.add(s.toLowerCase());
+    };
+    add(getCurrentUserEmail());
+    add(userEmail);
+    add(localStorage.getItem("userEmail"));
+    add(localStorage.getItem("user"));
+    add(localStorage.getItem("email"));
+    add(localStorage.getItem("user_email"));
+    add(sessionStorage.getItem("userEmail"));
+    add(sessionStorage.getItem("user"));
+    try {
+      const rawUser = localStorage.getItem("user");
+      if (rawUser && rawUser.startsWith("{")) {
+        const parsed = JSON.parse(rawUser);
+        add(parsed.email);
+        add(parsed.name);
+        add(parsed.username);
+      }
+    } catch {}
+    return Array.from(list);
+  };
+
+  const getLessonAllIdentifiers = (lesson: any, allLessons: any[] = []): string[] => {
+    if (!lesson) return [];
+    const set = new Set<string>();
+    const add = (val: any) => {
+      if (!val || typeof val !== 'string') return;
+      const s = val.trim();
+      if (!s) return;
+      set.add(s);
+      set.add(s.toLowerCase());
+      const slug = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      if (slug) set.add(slug);
+    };
+
+    add(lesson.name);
+    add(lesson.title);
+    add(lesson.lesson_name);
+    add(lesson.id);
+    add(lesson.lessonName);
+
+    if (Array.isArray(allLessons) && allLessons.length > 0) {
+      const lName = String(lesson.name || lesson.lessonName || '').trim().toLowerCase();
+      const lTitle = String(lesson.title || lesson.lesson_name || '').trim().toLowerCase();
+      const full = allLessons.find((item: any) => {
+        const iName = String(item?.name || '').trim().toLowerCase();
+        const iTitle = String(item?.title || item?.lesson_name || '').trim().toLowerCase();
+        return (lName && (iName === lName || iTitle === lName)) ||
+               (lTitle && (iName === lTitle || iTitle === lTitle));
+      });
+      if (full) {
+        add(full.name);
+        add(full.title);
+        add(full.lesson_name);
+        add(full.id);
+      }
+    }
+    return Array.from(set);
+  };
 
   const checkLessonRecordedComplete = (lessonItem: { lessonName?: string; name?: string; title?: string; lesson_name?: string }) => {
+    if (!lessonItem) return false;
+
+    // 0. A student cannot have a completed lesson if its quiz is not completed
+    if (!isInstructor && !isLessonQuizComplete(lessonItem)) {
+      return false;
+    }
+
     // 1. If course is completed at course-level, all lessons are complete
     if (courseLevelComplete) {
       return true;
     }
 
-    // Direct completion properties on lesson item if present
+    // 2. Direct completion properties on lesson item if present
     if (
       (lessonItem as any).is_complete === 1 ||
       (lessonItem as any).is_complete === true ||
@@ -1284,48 +1620,110 @@ export default function LessonPage() {
       return true;
     }
 
-    const lName = (lessonItem.lessonName || lessonItem.name || '').trim().toLowerCase();
-    const lTitle = (lessonItem.title || lessonItem.lesson_name || '').trim().toLowerCase();
+    const identifiers = getLessonAllIdentifiers(lessonItem, allLessonsList);
     const currentTId = (currentTargetId || '').trim().toLowerCase();
     const currLId = (lessonId || '').trim().toLowerCase();
 
-    if (isCompletedLocally && (lName === currentTId || lName === currLId || lTitle === currentTId || lTitle === currLId)) {
+    if (isCompletedLocally && (identifiers.includes(currentTId) || identifiers.includes(currLId))) {
       return true;
     }
 
-    // Check localStorage
-    if (typeof window !== 'undefined' && userEmail) {
-      const lesKey = lessonItem.lessonName || lessonItem.name;
-      if (
-        (lesKey && localStorage.getItem(`lms_lesson_${userEmail}_${lesKey}_completed`) === 'true') ||
-        (lesKey && localStorage.getItem(`lms_lesson_${userEmail}_${courseId}_${lesKey}_completed`) === 'true') ||
-        (lessonItem.title && localStorage.getItem(`lms_lesson_${userEmail}_${lessonItem.title}_completed`) === 'true')
-      ) {
+    // 3. Check localStorage for local completion flag across all permutations
+    if (typeof window !== 'undefined') {
+      // 3a. Check generic keys (no email required)
+      const genericMatch = identifiers.some(id =>
+        localStorage.getItem(`lms_lesson_${id}_completed`) === 'true' ||
+        localStorage.getItem(`lms_lesson_${courseId}_${id}_completed`) === 'true'
+      );
+      if (genericMatch) return true;
+
+      // 3b. Check email-scoped keys across all user identifiers
+      const userEmails = getAllUserIdentifiers();
+      for (const em of userEmails) {
+        const emailMatch = identifiers.some(id =>
+          localStorage.getItem(`lms_lesson_${em}_${id}_completed`) === 'true' ||
+          localStorage.getItem(`lms_lesson_${em}_${courseId}_${id}_completed`) === 'true'
+        );
+        if (emailMatch) return true;
+      }
+
+      // 3c. Scan localStorage keys
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('lms_lesson_') && k.endsWith('_completed')) {
+            if (localStorage.getItem(k) === 'true') {
+              const kLower = k.toLowerCase();
+              if (identifiers.some(id => id.length > 2 && kLower.includes(id))) {
+                return true;
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // 4. Check progress records returned by API
+    if (Array.isArray(progressRecords) && progressRecords.length > 0) {
+      const recordMatch = progressRecords.some((r: any) => {
+        if (!r) return false;
+        if (typeof r === 'string') {
+          const rStr = r.trim().toLowerCase();
+          return identifiers.includes(rStr);
+        }
+        const isCompleteStatus =
+          r.status === 'Complete' ||
+          r.status === 'Completed' ||
+          r.completed === 1 ||
+          r.completed === '1' ||
+          r.is_complete === 1 ||
+          r.is_complete === true ||
+          r.is_completed === 1 ||
+          !r.status;
+
+        if (!isCompleteStatus) return false;
+
+        const rIds = [
+          String(r.lesson || '').trim().toLowerCase(),
+          String(r.lesson_name || '').trim().toLowerCase(),
+          String(r.title || '').trim().toLowerCase(),
+          String(r.name || '').trim().toLowerCase(),
+          String(r.id || '').trim().toLowerCase(),
+          String(r.lesson_title || '').trim().toLowerCase(),
+        ].filter(Boolean);
+
+        return identifiers.some(id => rIds.includes(id));
+      });
+      if (recordMatch) return true;
+    }
+
+    // 5. Sequential completed count fallback from backend progress bar or enrollment
+    const backendCompleted = Math.max(
+      parsedPB?.completedLessons || 0,
+      Number((courseData as any)?.completed_lessons || 0),
+      Number(normalizedProgress?.completed_lessons || 0)
+    );
+    const backendPercent = Math.max(
+      parsedPB?.percent || 0,
+      Number((courseData as any)?.progress || 0),
+      Number(normalizedProgress?.progress || 0)
+    );
+    const percentCount = flatLessons.length > 0 && backendPercent > 0
+      ? Math.floor((backendPercent / 100) * flatLessons.length)
+      : 0;
+    const effectiveCompletedCount = Math.max(backendCompleted, percentCount);
+
+    if (effectiveCompletedCount > 0 && flatLessons.length > 0) {
+      const lessonIdx = flatLessons.findIndex((fl: any) => {
+        const flIds = getLessonAllIdentifiers(fl, allLessonsList);
+        return identifiers.some(id => flIds.includes(id));
+      });
+      if (lessonIdx >= 0 && lessonIdx < effectiveCompletedCount) {
         return true;
       }
     }
 
-    if (!Array.isArray(progressRecords) || progressRecords.length === 0) return false;
-
-    return progressRecords.some((r: any) => {
-      const rLesson = String(r.lesson || '').trim().toLowerCase();
-      const rLessonName = String(r.lesson_name || '').trim().toLowerCase();
-      const rTitle = String(r.title || '').trim().toLowerCase();
-      const isCompleteStatus =
-        r.status === 'Complete' ||
-        r.status === 'Completed' ||
-        r.completed === 1 ||
-        r.completed === '1' ||
-        r.is_complete === 1 ||
-        r.is_complete === true;
-
-      if (!isCompleteStatus) return false;
-
-      return (
-        (lName && (rLesson === lName || rLessonName === lName || rTitle === lName)) ||
-        (lTitle && (rLesson === lTitle || rLessonName === lTitle || rTitle === lTitle))
-      );
-    });
+    return false;
   };
 
   // Accurate outline lesson calculation
@@ -1338,10 +1736,10 @@ export default function LessonPage() {
     ? totalLessonsInOutline
     : (parsedPB?.totalLessons || Number(normalizedProgress.total_lessons || courseData?.total_lessons || 0));
 
-  // Course is strictly complete only if all syllabus outline lessons are recorded as complete
+  // Course is strictly complete only if all syllabus outline lessons are recorded as complete and all quizzes are done
   const areAllLessonsCompleted = totalLessonsInOutline > 0
-    ? (courseLevelComplete || flatLessons.every(l => checkLessonRecordedComplete(l)))
-    : Boolean(parsedPB?.isCompleted || (parsedPB?.pendingLessons === 0 && (parsedPB?.totalLessons || 0) > 0));
+    ? (courseLevelComplete || (flatLessons.every(l => checkLessonRecordedComplete(l)) && !hasIncompleteQuizzesInCourse))
+    : Boolean(parsedPB?.isCompleted || (parsedPB?.pendingLessons === 0 && (parsedPB?.totalLessons || 0) > 0 && !hasIncompleteQuizzesInCourse));
 
   const isCourseComplete = Boolean(courseLevelComplete || areAllLessonsCompleted);
 
@@ -1357,13 +1755,15 @@ export default function LessonPage() {
 
   const progressPercent = isCourseComplete
     ? 100
-    : Math.max(calculatedPercent, pbPercent, enrollPercent);
+    : Math.min(99, Math.max(calculatedPercent, pbPercent, enrollPercent));
 
   const isLessonComplete = (lessonItem: { lessonName?: string; name?: string; title?: string; lesson_name?: string }) => {
     return checkLessonRecordedComplete(lessonItem);
   };
 
-  const currentLessonIsCompleted = isCompletedLocally || checkLessonRecordedComplete({ lessonName: currentTargetId, title: lessonData?.title || lessonData?.lesson_name || '' });
+  const currentLessonIsCompleted = (!isInstructor && hasUncompletedQuizInCurrentLesson)
+    ? false
+    : Boolean(isCompletedLocally || checkLessonRecordedComplete({ lessonName: currentTargetId, title: lessonData?.title || lessonData?.lesson_name || '' }));
 
   // Sequential Locking Logic for Students
   const isLessonSequentiallyLocked = (idx: number) => {
@@ -1384,7 +1784,7 @@ export default function LessonPage() {
     ? flatLessons.filter((_, idx) => idx !== currentIndex).every(l => checkLessonRecordedComplete(l))
     : true;
 
-  const canCompleteCourse = isLastLesson && allOtherLessonsCompleted;
+  const canCompleteCourse = isLastLesson && allOtherLessonsCompleted && isLessonQuizComplete(flatLessons[currentIndex]);
 
   const firstIncompleteLesson = flatLessons.find(l => !checkLessonRecordedComplete(l)) || flatLessons[0];
 
@@ -1396,6 +1796,30 @@ export default function LessonPage() {
   const coursePrice = courseData?.course_price ?? 0;
   const currencySymbol = courseData?.currency === "INR" || !courseData?.currency ? "₹" : courseData.currency;
   const previewLesson = flatLessons.find(l => l.isPreview);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Navbar />
+        <div className="flex-grow flex justify-center items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isPaywallLocked && (error || !lessonData)) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Navbar />
+        <div className="flex-grow flex flex-col justify-center items-center p-8">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Lesson Error</h2>
+          <p className="text-gray-600">{error || 'Lesson not found.'}</p>
+          <button onClick={() => router.push(`/course/${encodeURIComponent(courseId)}`)} className="mt-6 px-6 py-2 bg-indigo-600 text-white rounded-full cursor-pointer hover:bg-indigo-700 transition-colors">Back to Course</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
@@ -1473,12 +1897,20 @@ export default function LessonPage() {
                       (fl.chapterName === chapter.name || (chapter.name && fl.chapterName && fl.chapterName.toLowerCase() === chapter.name.toLowerCase()))
                     );
                     const isSequentialLocked = lFlatIndex > 0 && isLessonSequentiallyLocked(lFlatIndex);
-                    const isLessonLocked = isInstructor ? false : (Boolean(l.is_locked) || isSequentialLocked);
+                    const isEnrolledStudent = Boolean(
+                      isInstructor ||
+                      courseData?.is_enrolled ||
+                      (courseData as any)?.membership
+                    );
+                    const isLessonLocked = isInstructor ? false : (isEnrolledStudent ? isSequentialLocked : (Boolean(l.is_locked) || isSequentialLocked));
                     const isLessonPreview = Number(l.include_in_preview) === 1;
+                    const lessonQuizIds = getLessonQuizIds(l);
+                    const hasQuiz = lessonQuizIds.length > 0;
+                    const isQuizDone = hasQuiz ? lessonQuizIds.every(qId => isQuizCompleted(qId)) : true;
                     const isCompleted = isLessonComplete({
                       lessonName: l.name,
                       title: l.title || l.lesson_name
-                    }) || (isCompletedLocally && isActive);
+                    }) || (isCompletedLocally && isActive && (isInstructor || isQuizDone));
 
                     return (
                       <li key={l.name || lIndex}>
@@ -1515,6 +1947,16 @@ export default function LessonPage() {
                             <span className="line-clamp-2 leading-snug flex-1">
                               {lIndex + 1}. {l.title || l.lesson_name || l.name}
                             </span>
+
+                            {hasQuiz && !isInstructor && (
+                              <span className={`ml-2 px-1.5 py-0.5 text-[10px] font-bold rounded flex items-center gap-1 flex-shrink-0 ${
+                                isQuizDone 
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              }`}>
+                                {isQuizDone ? 'Quiz ✓' : 'Quiz'}
+                              </span>
+                            )}
 
                             {isLessonPreview && !courseData?.is_enrolled && !isInstructor && (
                               <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex-shrink-0">
@@ -1593,7 +2035,26 @@ export default function LessonPage() {
                   <Lock className="w-3.5 h-3.5 text-amber-600" /> Lesson Locked
                 </span>
               ) : !currentLessonIsCompleted ? (
-                canCompleteCourse ? (
+                !isInstructor && hasUncompletedQuizInCurrentLesson ? (
+                  <button
+                    onClick={() => {
+                      const quizBlock = document.getElementById('lesson-quiz-section') || document.querySelector('.quiz-block') || document.querySelector('[data-quiz-section]');
+                      if (quizBlock) {
+                        quizBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      } else {
+                        const qId = currentLessonQuizIds[0];
+                        if (qId) {
+                          router.push(`/quizzes/${encodeURIComponent(qId)}?courseId=${encodeURIComponent(courseId)}&chapterId=${encodeURIComponent(chapterId)}&lessonId=${encodeURIComponent(currentTargetId)}`);
+                        }
+                      }
+                      showToast.error('Please complete the quiz inside this lesson before marking it as complete.');
+                    }}
+                    className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-lg shadow-sm shadow-amber-200 flex items-center gap-2 transition-all cursor-pointer"
+                  >
+                    <AlertCircle className="w-4 h-4" />
+                    Quiz Required
+                  </button>
+                ) : canCompleteCourse ? (
                   <button
                     onClick={handleCompleteCourse}
                     disabled={updatingProgress}
@@ -1799,7 +2260,11 @@ export default function LessonPage() {
                       <EditorBlockRenderer 
                         key={block.id || `blk-${idx}`} 
                         block={block} 
-                        isInstructor={isInstructor} 
+                        isInstructor={isInstructor}
+                        isQuizCompleted={isQuizCompleted}
+                        courseId={courseId}
+                        chapterId={chapterId}
+                        lessonId={currentTargetId}
                       />
                     ))}
                   </div>
@@ -1848,7 +2313,11 @@ export default function LessonPage() {
                             <EditorBlockRenderer 
                               key={block.id || `inst-${idx}`} 
                               block={block} 
-                              isInstructor={true} 
+                              isInstructor={true}
+                              isQuizCompleted={isQuizCompleted}
+                              courseId={courseId}
+                              chapterId={chapterId}
+                              lessonId={currentTargetId}
                             />
                           ))}
                         </div>
@@ -1872,31 +2341,48 @@ export default function LessonPage() {
                 <div className="mt-8 space-y-4">
                   {/* Quiz Option */}
                   {Boolean(attachedQuizId) && !hasQuizInBlocks && (
-                    <div className="p-5 md:p-6 bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/40 rounded-2xl border border-indigo-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div 
+                      id="lesson-quiz-section" 
+                      className={`p-5 md:p-6 rounded-2xl border shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+                        isCurrentLessonQuizCompleted 
+                          ? 'bg-emerald-50/60 border-emerald-200' 
+                          : 'bg-gradient-to-br from-amber-50/70 via-white to-indigo-50/40 border-amber-200'
+                      }`}
+                    >
                       <div className="flex items-start gap-3.5">
-                        <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-600/20">
-                          <HelpCircle className="w-5 h-5" />
+                        <div className={`w-11 h-11 rounded-xl text-white flex items-center justify-center shrink-0 shadow-md ${
+                          isCurrentLessonQuizCompleted ? 'bg-emerald-600 shadow-emerald-600/20' : 'bg-amber-500 shadow-amber-500/20'
+                        }`}>
+                          {isCurrentLessonQuizCompleted ? <CheckCircle className="w-5 h-5" /> : <HelpCircle className="w-5 h-5" />}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
-                              Lesson Quiz
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                              isCurrentLessonQuizCompleted ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-800 border-amber-200'
+                            }`}>
+                              {isCurrentLessonQuizCompleted ? 'Quiz Completed' : 'Quiz Required'}
                             </span>
                             <h4 className="text-base font-bold text-slate-900">
                               {attachedQuizId}
                             </h4>
                           </div>
                           <p className="text-xs text-slate-500 mt-1">
-                            Reinforce your understanding with interactive quiz questions.
+                            {isCurrentLessonQuizCompleted 
+                              ? 'You have passed/submitted this quiz! You can now mark this lesson as complete.' 
+                              : 'You must complete and submit this quiz before this lesson can be marked as complete.'}
                           </p>
                         </div>
                       </div>
                       <Link
-                        href={`/quizzes/${encodeURIComponent(attachedQuizId)}`}
-                        className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-1.5 shrink-0"
+                        href={`/quizzes/${encodeURIComponent(attachedQuizId)}?courseId=${encodeURIComponent(courseId)}&chapterId=${encodeURIComponent(chapterId)}&lessonId=${encodeURIComponent(currentTargetId)}`}
+                        className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 shrink-0 ${
+                          isCurrentLessonQuizCompleted
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/20'
+                        }`}
                       >
                         <Award className="w-4 h-4" />
-                        {isInstructor ? "Manage Quiz" : "Start Quiz"}
+                        {isInstructor ? "Manage Quiz" : isCurrentLessonQuizCompleted ? "Review Quiz" : "Start Quiz"}
                       </Link>
                     </div>
                   )}
@@ -2041,8 +2527,31 @@ export default function LessonPage() {
                 </div>
               )}
 
+              {/* Quiz requirement warning callout before completion bar */}
+              {!isInstructor && hasUncompletedQuizInCurrentLesson && !currentLessonIsCompleted && (
+                <div className="mt-8 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                      <AlertCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-amber-900">Quiz Completion Required</h4>
+                      <p className="text-xs text-amber-700">Please complete and submit the quiz inside this lesson before marking it as complete.</p>
+                    </div>
+                  </div>
+                  {currentLessonQuizIds[0] && (
+                    <Link
+                      href={`/quizzes/${encodeURIComponent(currentLessonQuizIds[0])}?courseId=${encodeURIComponent(courseId)}&chapterId=${encodeURIComponent(chapterId)}&lessonId=${encodeURIComponent(currentTargetId)}`}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl whitespace-nowrap shadow-sm transition-all"
+                    >
+                      Go to Quiz
+                    </Link>
+                  )}
+                </div>
+              )}
+
               {/* Bottom Action: Dynamic Lesson & Course Completion */}
-              <div className="mt-10 p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="mt-8 p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isCourseComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
                     {isCourseComplete ? <CheckCircle className="w-5 h-5 text-emerald-600" /> : <BookOpen className="w-5 h-5 text-indigo-600" />}
@@ -2109,6 +2618,22 @@ export default function LessonPage() {
                         </button>
                       ) : null}
                     </div>
+                  ) : !isInstructor && hasUncompletedQuizInCurrentLesson ? (
+                    <button
+                      onClick={() => {
+                        const quizElem = document.getElementById('lesson-quiz-section') || document.querySelector('.quiz-block') || document.querySelector('[data-quiz-section]');
+                        if (quizElem) {
+                          quizElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        } else if (currentLessonQuizIds[0]) {
+                          router.push(`/quizzes/${encodeURIComponent(currentLessonQuizIds[0])}?courseId=${encodeURIComponent(courseId)}&chapterId=${encodeURIComponent(chapterId)}&lessonId=${encodeURIComponent(currentTargetId)}`);
+                        }
+                        showToast.error('Please complete the quiz inside this lesson before marking it as complete.');
+                      }}
+                      className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-sm shadow-amber-200 transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+                    >
+                      <AlertCircle className="w-4 h-4" />
+                      Complete Quiz First
+                    </button>
                   ) : (
                     <button 
                       onClick={canCompleteCourse ? handleCompleteCourse : handleMarkComplete}

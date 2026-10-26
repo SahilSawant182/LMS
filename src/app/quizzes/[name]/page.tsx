@@ -16,7 +16,7 @@ import { isAuthorizedInstructor } from "@/services/auth.services";
 import { getCurrentUserEmail } from "@/services/api.services";
 import { formatDate } from "@/utils/formatters";
 import { navigateBack } from "@/utils/navigation";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import {
@@ -113,6 +113,11 @@ export default function QuizDetailsPage() {
   const router = useRouter();
   const rawName = (params?.name as string) || "";
   const name = decodeURIComponent(rawName);
+
+  const searchParams = useSearchParams();
+  const returnCourseId = searchParams?.get("courseId");
+  const returnChapterId = searchParams?.get("chapterId");
+  const returnLessonId = searchParams?.get("lessonId");
 
   const [quiz, setQuiz] = useState<QuizDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -484,7 +489,19 @@ export default function QuizDetailsPage() {
           }
           if (sid) {
             const resData = await getQuizResult(sid);
-            if (resData) setLastSubmissionResult(resData);
+            if (resData) {
+              setLastSubmissionResult(resData);
+              if (typeof window !== "undefined") {
+                const user = (currentUserEmail || getCurrentUserEmail() || "").trim().toLowerCase();
+                const qKey = quiz?.name || name;
+                if (user) {
+                  localStorage.setItem(`lms_quiz_completed_${user}_${qKey}`, "true");
+                  localStorage.setItem(`lms_quiz_${user}_${qKey}_completed`, "true");
+                }
+                localStorage.setItem(`lms_quiz_completed_${qKey}`, "true");
+                localStorage.setItem(`lms_quiz_${qKey}_completed`, "true");
+              }
+            }
           }
         } catch (e) {
           console.warn("Automatic post-submission getQuizResult fetch failed:", e);
@@ -714,6 +731,18 @@ export default function QuizDetailsPage() {
         }
       }
 
+      // Persist quiz completion in localStorage for immediate synchronization with lesson/course completion
+      if (typeof window !== "undefined") {
+        const user = (currentUserEmail || getCurrentUserEmail() || "").trim().toLowerCase();
+        const qKey = quiz.name || name;
+        if (user) {
+          localStorage.setItem(`lms_quiz_completed_${user}_${qKey}`, "true");
+          localStorage.setItem(`lms_quiz_${user}_${qKey}_completed`, "true");
+        }
+        localStorage.setItem(`lms_quiz_completed_${qKey}`, "true");
+        localStorage.setItem(`lms_quiz_${qKey}_completed`, "true");
+      }
+
       // Only instructors need to fetch student submissions
       if (isInstructor) {
         await fetchSubmissions();
@@ -874,6 +903,15 @@ export default function QuizDetailsPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
+              {returnCourseId && returnChapterId && returnLessonId && (
+                <Link
+                  href={`/course/${encodeURIComponent(returnCourseId)}/${encodeURIComponent(returnChapterId)}/${encodeURIComponent(returnLessonId)}`}
+                  className="inline-flex justify-center items-center px-6 py-2.5 font-bold rounded-lg shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 transition-colors flex-1 text-sm cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                  Return to Lesson
+                </Link>
+              )}
               {(lastSubmissionId || lastSubmissionResult) && (
                 <button
                   type="button"
