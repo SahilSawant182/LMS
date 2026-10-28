@@ -130,7 +130,7 @@ export default function Navbar() {
   const handleLogout = async () => {
     try {
       logout().catch((err) => console.warn("Logout API warning:", err));
-    } catch (e) {}
+    } catch (e) { }
 
     // Immediately clear all credentials and storage
     localStorage.removeItem("apiKey");
@@ -677,14 +677,14 @@ export default function Navbar() {
                           >
                             My Dashboard
                           </Link>
-                          <Link
+                          {/* <Link
                             href="/plans"
                             onClick={() => setIsDropdownOpen(false)}
                             className="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
                           >
                             <CreditCard className="w-4 h-4 mr-2 text-gray-400" />
                             Plans
-                          </Link>
+                          </Link> */}
                           {isInstructor ? (
                             <Link
                               href="/sales-earnings"
@@ -704,14 +704,14 @@ export default function Navbar() {
                               My Payments
                             </Link>
                           )}
-                          <Link
+                          {/* <Link
                             href="/profile"
                             onClick={() => setIsDropdownOpen(false)}
                             className="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
                           >
                             <User className="w-4 h-4 mr-2 text-gray-400" />
                             Profile
-                          </Link>
+                          </Link> */}
                         </div>
 
                         <div className="py-1">
