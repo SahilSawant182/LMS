@@ -7,7 +7,6 @@ import Pagination from "@/components/ui/Pagination";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getCourses, updateCourse } from "@/services/lms.services";
-import { getCoursesWithEnrollment } from "@/services/payment.services";
 import { getImageUrl } from "@/services/api.services";
 import { showToast } from "@/components/ui/Toast";
 import {
@@ -32,61 +31,22 @@ export default function CoursesPage() {
   const [isInstructor, setIsInstructor] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [selectedFilter, setSelectedFilter] = useState<"all" | "enrolled" | "free" | "paid">("all");
+  const [selectedFilter, setSelectedFilter] = useState<"All" | "Enrolled" | "Free" | "Paid">("All");
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
   const COURSES_PER_PAGE = 8;
 
-  const fetchCourses = async () => {
+  const fetchCourses = async (filterType?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const [enrollRes, catalogRes] = await Promise.allSettled([
-        getCoursesWithEnrollment(),
-        getCourses(),
-      ]);
-
-      const enrollList = enrollRes.status === "fulfilled" && Array.isArray(enrollRes.value) ? enrollRes.value : [];
-      const catalogList = catalogRes.status === "fulfilled"
-        ? (Array.isArray(catalogRes.value) ? catalogRes.value : (catalogRes.value as any)?.data || (catalogRes.value as any)?.message || [])
-        : [];
-
-      // Combine both so that all courses in catalog are always visible, augmented with is_enrolled from enrollment list
-      const courseMap = new Map<string, any>();
-
-      // 1. Index all catalog courses
-      catalogList.forEach((c: any) => {
-        const id = c.name || c.course || c.course_name;
-        if (id) {
-          const isEnrolled = Boolean(c.is_enrolled || c.membership);
-          courseMap.set(id, { ...c, is_enrolled: isEnrolled });
-        }
-      });
-
-      // 2. Augment with enrollment data
-      enrollList.forEach((e: any) => {
-        const id = e.name || e.course || e.course_name;
-        if (id) {
-          const existing = courseMap.get(id);
-          const isEnrolled = Boolean(e.is_enrolled || existing?.is_enrolled || e.membership);
-          if (existing) {
-            courseMap.set(id, {
-              ...existing,
-              ...e,
-              title: existing.title || e.title,
-              published: existing.published !== undefined ? existing.published : e.published,
-              is_enrolled: isEnrolled,
-            });
-          } else {
-            courseMap.set(id, { ...e, is_enrolled: isEnrolled });
-          }
-        }
-      });
-
-      const mergedList = Array.from(courseMap.values());
-      const data = mergedList.length > 0 ? mergedList : (enrollList.length > 0 ? enrollList : catalogList);
-      setCourses(data);
+      const activeType = filterType || selectedFilter;
+      const catalogRes = await getCourses({ type: activeType });
+      const rawList: any[] = Array.isArray(catalogRes)
+        ? catalogRes
+        : (catalogRes as any)?.data || (catalogRes as any)?.message || [];
+      setCourses(rawList);
     } catch (err: any) {
       setError(err?.message || "Failed to fetch courses");
       console.error("Error fetching courses:", err);
@@ -96,7 +56,10 @@ export default function CoursesPage() {
   };
 
   useEffect(() => {
-    fetchCourses();
+    fetchCourses(selectedFilter);
+  }, [selectedFilter]);
+
+  useEffect(() => {
     const checkRoles = () => {
       try {
         const rolesStr = localStorage.getItem("roles");
@@ -131,7 +94,7 @@ export default function CoursesPage() {
     return Array.from(set);
   }, [courses]);
 
-  // Filter courses by search, category, and type
+  // Filter courses by search and category (type filter is already applied by get_courses API)
   const filteredCourses = useMemo(() => {
     return courses.filter((c) => {
       // Hide unpublished draft courses from students (non-instructors)
@@ -150,23 +113,9 @@ export default function CoursesPage() {
       const matchesCat =
         selectedCategory === "all" || c.category === selectedCategory;
 
-      let matchesType = true;
-      const isEnrolled = Boolean(
-        c.is_enrolled ||
-        c.membership ||
-        (c.price && c.price.toString().trim().toLowerCase() === "enrolled")
-      );
-      if (selectedFilter === "enrolled") {
-        matchesType = isEnrolled;
-      } else if (selectedFilter === "free") {
-        matchesType = !c.paid_course && !c.is_paid && !isEnrolled;
-      } else if (selectedFilter === "paid") {
-        matchesType = Boolean(c.paid_course || c.is_paid);
-      }
-
-      return matchesSearch && matchesCat && matchesType;
+      return matchesSearch && matchesCat;
     });
-  }, [courses, isInstructor, searchQuery, selectedCategory, selectedFilter]);
+  }, [courses, isInstructor, searchQuery, selectedCategory]);
 
   const totalPages = Math.max(
     1,
@@ -278,9 +227,9 @@ export default function CoursesPage() {
               <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/60 text-xs font-semibold">
                 <button
                   type="button"
-                  onClick={() => setSelectedFilter("all")}
+                  onClick={() => setSelectedFilter("All")}
                   className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                    selectedFilter === "all"
+                    selectedFilter === "All"
                       ? "bg-white text-indigo-700 shadow-2xs font-bold"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
@@ -289,9 +238,9 @@ export default function CoursesPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedFilter("enrolled")}
+                  onClick={() => setSelectedFilter("Enrolled")}
                   className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                    selectedFilter === "enrolled"
+                    selectedFilter === "Enrolled"
                       ? "bg-white text-indigo-700 shadow-2xs font-bold"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
@@ -300,9 +249,9 @@ export default function CoursesPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedFilter("free")}
+                  onClick={() => setSelectedFilter("Free")}
                   className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                    selectedFilter === "free"
+                    selectedFilter === "Free"
                       ? "bg-white text-indigo-700 shadow-2xs font-bold"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
@@ -311,9 +260,9 @@ export default function CoursesPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedFilter("paid")}
+                  onClick={() => setSelectedFilter("Paid")}
                   className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                    selectedFilter === "paid"
+                    selectedFilter === "Paid"
                       ? "bg-white text-indigo-700 shadow-2xs font-bold"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
@@ -355,7 +304,8 @@ export default function CoursesPage() {
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
             <p className="text-sm font-bold text-red-700 mb-2">{error}</p>
             <button
-              onClick={fetchCourses}
+              type="button"
+              onClick={() => fetchCourses()}
               className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl text-xs font-bold border border-red-200 transition-colors cursor-pointer"
             >
               Try Again
@@ -368,17 +318,17 @@ export default function CoursesPage() {
             </div>
             <h3 className="text-base font-bold text-slate-900 mb-1">No courses found</h3>
             <p className="text-xs text-slate-500 max-w-md mx-auto mb-4">
-              {searchQuery || selectedCategory !== "all" || selectedFilter !== "all"
+              {searchQuery || selectedCategory !== "all" || selectedFilter !== "All"
                 ? "No courses matched your search criteria. Try adjusting or clearing your filters."
                 : "No courses have been published yet. Check back soon!"}
             </p>
-            {(searchQuery || selectedCategory !== "all" || selectedFilter !== "all") && (
+            {(searchQuery || selectedCategory !== "all" || selectedFilter !== "All") && (
               <button
                 type="button"
                 onClick={() => {
                   setSearchQuery("");
                   setSelectedCategory("all");
-                  setSelectedFilter("all");
+                  setSelectedFilter("All");
                 }}
                 className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-100 transition-colors cursor-pointer"
               >

@@ -71,9 +71,30 @@ const getCurrentUserEmail = () => {
 const getInstructorFilterParams = (payload?: any) => {
   const isInstructor = isAuthorizedInstructor();
   const currentUser = getCurrentUserEmail();
-  const params: Record<string, any> = { ...(payload || {}) };
 
-  // For students, NEVER pass user as a query param so all published courses in catalog are retrieved
+  let rawParams: Record<string, any> = {};
+  if (typeof payload === "string") {
+    rawParams = { type: payload };
+  } else if (payload && typeof payload === "object") {
+    rawParams = { ...payload };
+  }
+
+  const params: Record<string, any> = { ...rawParams };
+
+  // Set type query param based on user selection: All, Enrolled, Free, Paid
+  if (params.type !== undefined && params.type !== null && params.type !== "") {
+    const t = String(params.type).trim();
+    const tLower = t.toLowerCase();
+    if (tLower === "all") params.type = "All";
+    else if (tLower === "enrolled") params.type = "Enrolled";
+    else if (tLower === "free") params.type = "Free";
+    else if (tLower === "paid") params.type = "Paid";
+    else params.type = t;
+  } else if (!params.all && !params.no_user) {
+    params.type = "All";
+  }
+
+  // For students, NEVER pass user as a query param - just pass type
   if (!isInstructor) {
     delete params.user;
     params.no_user = true;
@@ -88,7 +109,7 @@ const getInstructorFilterParams = (payload?: any) => {
     return params;
   }
 
-  // Only filter by user/instructor if user is an authorized instructor AND caller hasn't passed a custom user
+  // For instructor role, pass user and type both
   if (!params.user && currentUser) {
     params.user = currentUser;
   }
@@ -115,7 +136,7 @@ export const getCourses = async (payload?: any): Promise<Course[]> => {
   }
 
   const filterUser = params?.user || payload?.user;
-  if (filterUser && isAuthorizedInstructor() && !params?.all && !params?.no_user) {
+  if (filterUser && isAuthorizedInstructor() && !params?.all && !params?.no_user && !params?.type) {
     const target = String(filterUser).toLowerCase().trim();
     rawList = rawList.filter((c: any) => {
       // Check if user created the course
