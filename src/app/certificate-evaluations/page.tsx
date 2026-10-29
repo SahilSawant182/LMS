@@ -507,7 +507,7 @@ export default function CertificateEvaluationsPage() {
                     <input
                       type="email" name="member" required value={formData.member}
                       onChange={handleInputChange} placeholder="student@example.com"
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm"
+                      className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm"
                     />
                   </div>
 
@@ -536,7 +536,7 @@ export default function CertificateEvaluationsPage() {
                     <input
                       type="email" name="evaluator" value={formData.evaluator}
                       onChange={handleInputChange} placeholder="evaluator@example.com"
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm"
+                      className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm"
                     />
                   </div>
 
@@ -546,7 +546,7 @@ export default function CertificateEvaluationsPage() {
                     </label>
                     <input
                       type="date" name="date" value={formData.date} onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm"
+                      className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm"
                     />
                   </div>
 
@@ -555,8 +555,8 @@ export default function CertificateEvaluationsPage() {
                       <Clock className="w-4 h-4 text-slate-400" /> Time (Start – End)
                     </label>
                     <div className="flex gap-2">
-                      <input type="time" name="start_time" step="1" value={formData.start_time} onChange={handleInputChange} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm" />
-                      <input type="time" name="end_time" step="1" value={formData.end_time} onChange={handleInputChange} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm" />
+                      <input type="time" name="start_time" step="1" value={formData.start_time} onChange={handleInputChange} className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm" />
+                      <input type="time" name="end_time" step="1" value={formData.end_time} onChange={handleInputChange} className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm" />
                     </div>
                   </div>
 
@@ -567,7 +567,7 @@ export default function CertificateEvaluationsPage() {
                     <input
                       type="number" name="rating" min="1" max="5" value={formData.rating}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm"
+                      className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm"
                     />
                   </div>
 
@@ -575,7 +575,7 @@ export default function CertificateEvaluationsPage() {
                     <label className="text-sm font-semibold text-slate-700">Status</label>
                     <select
                       name="status" value={formData.status} onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm"
+                      className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-colors text-sm"
                     >
                       <option value="Pass">Pass</option>
                       <option value="Fail">Fail</option>
