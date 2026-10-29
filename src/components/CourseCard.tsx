@@ -267,10 +267,11 @@ export default function CourseCard({
             <div className="aspect-video w-full bg-black">
               {youtubeId ? (
                 <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1`}
+                  src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&enablejsapi=1&rel=0`}
                   title={`${title} Preview Video`}
                   className="w-full h-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
                 />
               ) : (

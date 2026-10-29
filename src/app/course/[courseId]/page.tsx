@@ -52,13 +52,14 @@ const getEmbedUrl = (link?: string | null) => {
   if (!link) return null;
   const trimmed = link.trim();
   if (!trimmed) return null;
-  if (trimmed.includes('youtube.com/embed/')) return trimmed;
-  const matchWatch = trimmed.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/);
-  if (matchWatch && matchWatch[1]) {
-    return `https://www.youtube.com/embed/${matchWatch[1]}`;
+  const idMatch = trimmed.match(
+    /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i
+  );
+  if (idMatch && idMatch[1]) {
+    return `https://www.youtube.com/embed/${idMatch[1]}?autoplay=1&enablejsapi=1&rel=0`;
   }
-  if (/^[a-zA-Z0-9_-]{8,15}$/.test(trimmed)) {
-    return `https://www.youtube.com/embed/${trimmed}`;
+  if (/^[A-Za-z0-9_-]{11}$/.test(trimmed)) {
+    return `https://www.youtube.com/embed/${trimmed}?autoplay=1&enablejsapi=1&rel=0`;
   }
   return trimmed;
 };
@@ -2410,7 +2411,8 @@ export default function CourseDetailPage() {
                 src={getEmbedUrl(details.video_link) || ''}
                 title="Course Preview Video"
                 className="absolute inset-0 w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
                 allowFullScreen
               />
             </div>

@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { navigateBack } from '@/utils/navigation';
-import { 
-  BookOpen, Check, X, Loader2, Sparkles, Upload, 
-  PlayCircle, DollarSign, Award, Layers, Eye, 
+import {
+  BookOpen, Check, X, Loader2, Sparkles, Upload,
+  PlayCircle, DollarSign, Award, Layers, Eye,
   Palette, Tag, ShieldCheck, Clock, ArrowLeft,
   CheckCircle2, Lock, Image as ImageIcon, Globe, Play
 } from 'lucide-react';
@@ -165,18 +165,18 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
           if (Array.isArray(res) && res.length > 0) {
             catList = res.filter(Boolean);
           }
-        } catch (e) {}
+        } catch (e) { }
 
         if (catList.length === 0) {
           try {
             const res = await getCategoryList();
-            const items = Array.isArray(res) 
-              ? res 
+            const items = Array.isArray(res)
+              ? res
               : (res?.data?.categories || res?.message?.data?.categories || res?.message?.categories || res?.message?.data || res?.data || []);
             if (Array.isArray(items)) {
               catList = items.map((i: any) => typeof i === 'string' ? i : (i.value || i.label || i.category || i.name || i.title || '')).filter(Boolean);
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         if (Array.isArray(catList) && catList.length > 0) {
@@ -196,8 +196,8 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
       const checked = (e.target as HTMLInputElement).checked;
       setFormData(prev => ({ ...prev, [name]: checked }));
     } else if (name === 'course_price' || name === 'amount_usd') {
-      setFormData(prev => ({ 
-        ...prev, 
+      setFormData(prev => ({
+        ...prev,
         [name]: value,
         ...(name === 'course_price' && Number(value) > 0 ? { paid_course: true } : {})
       }));
@@ -293,8 +293,8 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
         const res = await createCourse(payload);
         const createdName = res?.data?.name || res?.message?.name || res?.data?.data?.name || res?.name;
         setSuccess(
-          isPublished 
-            ? 'Course created and published successfully!' 
+          isPublished
+            ? 'Course created and published successfully!'
             : 'Course saved as draft! Redirecting to course studio...'
         );
         setTimeout(() => {
@@ -352,8 +352,8 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                 {isEditing ? 'Edit Course Details' : 'Create New Course'}
               </h1>
               <p className="text-indigo-200/80 text-sm mt-1 max-w-xl font-light">
-                {isEditing 
-                  ? 'Update curriculum parameters, pricing, media, and publishing rules.' 
+                {isEditing
+                  ? 'Update curriculum parameters, pricing, media, and publishing rules.'
                   : 'Design and publish an engaging course with lessons, certifications, and live batches.'}
               </p>
             </div>
@@ -644,11 +644,10 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                       key={grad.value}
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, card_gradient: grad.value }))}
-                      className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
-                        isSelected 
-                          ? 'border-indigo-600 bg-indigo-50/60 text-indigo-950 shadow-xs ring-2 ring-indigo-500/20' 
-                          : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                      }`}
+                      className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${isSelected
+                        ? 'border-indigo-600 bg-indigo-50/60 text-indigo-950 shadow-xs ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                        }`}
                     >
                       <span className={`w-3.5 h-3.5 rounded-full ${grad.bg} shadow-xs shrink-0`}></span>
                       <span>{grad.label}</span>
@@ -712,8 +711,8 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                   </p>
                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-xs font-bold">
                     <span className="text-indigo-600">
-                      {formData.paid_course && formData.course_price > 0 
-                        ? `${formData.currency} ${formData.course_price}` 
+                      {formData.paid_course && formData.course_price > 0
+                        ? `${formData.currency} ${formData.course_price}`
                         : 'Free Course'}
                     </span>
                     <span className="text-[10px] text-slate-400 font-normal">
@@ -747,14 +746,12 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
               <button
                 type="button"
                 onClick={() => handleToggle('paid_course')}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                  formData.paid_course ? 'bg-indigo-600' : 'bg-slate-300'
-                }`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${formData.paid_course ? 'bg-indigo-600' : 'bg-slate-300'
+                  }`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    formData.paid_course ? 'translate-x-6' : 'translate-x-1'
-                  }`}
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.paid_course ? 'translate-x-6' : 'translate-x-1'
+                    }`}
                 />
               </button>
             </div>
@@ -834,11 +831,10 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Enable Certification */}
-            <div 
+            <div
               onClick={() => handleToggle('enable_certification')}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
-                formData.enable_certification ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
-              }`}
+              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${formData.enable_certification ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                }`}
             >
               <div>
                 <p className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
@@ -853,17 +849,16 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                 type="checkbox"
                 name="enable_certification"
                 checked={formData.enable_certification}
-                onChange={() => {}}
+                onChange={() => { }}
                 className="h-5 w-5 mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 pointer-events-none"
               />
             </div>
 
             {/* Paid Certificate */}
-            <div 
+            <div
               onClick={() => handleToggle('paid_certificate')}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
-                formData.paid_certificate ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
-              }`}
+              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${formData.paid_certificate ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                }`}
             >
               <div>
                 <p className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
@@ -878,17 +873,16 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                 type="checkbox"
                 name="paid_certificate"
                 checked={formData.paid_certificate}
-                onChange={() => {}}
+                onChange={() => { }}
                 className="h-5 w-5 mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 pointer-events-none"
               />
             </div>
 
             {/* Enforce Lesson Completion */}
-            <div 
+            <div
               onClick={() => handleToggle('enforce_lesson_completion')}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
-                formData.enforce_lesson_completion ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
-              }`}
+              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${formData.enforce_lesson_completion ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                }`}
             >
               <div>
                 <p className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
@@ -903,17 +897,16 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                 type="checkbox"
                 name="enforce_lesson_completion"
                 checked={formData.enforce_lesson_completion}
-                onChange={() => {}}
+                onChange={() => { }}
                 className="h-5 w-5 mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 pointer-events-none"
               />
             </div>
 
             {/* Disable Self Learning */}
-            <div 
+            <div
               onClick={() => handleToggle('disable_self_learning')}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
-                formData.disable_self_learning ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
-              }`}
+              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${formData.disable_self_learning ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                }`}
             >
               <div>
                 <p className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
@@ -928,7 +921,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                 type="checkbox"
                 name="disable_self_learning"
                 checked={formData.disable_self_learning}
-                onChange={() => {}}
+                onChange={() => { }}
                 className="h-5 w-5 mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 pointer-events-none"
               />
             </div>
@@ -949,11 +942,10 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Published */}
-            <div 
+            <div
               onClick={() => handleToggle('published')}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
-                formData.published ? 'border-emerald-300 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
-              }`}
+              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${formData.published ? 'border-emerald-300 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                }`}
             >
               <div>
                 <p className="font-bold text-sm text-slate-900">Publish Immediately</p>
@@ -963,17 +955,16 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                 type="checkbox"
                 name="published"
                 checked={formData.published}
-                onChange={() => {}}
+                onChange={() => { }}
                 className="h-5 w-5 mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 pointer-events-none"
               />
             </div>
 
             {/* Featured */}
-            <div 
+            <div
               onClick={() => handleToggle('featured')}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
-                formData.featured ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
-              }`}
+              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${formData.featured ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                }`}
             >
               <div>
                 <p className="font-bold text-sm text-slate-900">Featured Course</p>
@@ -983,17 +974,16 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                 type="checkbox"
                 name="featured"
                 checked={formData.featured}
-                onChange={() => {}}
+                onChange={() => { }}
                 className="h-5 w-5 mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 pointer-events-none"
               />
             </div>
 
             {/* Upcoming */}
-            <div 
+            <div
               onClick={() => handleToggle('upcoming')}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
-                formData.upcoming ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
-              }`}
+              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${formData.upcoming ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                }`}
             >
               <div>
                 <p className="font-bold text-sm text-slate-900">Mark as Upcoming</p>
@@ -1003,7 +993,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                 type="checkbox"
                 name="upcoming"
                 checked={formData.upcoming}
-                onChange={() => {}}
+                onChange={() => { }}
                 className="h-5 w-5 mt-0.5 rounded text-amber-600 focus:ring-amber-500 pointer-events-none"
               />
             </div>
@@ -1064,11 +1054,11 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
 
       {/* Video Player Modal */}
       {videoModalOpen && youtubeId && (
-        <div 
+        <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-fade-in"
           onClick={() => setVideoModalOpen(false)}
         >
-          <div 
+          <div
             className="relative w-full max-w-3xl bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10"
             onClick={(e) => e.stopPropagation()}
           >
@@ -1086,10 +1076,11 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
             </div>
             <div className="aspect-video w-full bg-black">
               <iframe
-                src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1`}
+                src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&enablejsapi=1&rel=0`}
                 title="Course Preview Video"
                 className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
                 allowFullScreen
               />
             </div>
