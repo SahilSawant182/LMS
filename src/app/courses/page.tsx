@@ -7,6 +7,7 @@ import Pagination from "@/components/ui/Pagination";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getCourses, updateCourse } from "@/services/lms.services";
+import { isAuthorizedInstructor } from "@/services/auth.services";
 import { getImageUrl } from "@/services/api.services";
 import { showToast } from "@/components/ui/Toast";
 import {
@@ -31,7 +32,10 @@ export default function CoursesPage() {
   const [isInstructor, setIsInstructor] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [selectedFilter, setSelectedFilter] = useState<"All" | "Enrolled" | "Free" | "Paid">("All");
+  const [selectedFilter, setSelectedFilter] = useState<string>("All");
+
+  const instructorFilterOptions = ["All", "Paid", "Unpaid", "Published", "Unpublished"] as const;
+  const studentFilterOptions = ["All", "Enrolled", "Free", "Paid"] as const;
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -62,22 +66,7 @@ export default function CoursesPage() {
   useEffect(() => {
     const checkRoles = () => {
       try {
-        const rolesStr = localStorage.getItem("roles");
-        if (rolesStr) {
-          const roles = JSON.parse(rolesStr);
-          setIsInstructor(
-            Array.isArray(roles)
-              ? roles.some((r: string) =>
-                  [
-                    "Instructor",
-                    "Course Creator",
-                    "Administrator",
-                    "System Manager",
-                  ].includes(r)
-                )
-              : false
-          );
-        }
+        setIsInstructor(isAuthorizedInstructor());
       } catch (e) {}
     };
     checkRoles();
@@ -102,6 +91,23 @@ export default function CoursesPage() {
         return false;
       }
 
+      if (isInstructor) {
+        if (selectedFilter === "Published" && (c.published === 0 || c.published === false || c.published === "0")) {
+          return false;
+        }
+        if (selectedFilter === "Unpublished" && (c.published === 1 || c.published === true || c.published === "1")) {
+          return false;
+        }
+        if (selectedFilter === "Unpaid") {
+          const isPaid = c.paid_course === 1 || c.paid_course === true || Number(c.course_price || c.amount || 0) > 0;
+          if (isPaid) return false;
+        }
+        if (selectedFilter === "Paid") {
+          const isPaid = c.paid_course === 1 || c.paid_course === true || Number(c.course_price || c.amount || 0) > 0;
+          if (!isPaid) return false;
+        }
+      }
+
       const q = searchQuery.toLowerCase().trim();
       const titleMatch = (c.title || c.name || "").toLowerCase().includes(q);
       const descMatch = (c.short_introduction || c.description || "")
@@ -115,7 +121,7 @@ export default function CoursesPage() {
 
       return matchesSearch && matchesCat;
     });
-  }, [courses, isInstructor, searchQuery, selectedCategory]);
+  }, [courses, isInstructor, searchQuery, selectedCategory, selectedFilter]);
 
   const totalPages = Math.max(
     1,
@@ -225,50 +231,20 @@ export default function CoursesPage() {
             <div className="flex flex-wrap items-center gap-2">
               {/* Type Filter */}
               <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/60 text-xs font-semibold">
-                <button
-                  type="button"
-                  onClick={() => setSelectedFilter("All")}
-                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                    selectedFilter === "All"
-                      ? "bg-white text-indigo-700 shadow-2xs font-bold"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedFilter("Enrolled")}
-                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                    selectedFilter === "Enrolled"
-                      ? "bg-white text-indigo-700 shadow-2xs font-bold"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Enrolled
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedFilter("Free")}
-                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                    selectedFilter === "Free"
-                      ? "bg-white text-indigo-700 shadow-2xs font-bold"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Free
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedFilter("Paid")}
-                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                    selectedFilter === "Paid"
-                      ? "bg-white text-indigo-700 shadow-2xs font-bold"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Paid
-                </button>
+                {(isInstructor ? instructorFilterOptions : studentFilterOptions).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setSelectedFilter(filter)}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      selectedFilter === filter
+                        ? "bg-white text-indigo-700 shadow-2xs font-bold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
               </div>
 
               {/* Category dropdown or select */}

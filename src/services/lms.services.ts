@@ -81,7 +81,7 @@ const getInstructorFilterParams = (payload?: any) => {
 
   const params: Record<string, any> = { ...rawParams };
 
-  // Set type query param based on user selection: All, Enrolled, Free, Paid
+  // Set type query param based on user selection: All, Enrolled, Free, Paid, Unpaid, Published, Unpublished
   if (params.type !== undefined && params.type !== null && params.type !== "") {
     const t = String(params.type).trim();
     const tLower = t.toLowerCase();
@@ -89,6 +89,9 @@ const getInstructorFilterParams = (payload?: any) => {
     else if (tLower === "enrolled") params.type = "Enrolled";
     else if (tLower === "free") params.type = "Free";
     else if (tLower === "paid") params.type = "Paid";
+    else if (tLower === "unpaid") params.type = "Unpaid";
+    else if (tLower === "published") params.type = "Published";
+    else if (tLower === "unpublished") params.type = "Unpublished";
     else params.type = t;
   } else if (!params.all && !params.no_user) {
     params.type = "All";
