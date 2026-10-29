@@ -351,6 +351,7 @@ export default function CoursesPage() {
                   >
                     <CourseCard
                       image={getImageUrl(course.image)}
+                      video_link={course.video_link}
                       providerLogo={getImageUrl(course.instructors?.[0]?.user_image)}
                       providerName={course.instructors?.[0]?.full_name}
                       title={course.title || course.name}

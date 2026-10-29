@@ -152,6 +152,7 @@ export default function CourseSection() {
                   <Link href={`/course/${course.name}`} className="block h-full transition-transform hover:-translate-y-1 duration-300">
                     <CourseCard 
                       image={getImageUrl(course.image)}
+                      video_link={course.video_link}
                       providerLogo={getImageUrl(course.instructors?.[0]?.user_image)}
                       providerName={course.instructors?.[0]?.full_name}
                       title={course.title || course.name}

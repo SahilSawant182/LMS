@@ -7,11 +7,23 @@ import {
   BookOpen, Check, X, Loader2, Sparkles, Upload, 
   PlayCircle, DollarSign, Award, Layers, Eye, 
   Palette, Tag, ShieldCheck, Clock, ArrowLeft,
-  CheckCircle2, Lock, Image as ImageIcon, Globe
+  CheckCircle2, Lock, Image as ImageIcon, Globe, Play
 } from 'lucide-react';
 import { createCourse, updateCourse, getMasterData, getCategoryList, CreateCoursePayload, normalizeCourseColor } from '@/services/lms.services';
 import { uploadFile, getImageUrl } from '@/services/api.services';
 import Dropdown from '@/components/ui/Dropdown';
+
+/** Extract YouTube video ID from a full URL or a bare ID */
+function getYouTubeVideoId(input: string): string | null {
+  if (!input || !input.trim()) return null;
+  const trimmed = input.trim();
+  const urlMatch = trimmed.match(
+    /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i
+  );
+  if (urlMatch) return urlMatch[1];
+  if (/^[A-Za-z0-9_-]{11}$/.test(trimmed)) return trimmed;
+  return null;
+}
 
 interface CourseFormProps {
   initialData?: {
@@ -82,7 +94,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
     video_link: initialData?.video_link || '',
     tags: initialData?.tags || '',
     category: initialData?.category || 'Business',
-    image: initialData?.image || '/assets/lms/images/course_card.jpeg',
+    image: initialData?.image || '',
     card_gradient: normalizeCourseColor(initialData?.card_gradient || initialData?.color || 'Blue'),
     upcoming: Boolean(initialData?.upcoming),
     featured: Boolean(initialData?.featured !== undefined ? initialData?.featured : 1),
@@ -101,9 +113,18 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
   const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
+  const [coverImageError, setCoverImageError] = useState(false);
+  const [cardImageError, setCardImageError] = useState(false);
   const courseId = formData.name || initialData?.name || initialData?.course || '';
 
   const isInitializedRef = React.useRef(Boolean(initialData?.name || initialData?.course));
+
+  // Reset image error states when image or video changes
+  useEffect(() => {
+    setCoverImageError(false);
+    setCardImageError(false);
+  }, [formData.image, formData.video_link]);
 
   // Synchronize when initialData is loaded asynchronously (only once on load, never overwriting user edits)
   useEffect(() => {
@@ -118,7 +139,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
         video_link: initialData.video_link || '',
         tags: initialData.tags || '',
         category: initialData.category || 'Business',
-        image: initialData.image || '/assets/lms/images/course_card.jpeg',
+        image: initialData.image || '',
         card_gradient: normalizeCourseColor(initialData.card_gradient || initialData.color || 'Blue'),
         upcoming: Boolean(initialData.upcoming),
         featured: Boolean(initialData.featured !== undefined ? initialData.featured : 1),
@@ -249,7 +270,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
         video_link: formData.video_link.trim(),
         tags: formData.tags.trim(),
         category: formData.category.trim() || 'Business',
-        image: formData.image.trim() || '/assets/lms/images/course_card.jpeg',
+        image: formData.image.trim(),
         card_gradient: normalizedColor,
         color: normalizedColor,
         upcoming: formData.upcoming ? 1 : 0,
@@ -305,6 +326,13 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
   };
 
   const selectedGradient = GRADIENT_OPTIONS.find(g => g.value === formData.card_gradient) || GRADIENT_OPTIONS[0];
+
+  const youtubeId = getYouTubeVideoId(formData.video_link);
+  const videoThumbnail = youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null;
+  const hasCustomImage = Boolean(formData.image && formData.image.trim());
+  const effectiveCoverImage = hasCustomImage
+    ? (getImageUrl(formData.image.trim()) || formData.image.trim())
+    : (videoThumbnail || null);
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -492,7 +520,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                   name="image"
                   value={formData.image}
                   onChange={handleChange}
-                  placeholder="/assets/lms/images/course_card.jpeg"
+                  placeholder="e.g. https://example.com/cover.jpg or upload"
                   className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-xs font-medium text-slate-900"
                 />
                 <label className="cursor-pointer px-3.5 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 flex items-center gap-1.5 transition-colors shrink-0">
@@ -512,38 +540,62 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                 </label>
               </div>
               <p className="text-[11px] text-slate-400">
-                Enter an image URL, path, or upload a local file (.jpg, .png).
+                Upload a cover image, or provide a video link below to auto-display the video thumbnail.
               </p>
 
               {/* Designed Space / Container for Cover Image */}
               <div className="mt-3 relative w-full h-48 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-950 overflow-hidden flex items-center justify-center shadow-inner group">
-                {formData.image ? (
+                {effectiveCoverImage && !coverImageError ? (
                   <>
                     <img
-                      src={getImageUrl(formData.image) || '/assets/lms/images/course_card.jpeg'}
+                      src={effectiveCoverImage}
                       alt=""
                       aria-hidden="true"
                       className="absolute inset-0 w-full h-full object-cover blur-md opacity-30 scale-110 pointer-events-none"
                     />
                     <img
-                      src={getImageUrl(formData.image) || '/assets/lms/images/course_card.jpeg'}
+                      src={effectiveCoverImage}
                       alt="Course Cover"
                       className="relative z-10 max-h-full max-w-full object-contain p-2 transition-transform duration-300 group-hover:scale-[1.02]"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/assets/lms/images/course_card.jpeg';
-                      }}
+                      onError={() => setCoverImageError(true)}
                     />
+
+                    {/* Play Video Button on Cover */}
+                    {youtubeId && (
+                      <button
+                        type="button"
+                        onClick={() => setVideoModalOpen(true)}
+                        className="absolute z-20 inset-0 m-auto w-14 h-14 rounded-full bg-indigo-600/90 hover:bg-indigo-600 text-white flex items-center justify-center shadow-2xl backdrop-blur-md hover:scale-110 transition-all border border-white/20 cursor-pointer"
+                        title="Play Preview Video"
+                      >
+                        <Play className="w-6 h-6 fill-white ml-0.5" />
+                      </button>
+                    )}
+
                     <div className="absolute top-2.5 left-2.5 z-20 px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md text-[10px] text-slate-200 font-semibold border border-white/10 flex items-center gap-1.5">
-                      <ImageIcon className="w-3 h-3 text-indigo-400" /> Cover Preview (Fits Container)
+                      {hasCustomImage ? (
+                        <>
+                          <ImageIcon className="w-3 h-3 text-indigo-400" /> Cover Image
+                        </>
+                      ) : (
+                        <>
+                          <PlayCircle className="w-3 h-3 text-rose-400" /> Video Thumbnail
+                        </>
+                      )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
-                      className="absolute top-2.5 right-2.5 z-20 p-1.5 rounded-lg bg-black/60 hover:bg-rose-600/80 text-white backdrop-blur-md transition-colors border border-white/10 cursor-pointer"
-                      title="Clear image"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                    {hasCustomImage && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({ ...prev, image: '' }));
+                          setCoverImageError(false);
+                        }}
+                        className="absolute top-2.5 right-2.5 z-20 p-1.5 rounded-lg bg-black/60 hover:bg-rose-600/80 text-white backdrop-blur-md transition-colors border border-white/10 cursor-pointer"
+                        title="Clear image"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </>
                 ) : (
                   <div className="flex flex-col items-center justify-center p-6 text-center text-slate-400">
@@ -551,7 +603,7 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                       <ImageIcon className="w-6 h-6" />
                     </div>
                     <p className="text-xs font-semibold text-slate-300">No cover image selected</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">Upload or enter an image URL to preview how it fits in the container.</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Upload an image or provide a video link to see a preview.</p>
                   </div>
                 )}
               </div>
@@ -607,27 +659,46 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
               </div>
             </div>
 
-            {/* Live Preview Card */}
+            {/* Live Card Preview */}
             <div className="md:col-span-2 bg-slate-50 p-5 rounded-2xl border border-slate-200/80">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-3">
                 Live Card Preview
               </span>
               <div className="max-w-sm rounded-2xl overflow-hidden shadow-md border border-slate-200 bg-white">
                 <div className="aspect-[16/9] w-full relative overflow-hidden bg-slate-950 flex items-center justify-center">
-                  <img
-                    src={getImageUrl(formData.image) || '/assets/lms/images/course_card.jpeg'}
-                    alt=""
-                    aria-hidden="true"
-                    className="absolute inset-0 w-full h-full object-cover blur-md opacity-25 scale-110 pointer-events-none"
-                  />
-                  <img
-                    src={getImageUrl(formData.image) || '/assets/lms/images/course_card.jpeg'}
-                    alt="Course Preview"
-                    className="relative z-10 max-h-full max-w-full object-contain p-2"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/assets/lms/images/course_card.jpeg';
-                    }}
-                  />
+                  {effectiveCoverImage && !cardImageError ? (
+                    <>
+                      <img
+                        src={effectiveCoverImage}
+                        alt=""
+                        aria-hidden="true"
+                        className="absolute inset-0 w-full h-full object-cover blur-md opacity-25 scale-110 pointer-events-none"
+                      />
+                      <img
+                        src={effectiveCoverImage}
+                        alt="Course Preview"
+                        className="relative z-10 max-h-full max-w-full object-contain p-2"
+                        onError={() => setCardImageError(true)}
+                      />
+                      {youtubeId && (
+                        <button
+                          type="button"
+                          onClick={() => setVideoModalOpen(true)}
+                          className="absolute z-20 inset-0 m-auto w-11 h-11 rounded-full bg-indigo-600/90 hover:bg-indigo-600 text-white flex items-center justify-center shadow-xl backdrop-blur-md hover:scale-110 transition-all border border-white/20 cursor-pointer"
+                          title="Play Preview Video"
+                        >
+                          <Play className="w-5 h-5 fill-white ml-0.5" />
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <div className={`w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br ${selectedGradient.class} text-white`}>
+                      <BookOpen className="w-10 h-10 text-white/70 mb-1.5" />
+                      <span className="text-xs font-bold text-white/90 text-center line-clamp-1 px-3">
+                        {formData.title || 'Course Preview'}
+                      </span>
+                    </div>
+                  )}
                   <div className={`absolute top-2.5 right-2.5 z-20 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white shadow-xs bg-gradient-to-r ${selectedGradient.class}`}>
                     {formData.category || 'Course'}
                   </div>
@@ -990,6 +1061,41 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
         </div>
 
       </form>
+
+      {/* Video Player Modal */}
+      {videoModalOpen && youtubeId && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-fade-in"
+          onClick={() => setVideoModalOpen(false)}
+        >
+          <div 
+            className="relative w-full max-w-3xl bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 text-white">
+              <span className="text-xs font-bold flex items-center gap-2">
+                <PlayCircle className="w-4 h-4 text-indigo-400" /> Course Preview Video
+              </span>
+              <button
+                type="button"
+                onClick={() => setVideoModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="aspect-video w-full bg-black">
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1`}
+                title="Course Preview Video"
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

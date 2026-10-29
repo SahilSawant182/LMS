@@ -1,5 +1,16 @@
-import React from 'react';
-import { Star, Users, BookOpen, ArrowRight, Edit2, CheckCircle, Globe, Lock } from 'lucide-react';
+import React, { useState } from 'react';
+import { Star, Users, BookOpen, ArrowRight, Edit2, CheckCircle, Globe, Lock, Play, PlayCircle, X } from 'lucide-react';
+
+function getYouTubeVideoId(input?: string | null): string | null {
+  if (!input || !input.trim()) return null;
+  const trimmed = input.trim();
+  const urlMatch = trimmed.match(
+    /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i
+  );
+  if (urlMatch) return urlMatch[1];
+  if (/^[A-Za-z0-9_-]{11}$/.test(trimmed)) return trimmed;
+  return null;
+}
 
 export interface CourseCardProps {
   image?: string;
@@ -16,6 +27,7 @@ export interface CourseCardProps {
   description?: string;
   isEnrolled?: boolean;
   published?: boolean | number;
+  video_link?: string;
   onEdit?: (e: React.MouseEvent) => void;
   onPublish?: (e: React.MouseEvent) => void;
 }
@@ -35,9 +47,17 @@ export default function CourseCard({
   description,
   isEnrolled = false,
   published,
+  video_link,
   onEdit,
   onPublish
 }: CourseCardProps) {
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  const youtubeId = getYouTubeVideoId(video_link);
+  const videoThumbnail = youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null;
+  const hasCustomImage = Boolean(image && image.trim());
+  const effectiveImage = hasCustomImage && image ? image.trim() : (videoThumbnail || null);
 
   const enrolled = Boolean(isEnrolled || (price && price.trim().toLowerCase() === 'enrolled'));
 
@@ -63,22 +83,41 @@ export default function CourseCard({
       {/* Course Image */}
       <div className="relative h-48 w-full overflow-hidden bg-slate-950 flex items-center justify-center">
         <div className={`absolute inset-0 bg-gradient-to-t ${getGradientClass(cardGradient || '')} z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none`}></div>
-        {image ? (
+        {effectiveImage && !imageError ? (
           <>
             <img
-              src={image}
+              src={effectiveImage}
               alt=""
               aria-hidden="true"
               className="absolute inset-0 w-full h-full object-cover blur-md opacity-30 scale-110 pointer-events-none"
             />
             <img
-              src={image}
+              src={effectiveImage}
               alt={title}
+              onError={() => setImageError(true)}
               className="relative z-10 max-h-full max-w-full object-contain p-1.5 group-hover:scale-105 transition-transform duration-500 ease-in-out"
             />
+            {/* Play Button Overlay if video_link is present */}
+            {video_link && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setVideoModalOpen(true);
+                }}
+                className="absolute inset-0 m-auto w-12 h-12 rounded-full bg-indigo-600/90 hover:bg-indigo-600 text-white flex items-center justify-center shadow-xl backdrop-blur-md hover:scale-110 transition-all border border-white/20 z-30 cursor-pointer"
+                title="Play Preview Video"
+              >
+                <Play className="w-5 h-5 fill-white ml-0.5" />
+              </button>
+            )}
           </>
         ) : (
-          <div className="text-gray-400 font-medium bg-gray-200 w-full h-full flex items-center justify-center">No Image</div>
+          <div className="text-gray-400 font-medium bg-gray-200 w-full h-full flex flex-col items-center justify-center gap-2">
+            <BookOpen className="w-8 h-8 text-gray-400" />
+            <span className="text-xs">No Image</span>
+          </div>
         )}
 
         {/* Floating actions for Edit/Publish */}
@@ -191,6 +230,61 @@ export default function CourseCard({
           )}
         </div>
       </div>
+
+      {/* Video Player Modal */}
+      {videoModalOpen && video_link && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-fade-in cursor-default"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setVideoModalOpen(false);
+          }}
+        >
+          <div 
+            className="relative w-full max-w-3xl bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 text-white">
+              <span className="text-xs font-bold flex items-center gap-2">
+                <PlayCircle className="w-4 h-4 text-indigo-400" /> {title} &bull; Preview Video
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setVideoModalOpen(false);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="aspect-video w-full bg-black">
+              {youtubeId ? (
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1`}
+                  title={`${title} Preview Video`}
+                  className="w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : (
+                <video
+                  src={video_link}
+                  controls
+                  autoPlay
+                  className="w-full h-full"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

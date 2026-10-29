@@ -63,6 +63,17 @@ const getEmbedUrl = (link?: string | null) => {
   return trimmed;
 };
 
+const getYouTubeVideoId = (input?: string | null): string | null => {
+  if (!input || !input.trim()) return null;
+  const trimmed = input.trim();
+  const urlMatch = trimmed.match(
+    /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i
+  );
+  if (urlMatch) return urlMatch[1];
+  if (/^[A-Za-z0-9_-]{11}$/.test(trimmed)) return trimmed;
+  return null;
+};
+
 export default function CourseDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -2098,47 +2109,57 @@ export default function CourseDetailPage() {
             <div className="bg-white rounded-lg p-5 md:p-6">
 
               {/* Course Thumbnail & Video Preview */}
-              {details.image ? (
-                <div 
-                  onClick={() => {
-                    if (details.video_link) setIsVideoModalOpen(true);
-                  }}
-                  className={`w-full h-48 rounded-xl overflow-hidden mb-5 relative shadow-inner bg-slate-950 flex items-center justify-center group ${details.video_link ? 'cursor-pointer' : ''}`}
-                >
-                  <img src={getImageUrl(details.image)} alt="" className="absolute inset-0 w-full h-full object-cover blur-md opacity-30 scale-110 pointer-events-none" />
-                  <img src={getImageUrl(details.image)} alt="Course Thumbnail" className="relative z-10 max-h-full max-w-full object-contain p-1 group-hover:scale-105 transition-transform duration-300" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none"></div>
-                  {details.video_link ? (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-12 h-12 bg-white/30 backdrop-blur-md rounded-full flex items-center justify-center group-hover:bg-indigo-600 group-hover:scale-110 transition-all shadow-lg">
-                        <PlayCircle className="w-6 h-6 text-white" />
+              {(() => {
+                const youtubeId = getYouTubeVideoId(details.video_link);
+                const videoThumbnail = youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null;
+                const effectiveCover = details.image ? getImageUrl(details.image) : videoThumbnail;
+
+                if (effectiveCover) {
+                  return (
+                    <div 
+                      onClick={() => {
+                        if (details.video_link) setIsVideoModalOpen(true);
+                      }}
+                      className={`w-full h-48 rounded-xl overflow-hidden mb-5 relative shadow-inner bg-slate-950 flex items-center justify-center group ${details.video_link ? 'cursor-pointer' : ''}`}
+                    >
+                      <img src={effectiveCover} alt="" className="absolute inset-0 w-full h-full object-cover blur-md opacity-30 scale-110 pointer-events-none" />
+                      <img src={effectiveCover} alt="Course Thumbnail" className="relative z-10 max-h-full max-w-full object-contain p-1 group-hover:scale-105 transition-transform duration-300" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none"></div>
+                      {details.video_link ? (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-12 h-12 bg-white/30 backdrop-blur-md rounded-full flex items-center justify-center group-hover:bg-indigo-600 group-hover:scale-110 transition-all shadow-lg">
+                            <PlayCircle className="w-6 h-6 text-white" />
+                          </div>
+                        </div>
+                      ) : null}
+                      {details.video_link && (
+                        <div className="absolute bottom-2.5 left-3 text-[11px] font-bold text-white bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow-sm">
+                          <PlayCircle className="w-3.5 h-3.5 text-indigo-400" />
+                          Watch Preview Video
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div 
+                    onClick={() => {
+                      if (details.video_link) setIsVideoModalOpen(true);
+                    }}
+                    className={`w-full h-36 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl mb-5 flex items-center justify-center shadow-inner relative group ${details.video_link ? 'cursor-pointer' : ''}`}
+                  >
+                    <BookOpen className="w-10 h-10 text-indigo-300" />
+                    {details.video_link && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-12 h-12 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                          <PlayCircle className="w-6 h-6" />
+                        </div>
                       </div>
-                    </div>
-                  ) : null}
-                  {details.video_link && (
-                    <div className="absolute bottom-2.5 left-3 text-[11px] font-bold text-white bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow-sm">
-                      <PlayCircle className="w-3.5 h-3.5 text-indigo-400" />
-                      Watch Preview Video
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div 
-                  onClick={() => {
-                    if (details.video_link) setIsVideoModalOpen(true);
-                  }}
-                  className={`w-full h-36 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl mb-5 flex items-center justify-center shadow-inner relative group ${details.video_link ? 'cursor-pointer' : ''}`}
-                >
-                  <BookOpen className="w-10 h-10 text-indigo-300" />
-                  {details.video_link && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-12 h-12 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                        <PlayCircle className="w-6 h-6" />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Price & CTA */}
               <div className="mb-6">
