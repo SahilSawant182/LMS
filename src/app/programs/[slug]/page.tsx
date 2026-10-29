@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { getProgramDetail, deleteProgram, Program, ProgramCourse } from '@/services/lms.services';
 import { getImageUrl, getCurrentUserEmail } from '@/services/api.services';
+import { isProgramInstructorOrOwner } from '@/services/auth.services';
 import { navigateBack } from '@/utils/navigation';
 
 export default function ProgramDetailPage() {
@@ -32,6 +33,7 @@ export default function ProgramDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userMember, setUserMember] = useState<any>(null);
+  const [userEmail, setUserEmail] = useState<string>('');
   const [isInstructor, setIsInstructor] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -41,14 +43,15 @@ export default function ProgramDetailPage() {
     const fetchProgram = async () => {
       setLoading(true);
       try {
-        const userEmail =
+        const email =
           getCurrentUserEmail() ||
           (typeof window !== 'undefined'
             ? localStorage.getItem('userEmail') || localStorage.getItem('user')
             : '') ||
           '';
+        setUserEmail(email);
 
-        const rawResponse = await getProgramDetail(programTitle, { user: userEmail });
+        const rawResponse = await getProgramDetail(programTitle, { user: email });
         const data: Program =
           (rawResponse as any)?.data ||
           (rawResponse as any)?.message?.data ||
@@ -57,9 +60,9 @@ export default function ProgramDetailPage() {
         setProgram(data);
 
         // Check if current logged-in user is a member
-        if (userEmail && data.program_members) {
+        if (email && data.program_members) {
           const member = data.program_members.find(
-            (m) => m.member?.toLowerCase() === userEmail.toLowerCase()
+            (m) => m.member?.toLowerCase() === email.toLowerCase()
           );
           setUserMember(member || null);
         }
@@ -196,7 +199,7 @@ export default function ProgramDetailPage() {
                 All Learning Paths
               </Link>
               
-              {isInstructor && (
+              {isInstructor && isProgramInstructorOrOwner(program, userEmail) && (
                 <div className="flex items-center gap-3">
                   <Link
                     href={`/programs/${rawSlug}/edit`}

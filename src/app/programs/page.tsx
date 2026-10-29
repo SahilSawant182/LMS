@@ -15,6 +15,7 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { getProgramList, Program } from '@/services/lms.services';
+import { isAuthorizedInstructor } from '@/services/auth.services';
 import { getImageUrl } from '@/services/api.services';
 
 export default function ProgramsPage() {
@@ -29,10 +30,13 @@ export default function ProgramsPage() {
     const fetchPrograms = async () => {
       setLoading(true);
       try {
-        const rawResponse = await getProgramList();
+        const userEmail = typeof window !== 'undefined' ? (localStorage.getItem('userEmail') || localStorage.getItem('user') || '') : '';
+        const isInst = isAuthorizedInstructor();
+        const payload = isInst && userEmail ? { user: userEmail } : undefined;
+        const rawResponse = await getProgramList(payload);
         const arr = Array.isArray(rawResponse)
           ? rawResponse
-          : ((rawResponse as any)?.data || (rawResponse as any)?.message || []);
+          : ((rawResponse as any)?.message?.data || (rawResponse as any)?.data?.message || (rawResponse as any)?.data || (rawResponse as any)?.message || []);
         const data: Program[] = Array.isArray(arr) ? arr : [];
         setPrograms(data);
         setFiltered(data);

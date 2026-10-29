@@ -6,6 +6,7 @@ import BatchForm from '@/components/admin/BatchForm';
 import { useRouter, useParams } from 'next/navigation';
 import { navigateBack } from '@/utils/navigation';
 import { getBatchDetails } from '@/services/lms.services';
+import { isBatchInstructorOrOwner } from '@/services/auth.services';
 
 export default function EditBatchPage() {
   const router = useRouter();
@@ -48,6 +49,12 @@ export default function EditBatchPage() {
           
           if (!extracted) throw new Error('Batch not found');
           
+          const currentUser = typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
+          if (!isBatchInstructorOrOwner(extracted, currentUser)) {
+            setError('You do not have permission to edit this batch.');
+            return;
+          }
+
           setInitialData(extracted);
         } catch (err: any) {
           setError(err.message || 'Failed to load batch data');

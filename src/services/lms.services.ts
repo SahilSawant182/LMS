@@ -1,5 +1,5 @@
 import { apiService, API_TOKEN, API_METHOD_PREFIX, uploadFile } from "./api.services";
-import { isAuthorizedInstructor } from "./auth.services";
+import { isAuthorizedInstructor, isCourseInstructorOrOwner, isBatchInstructorOrOwner, isProgramInstructorOrOwner } from "./auth.services";
 
 // Define interfaces if needed, or use any/generic for now
 export interface GetCourseDetailsPayload {
@@ -101,15 +101,14 @@ const getInstructorFilterParams = (payload?: any) => {
     return params;
   }
 
-  // If caller specifically requested all items or bypassed instructor filter (e.g. global search)
-  if (params.all || params.user === "" || params.user === null || params.no_user) {
-    delete params.all;
+  // If caller explicitly requested bypassing user filter (e.g. no_user = true)
+  if (params.no_user) {
     delete params.user;
     params.no_user = true;
     return params;
   }
 
-  // For instructor role, pass user and type both
+  // For instructor role, pass user in query params
   if (!params.user && currentUser) {
     params.user = currentUser;
   }
@@ -133,41 +132,6 @@ export const getCourses = async (payload?: any): Promise<Course[]> => {
     rawList = response.message;
   } else if (response?.data && Array.isArray(response.data)) {
     rawList = response.data;
-  }
-
-  const filterUser = params?.user || payload?.user;
-  if (filterUser && isAuthorizedInstructor() && !params?.all && !params?.no_user && !params?.type) {
-    const target = String(filterUser).toLowerCase().trim();
-    rawList = rawList.filter((c: any) => {
-      // Check if user created the course
-      const ownerField = c.owner ? String(c.owner).toLowerCase().trim() : '';
-      if (ownerField === target) return true;
-
-      const createdByField = c.created_by ? String(c.created_by).toLowerCase().trim() : '';
-      if (createdByField === target) return true;
-
-      const instField = c.instructor ? String(c.instructor).toLowerCase().trim() : '';
-      if (instField === target) return true;
-
-      // Check if user is among assigned instructors
-      if (Array.isArray(c.instructors) && c.instructors.length > 0) {
-        return c.instructors.some((inst: any) => {
-          if (typeof inst === 'string') return inst.toLowerCase().trim() === target;
-          const instName = String(inst?.name || '').toLowerCase().trim();
-          const instEmail = String(inst?.email || '').toLowerCase().trim();
-          const instUsername = String(inst?.username || '').toLowerCase().trim();
-          const instInstructor = String(inst?.instructor || '').toLowerCase().trim();
-          return (
-            instName === target ||
-            instEmail === target ||
-            (instUsername && instUsername === target) ||
-            (instInstructor && instInstructor === target)
-          );
-        });
-      }
-
-      return false;
-    });
   }
 
   return rawList;
@@ -389,6 +353,7 @@ export const getReviews = async (payload: GetReviewsPayload) => {
 
 export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
   const isInstructor = isAuthorizedInstructor();
+  const currentUser = getCurrentUserEmail();
   const nameParam = payload.batch || payload.name;
   const params = getInstructorFilterParams({
     batch: nameParam,
@@ -397,6 +362,8 @@ export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
   if (!isInstructor) {
     delete params.user;
     params.no_user = true;
+  } else if (currentUser && !params.user && !params.no_user) {
+    params.user = currentUser;
   }
   const headers = getQuestionAuthHeaders("application/json");
   return apiService.get(`method/lms.lms.stride_lms.get_batch_details`, {
@@ -421,10 +388,13 @@ export const getBatchCourses = async (payload: GetBatchCoursesPayload) => {
 
 export const getBatches = async (payload?: any): Promise<any> => {
   const isInstructor = isAuthorizedInstructor();
+  const currentUser = getCurrentUserEmail();
   const params = getInstructorFilterParams(payload);
   if (!isInstructor) {
     delete params.user;
     params.no_user = true;
+  } else if (currentUser && !params.user && !params.no_user) {
+    params.user = currentUser;
   }
   const headers = getQuestionAuthHeaders("application/json");
 
@@ -446,7 +416,6 @@ export const getBatches = async (payload?: any): Promise<any> => {
 
   // Fallback: Query resource/LMS Batch directly
   try {
-    const isInstructor = isAuthorizedInstructor();
     const resourceParams: Record<string, any> = {
       fields: JSON.stringify([
         "name", "title", "batch_title", "description", "start_date", "end_date",
@@ -2771,11 +2740,21 @@ export interface Program {
 }
 
 export const getProgramList = async (payload?: any): Promise<Program[]> => {
-  const params = getInstructorFilterParams(payload);
-  return apiService.get(`method/lms.lms.doctype.lms_program.lms_program.get_program_list`, {
+  const isInstructor = isAuthorizedInstructor();
+  const currentUser = getCurrentUserEmail();
+  const params: Record<string, any> = {};
+  if (typeof payload === 'object' && payload !== null) {
+    Object.assign(params, payload);
+  }
+  if (isInstructor && currentUser && !params.user && !params.no_user) {
+    params.user = currentUser;
+  }
+  const res: any = await apiService.get(`method/lms.lms.doctype.lms_program.lms_program.get_program_list`, {
     params,
     headers: { 'Authorization': `token ${API_TOKEN}` }
   });
+  const data = res?.message?.data || res?.data?.message || res?.data || res?.message || res;
+  return Array.isArray(data) ? data : (Array.isArray(res) ? res : []);
 };
 
 export const getProgramDetail = async (program_title: string, payload?: any): Promise<Program> => {

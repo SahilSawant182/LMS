@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Users, Calendar, Clock, ArrowRight, Search, Trash2, Plus, Edit } from 'lucide-react';
 import { getBatches, deleteBatch } from '@/services/lms.services';
 import { getBatchesWithEnrollment } from '@/services/payment.services';
-import { isAuthorizedInstructor } from '@/services/auth.services';
+import { isAuthorizedInstructor, isBatchInstructorOrOwner } from '@/services/auth.services';
 import { formatDate } from '@/utils/formatters';
 
 export default function BatchesPage() {
@@ -14,15 +14,19 @@ export default function BatchesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInstructor, setIsInstructor] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchBatches = async () => {
     setLoading(true);
     setError(null);
     try {
+      const email = typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
+      const isInst = isAuthorizedInstructor();
+      const batchPayload = isInst && email ? { user: email } : {};
       const [enrollRes, catalogRes] = await Promise.allSettled([
-        getBatchesWithEnrollment({ all: 1 }),
-        getBatches({ all: 1 }),
+        getBatchesWithEnrollment(batchPayload),
+        getBatches(batchPayload),
       ]);
 
       const enrollList = enrollRes.status === "fulfilled" && Array.isArray(enrollRes.value) ? enrollRes.value : [];
@@ -77,6 +81,8 @@ export default function BatchesPage() {
     const checkRoles = () => {
       try {
         setIsInstructor(isAuthorizedInstructor());
+        const email = typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
+        setUserEmail(email);
       } catch (e) {}
     };
     checkRoles();
@@ -204,7 +210,7 @@ export default function BatchesPage() {
                 <div key={batch.name || idx} className="relative bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md hover:border-indigo-200 transition-all flex flex-col h-full group">
                   
                   {/* Actions - Shows on Hover */}
-                  {isInstructor && (
+                  {isInstructor && isBatchInstructorOrOwner(batch, userEmail) && (
                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex gap-2">
                       <Link 
                         href={`/batch/${batch.name}/edit`}

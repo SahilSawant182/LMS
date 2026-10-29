@@ -7,6 +7,7 @@ import { ArrowLeft, Save, Plus, Trash2, LayoutList, BookOpen, Users, Info } from
 import Link from "next/link";
 import Dropdown from "@/components/ui/Dropdown";
 import { updateProgram, getProgramDetail, Program } from "@/services/lms.services";
+import { isProgramInstructorOrOwner } from "@/services/auth.services";
 import { navigateBack } from "@/utils/navigation";
 
 export default function EditProgramPage() {
@@ -51,6 +52,13 @@ export default function EditProgramPage() {
           (rawResponse as any)?.message ||
           rawResponse;
         
+        const userEmail = typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
+        if (!isProgramInstructorOrOwner(data, userEmail)) {
+          setError("You do not have permission to edit this program.");
+          setInitialLoading(false);
+          return;
+        }
+
         setProgramName(data.name || data.title);
         setTitle(data.title || "");
         setPublished(data.published === 1);

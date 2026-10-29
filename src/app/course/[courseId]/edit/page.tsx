@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { navigateBack } from '@/utils/navigation';
 import { getCourseDetails, normalizeCourseColor } from '@/services/lms.services';
+import { isCourseInstructorOrOwner } from '@/services/auth.services';
 
 export default function EditCoursePage() {
   const params = useParams();
@@ -26,6 +27,12 @@ export default function EditCoursePage() {
         // Depending on API structure, it could be response, response.data, or response.message
         const data = (response as any)?.data || (response as any)?.message || response;
         if (data) {
+          const userEmail = typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
+          if (!isCourseInstructorOrOwner(data, userEmail)) {
+            setError('You do not have permission to edit this course.');
+            return;
+          }
+
           setInitialData({
             name: data.name || courseName,
             course: data.name || courseName,
