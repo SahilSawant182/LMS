@@ -14,7 +14,7 @@ import {
   Plus,
   GraduationCap,
 } from 'lucide-react';
-import { getProgramList, Program } from '@/services/lms.services';
+import { getProgramList, getProgramDetail, Program } from '@/services/lms.services';
 import { isAuthorizedInstructor } from '@/services/auth.services';
 import { getImageUrl } from '@/services/api.services';
 
@@ -40,6 +40,35 @@ export default function ProgramsPage() {
         const data: Program[] = Array.isArray(arr) ? arr : [];
         setPrograms(data);
         setFiltered(data);
+
+        // Dynamically fetch program details to count actual enrolled program members instead of course learners
+        if (data.length > 0) {
+          Promise.allSettled(
+            data.map(async (p) => {
+              try {
+                const detailRes = await getProgramDetail(p.title, payload);
+                const detail: Program =
+                  (detailRes as any)?.data ||
+                  (detailRes as any)?.message?.data ||
+                  (detailRes as any)?.message ||
+                  detailRes;
+                if (detail && Array.isArray(detail.program_members)) {
+                  return {
+                    ...p,
+                    program_members: detail.program_members,
+                    member_count: detail.program_members.length,
+                  };
+                }
+              } catch {}
+              return p;
+            })
+          ).then((results) => {
+            const enriched = results.map((r, i) =>
+              r.status === 'fulfilled' ? r.value : data[i]
+            );
+            setPrograms(enriched);
+          });
+        }
       } catch (err: any) {
         setError(err.message || 'Failed to fetch programs');
       } finally {
@@ -133,7 +162,14 @@ export default function ProgramsPage() {
                 },
                 {
                   label: 'Total Learners',
-                  value: programs.reduce((a, p) => a + (p.member_count || 0), 0),
+                  value: programs.reduce(
+                    (a, p) =>
+                      a +
+                      (Array.isArray(p.program_members)
+                        ? p.program_members.length
+                        : (p.member_count || 0)),
+                    0
+                  ),
                   icon: Users,
                   color: 'bg-emerald-50 text-emerald-600',
                 },
@@ -291,7 +327,11 @@ function ProgramCard({ program }: { program: Program }) {
         <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
             <Users className="w-4 h-4 text-indigo-400" />
-            <span>{program.member_count ?? 0} Learners</span>
+            <span>
+              {Array.isArray(program.program_members)
+                ? program.program_members.length
+                : (program.member_count ?? 0)} Learners
+            </span>
           </div>
           <span className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 group-hover:gap-2 transition-all">
             View Path <ArrowRight className="w-4 h-4" />

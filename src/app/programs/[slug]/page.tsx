@@ -141,7 +141,10 @@ export default function ProgramDetailPage() {
     ? [...program.program_courses].sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0))
     : [];
   const totalCourses = courses.length;
-  const memberCount = program.member_count ?? 0;
+  // Dynamically count actual enrolled members of the program itself
+  const memberCount = Array.isArray(program.program_members)
+    ? program.program_members.length
+    : (program.member_count ?? 0);
   const isEnrolled = !!userMember;
   const userProgress = userMember?.progress ?? 0;
   const imageUrl = getImageUrl(program.image);
