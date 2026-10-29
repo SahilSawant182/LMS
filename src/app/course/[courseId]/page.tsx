@@ -2,9 +2,9 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { 
-  getCourse, getCourseDetails, getChapters, getLessons, getReviews, 
-  createChapter, createLesson, getCourseProgress, getCourseProgressBar, parseProgressBarValue, getAssignments, 
+import {
+  getCourse, getCourseDetails, getChapters, getLessons, getReviews,
+  createChapter, createLesson, getCourseProgress, getCourseProgressBar, parseProgressBarValue, getAssignments,
   getAssignmentSubmissions, enrollInCourse, updateCourse,
   getCourseReviewList, createCourseReview, deleteCourseReview, LMSCourseReview,
   getQuizSubmissions
@@ -182,7 +182,7 @@ export default function CourseDetailPage() {
         const name = localStorage.getItem("fullName") || "";
         setCurrentUserEmail(email);
         setCurrentUserName(name);
-      } catch (e) {}
+      } catch (e) { }
     };
     checkRoles();
     fetchCourseData();
@@ -256,7 +256,7 @@ export default function CourseDetailPage() {
       if (detailsRes.status === 'fulfilled') {
         const d = detailsRes.value?.data || detailsRes.value?.message?.data || detailsRes.value?.message || detailsRes.value;
         setDetails(d);
-        
+
         let userIsEnrolled = false;
         if (enrollRes.status === 'fulfilled' && enrollRes.value) {
           userIsEnrolled = Boolean(enrollRes.value.is_enrolled);
@@ -446,7 +446,7 @@ export default function CourseDetailPage() {
       if (combinedReviews.length > 0 && docReviews.length > 0) {
         combinedReviews = combinedReviews.map(r => {
           if (r.name) return r;
-          const match = docReviews.find(dr => 
+          const match = docReviews.find(dr =>
             (dr.owner && r.owner && dr.owner === r.owner) ||
             (dr.review && r.review && dr.review === r.review)
           );
@@ -536,7 +536,7 @@ export default function CourseDetailPage() {
                     return false;
                   }
                 });
-              } catch (e) {}
+              } catch (e) { }
             }
 
             const sub = subList.find((s: any) => {
@@ -608,10 +608,10 @@ export default function CourseDetailPage() {
               msg = parsed.message.replace(/<[^>]*>?/gm, '').trim();
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       } else if (err.response?.data?.message) {
-        msg = typeof err.response.data.message === 'string' 
-          ? err.response.data.message 
+        msg = typeof err.response.data.message === 'string'
+          ? err.response.data.message
           : err.response.data.message?.message || JSON.stringify(err.response.data.message);
       }
       showToast.error(msg);
@@ -629,7 +629,7 @@ export default function CourseDetailPage() {
         (r: any) =>
           r.name &&
           ((currentUserEmail && (r.owner === currentUserEmail || r.user === currentUserEmail || r.owner_details?.username === currentUserEmail)) ||
-          (currentUserName && (r.owner_details?.full_name === currentUserName || r.user_name === currentUserName)))
+            (currentUserName && (r.owner_details?.full_name === currentUserName || r.user_name === currentUserName)))
       );
       if (match?.name) {
         targetName = match.name;
@@ -759,12 +759,12 @@ export default function CourseDetailPage() {
   const progressRecords = Array.isArray(normalizedProgress)
     ? normalizedProgress
     : (Array.isArray(normalizedProgress?.records)
-        ? normalizedProgress.records
-        : (Array.isArray(normalizedProgress?.data?.records)
-            ? normalizedProgress.data.records
-            : (Array.isArray(progress?.data)
-                ? progress.data
-                : (Array.isArray(progress?.message) ? progress.message : []))));
+      ? normalizedProgress.records
+      : (Array.isArray(normalizedProgress?.data?.records)
+        ? normalizedProgress.data.records
+        : (Array.isArray(progress?.data)
+          ? progress.data
+          : (Array.isArray(progress?.message) ? progress.message : []))));
 
   // High-confidence course-level completion checks (consistent with Student Dashboard and Frappe LMS)
   const pbIsComplete = Boolean(
@@ -899,11 +899,11 @@ export default function CourseDetailPage() {
       localStorage.removeItem(`lms_course_completed_${courseId}`);
       try {
         localStorage.setItem(`lms_course_has_incomplete_quizzes_${courseId}`, 'true');
-      } catch {}
+      } catch { }
     } else if (!hasIncompleteQuizzesInCourse && typeof window !== 'undefined') {
       try {
         localStorage.removeItem(`lms_course_has_incomplete_quizzes_${courseId}`);
-      } catch {}
+      } catch { }
     }
   }, [hasIncompleteQuizzesInCourse, currentUserEmail, courseId]);
 
@@ -952,7 +952,7 @@ export default function CourseDetailPage() {
         add(parsed.name);
         add(parsed.username);
       }
-    } catch {}
+    } catch { }
     return Array.from(list);
   };
 
@@ -982,7 +982,7 @@ export default function CourseDetailPage() {
         const iName = String(item?.name || '').trim().toLowerCase();
         const iTitle = String(item?.title || item?.lesson_name || '').trim().toLowerCase();
         return (lName && (iName === lName || iTitle === lName)) ||
-               (lTitle && (iName === lTitle || iTitle === lTitle));
+          (lTitle && (iName === lTitle || iTitle === lTitle));
       });
       if (full) {
         add(full.name);
@@ -1037,7 +1037,7 @@ export default function CourseDetailPage() {
     // 4. Check localStorage for local completion flag across all identifier & email permutations
     if (typeof window !== 'undefined') {
       // 4a. Check generic keys (no email required)
-      const genericMatch = identifiers.some(id => 
+      const genericMatch = identifiers.some(id =>
         localStorage.getItem(`lms_lesson_${id}_completed`) === 'true' ||
         localStorage.getItem(`lms_lesson_${courseId}_${id}_completed`) === 'true'
       );
@@ -1066,7 +1066,7 @@ export default function CourseDetailPage() {
             }
           }
         }
-      } catch {}
+      } catch { }
     }
 
     // 5. Check progress records returned by API
@@ -1158,15 +1158,15 @@ export default function CourseDetailPage() {
     if (flatOutline.length === 0) return null;
 
     // 1. Check if backend explicitly indicates resume/current lesson in membership or progress
-    const backendLessonId = 
+    const backendLessonId =
       details?.membership?.current_lesson ||
       enrollmentData?.current_lesson ||
       normalizedProgress?.current_lesson ||
       normalizedProgress?.next_lesson;
 
     if (backendLessonId) {
-      const foundIdx = flatOutline.findIndex(item => 
-        item.lesson.name === backendLessonId || 
+      const foundIdx = flatOutline.findIndex(item =>
+        item.lesson.name === backendLessonId ||
         item.lesson.title === backendLessonId ||
         item.lesson.lesson_name === backendLessonId
       );
@@ -1366,40 +1366,11 @@ export default function CourseDetailPage() {
               Back
             </Link>
 
-            {isInstructor && (
+            {isInstructor && Boolean(details?.published) ? (
               <div className="flex items-center gap-2">
-                {!details?.published ? (
-                  <>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold tracking-wide text-amber-200 uppercase bg-amber-900/60 border border-amber-500/50 rounded-lg backdrop-blur-sm">
-                      <Lock className="w-3.5 h-3.5 text-amber-400" /> Draft
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleTogglePublish(true)}
-                      disabled={publishingLoading}
-                      className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg shadow-sm transition-all cursor-pointer disabled:opacity-50"
-                      title="Publish course directly to student catalog"
-                    >
-                      {publishingLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Globe className="w-3.5 h-3.5" />}
-                      Publish Course
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold tracking-wide text-emerald-200 uppercase bg-emerald-900/60 border border-emerald-500/50 rounded-lg backdrop-blur-sm">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Published
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleTogglePublish(false)}
-                      disabled={publishingLoading}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-lg transition-all cursor-pointer"
-                      title="Switch back to draft mode"
-                    >
-                      Unpublish
-                    </button>
-                  </>
-                )}
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold tracking-wide text-emerald-200 uppercase bg-emerald-900/60 border border-emerald-500/50 rounded-lg backdrop-blur-sm">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Published
+                </span>
                 <Link
                   href={`/course/${courseId}/edit`}
                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg backdrop-blur-sm transition-all"
@@ -1408,7 +1379,7 @@ export default function CourseDetailPage() {
                   Edit Course
                 </Link>
               </div>
-            )}
+            ) : null}
           </div>
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -1601,11 +1572,10 @@ export default function CourseDetailPage() {
                                     </span>
                                   )}
                                   {hasQuiz && !isInstructor && (
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ml-1.5 shrink-0 flex items-center gap-1 ${
-                                      isLessonQuizDone 
-                                        ? 'text-emerald-700 bg-emerald-50 border border-emerald-200/80 shadow-2xs' 
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ml-1.5 shrink-0 flex items-center gap-1 ${isLessonQuizDone
+                                        ? 'text-emerald-700 bg-emerald-50 border border-emerald-200/80 shadow-2xs'
                                         : 'text-amber-700 bg-amber-50 border border-amber-200/80 shadow-2xs'
-                                    }`}>
+                                      }`}>
                                       {isLessonQuizDone ? 'Quiz ✓' : 'Quiz Required'}
                                     </span>
                                   )}
@@ -1679,8 +1649,8 @@ export default function CourseDetailPage() {
                   Course Reviews & Ratings
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  {isInstructor 
-                    ? "Instructor View: Monitor learner feedback and course satisfaction." 
+                  {isInstructor
+                    ? "Instructor View: Monitor learner feedback and course satisfaction."
                     : "Share your experience and help fellow students choose."}
                 </p>
               </div>
@@ -1712,7 +1682,7 @@ export default function CourseDetailPage() {
                       Write a Review
                     </button>
                   ) : (
-                    <span 
+                    <span
                       title="You must be enrolled in the course to submit a review"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200 cursor-not-allowed"
                     >
@@ -1764,106 +1734,105 @@ export default function CourseDetailPage() {
               <div className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   {paginatedReviews.map((review: any, index: number) => {
-                  const authorName = review.owner_details?.full_name || review.owner_details?.username || review.user_name || review.owner || 'Student';
-                  const authorUsername = review.owner_details?.username || (review.owner && review.owner.includes('@') ? review.owner.split('@')[0] : null);
-                  const authorImage = review.owner_details?.user_image ? getImageUrl(review.owner_details.user_image) : null;
-                  const creationDate = formatReviewDate(review.creation);
-                  const initialChar = (authorName.trim() || 'S')[0].toUpperCase();
+                    const authorName = review.owner_details?.full_name || review.owner_details?.username || review.user_name || review.owner || 'Student';
+                    const authorUsername = review.owner_details?.username || (review.owner && review.owner.includes('@') ? review.owner.split('@')[0] : null);
+                    const authorImage = review.owner_details?.user_image ? getImageUrl(review.owner_details.user_image) : null;
+                    const creationDate = formatReviewDate(review.creation);
+                    const initialChar = (authorName.trim() || 'S')[0].toUpperCase();
 
-                  const isCurrentUsers = (currentUserEmail && (review.owner === currentUserEmail || review.user === currentUserEmail || review.owner_details?.username === currentUserEmail)) ||
-                    (currentUserName && (review.owner_details?.full_name === currentUserName || review.user_name === currentUserName));
+                    const isCurrentUsers = (currentUserEmail && (review.owner === currentUserEmail || review.user === currentUserEmail || review.owner_details?.username === currentUserEmail)) ||
+                      (currentUserName && (review.owner_details?.full_name === currentUserName || review.user_name === currentUserName));
 
-                  return (
-                    <div 
-                      key={review.name || `${review.owner}-${index}`} 
-                      className={`p-5 rounded-2xl border transition-all duration-200 relative flex flex-col justify-between shadow-2xs ${
-                        isCurrentUsers 
-                          ? 'bg-indigo-50/40 border-indigo-200/90 shadow-xs' 
-                          : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-md'
-                      }`}
-                    >
-                      <div>
-                        {/* Rating header & Badges */}
-                        <div className="flex items-center justify-between gap-2 mb-3">
-                          <div className="flex items-center gap-1.5">
-                            <div className="flex items-center gap-0.5 text-amber-400">
-                              {[...Array(5)].map((_, i) => (
-                                <Star 
-                                  key={i} 
-                                  className={`w-3.5 h-3.5 ${i < Math.round(Number(review.rating) || 5) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} 
-                                />
-                              ))}
+                    return (
+                      <div
+                        key={review.name || `${review.owner}-${index}`}
+                        className={`p-5 rounded-2xl border transition-all duration-200 relative flex flex-col justify-between shadow-2xs ${isCurrentUsers
+                            ? 'bg-indigo-50/40 border-indigo-200/90 shadow-xs'
+                            : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-md'
+                          }`}
+                      >
+                        <div>
+                          {/* Rating header & Badges */}
+                          <div className="flex items-center justify-between gap-2 mb-3">
+                            <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-0.5 text-amber-400">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star
+                                    key={i}
+                                    className={`w-3.5 h-3.5 ${i < Math.round(Number(review.rating) || 5) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`}
+                                  />
+                                ))}
+                              </div>
+                              <span className="text-xs font-bold text-slate-800 ml-1 px-1.5 py-0.5 bg-amber-50 rounded-md border border-amber-200/60 text-amber-900">
+                                {(Number(review.rating) || 5).toFixed(1)}
+                              </span>
                             </div>
-                            <span className="text-xs font-bold text-slate-800 ml-1 px-1.5 py-0.5 bg-amber-50 rounded-md border border-amber-200/60 text-amber-900">
-                              {(Number(review.rating) || 5).toFixed(1)}
-                            </span>
+
+                            <div className="flex items-center gap-1.5">
+                              {creationDate && (
+                                <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {creationDate}
+                                </span>
+                              )}
+                              {isCurrentUsers && (
+                                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                  Your Review
+                                </span>
+                              )}
+                            </div>
                           </div>
 
-                          <div className="flex items-center gap-1.5">
-                            {creationDate && (
-                              <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {creationDate}
-                              </span>
-                            )}
-                            {isCurrentUsers && (
-                              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
-                                Your Review
-                              </span>
-                            )}
-                          </div>
+                          {/* Review Content */}
+                          <p className="text-slate-700 text-xs sm:text-sm mb-4 leading-relaxed whitespace-pre-wrap font-normal">
+                            "{review.review || review.content}"
+                          </p>
                         </div>
 
-                        {/* Review Content */}
-                        <p className="text-slate-700 text-xs sm:text-sm mb-4 leading-relaxed whitespace-pre-wrap font-normal">
-                          "{review.review || review.content}"
-                        </p>
-                      </div>
-
-                      {/* Author Info footer */}
-                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs mt-auto">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {authorImage ? (
-                            <img
-                              src={authorImage}
-                              alt={authorName}
-                              className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0 shadow-2xs"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-2xs">
-                              {initialChar}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <p className="font-bold text-slate-900 truncate text-xs">
-                              {authorName}
-                            </p>
-                            {authorUsername && authorUsername !== authorName && (
-                              <p className="text-[10px] text-slate-400 truncate">
-                                @{authorUsername}
+                        {/* Author Info footer */}
+                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs mt-auto">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {authorImage ? (
+                              <img
+                                src={authorImage}
+                                alt={authorName}
+                                className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0 shadow-2xs"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-2xs">
+                                {initialChar}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-900 truncate text-xs">
+                                {authorName}
                               </p>
+                              {authorUsername && authorUsername !== authorName && (
+                                <p className="text-[10px] text-slate-400 truncate">
+                                  @{authorUsername}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Action buttons (Delete for student's own review, or Instructor) */}
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            {(isCurrentUsers || isInstructor) && (
+                              <button
+                                onClick={() => handleDeleteReview(review.name)}
+                                disabled={reviewDeleting}
+                                title="Delete review"
+                                className="text-slate-400 hover:text-rose-600 transition-colors p-1 rounded-md hover:bg-rose-50 flex items-center justify-center disabled:opacity-50"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             )}
                           </div>
                         </div>
-
-                        {/* Action buttons (Delete for student's own review, or Instructor) */}
-                        <div className="flex items-center gap-2 shrink-0 ml-2">
-                          {(isCurrentUsers || isInstructor) && (
-                            <button
-                              onClick={() => handleDeleteReview(review.name)}
-                              disabled={reviewDeleting}
-                              title="Delete review"
-                              className="text-slate-400 hover:text-rose-600 transition-colors p-1 rounded-md hover:bg-rose-50 flex items-center justify-center disabled:opacity-50"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
 
                 {/* Course Reviews Pagination */}
                 <Pagination
@@ -1881,8 +1850,8 @@ export default function CourseDetailPage() {
                 <MessageSquare className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                 <h3 className="text-sm font-bold text-slate-800">No reviews yet for this course</h3>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
-                  {isInstructor 
-                    ? "As learners complete lessons and engage with the curriculum, their reviews will appear here." 
+                  {isInstructor
+                    ? "As learners complete lessons and engage with the curriculum, their reviews will appear here."
                     : "Be the first student to review this course and help others learn!"}
                 </p>
                 {!isInstructor && (
@@ -1955,11 +1924,10 @@ export default function CourseDetailPage() {
                           className="p-1 text-2xl transition-transform hover:scale-125 focus:outline-none"
                         >
                           <Star
-                            className={`w-8 h-8 ${
-                              star <= (hoverRating || reviewRating)
+                            className={`w-8 h-8 ${star <= (hoverRating || reviewRating)
                                 ? 'fill-amber-400 text-amber-400'
                                 : 'text-slate-200'
-                            }`}
+                              }`}
                           />
                         </button>
                       ))}
@@ -2117,7 +2085,7 @@ export default function CourseDetailPage() {
 
                 if (effectiveCover) {
                   return (
-                    <div 
+                    <div
                       onClick={() => {
                         if (details.video_link) setIsVideoModalOpen(true);
                       }}
@@ -2144,7 +2112,7 @@ export default function CourseDetailPage() {
                 }
 
                 return (
-                  <div 
+                  <div
                     onClick={() => {
                       if (details.video_link) setIsVideoModalOpen(true);
                     }}
@@ -2201,18 +2169,17 @@ export default function CourseDetailPage() {
                       </span>
                     </div>
                     <div className="w-full bg-slate-200 rounded-full h-2 mb-2 overflow-hidden">
-                      <div 
-                        className={`h-2 rounded-full transition-all duration-1000 ease-out ${
-                          isCourseComplete
+                      <div
+                        className={`h-2 rounded-full transition-all duration-1000 ease-out ${isCourseComplete
                             ? "bg-gradient-to-r from-emerald-500 to-teal-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                             : "bg-gradient-to-r from-indigo-500 to-violet-500"
-                        }`} 
+                          }`}
                         style={{ width: `${isCourseComplete ? 100 : progressPercent}%` }}
                       ></div>
                     </div>
                     <p className="text-[11px] text-slate-500 text-center">
-                      {isCourseComplete 
-                        ? `All ${allOutlineLessons.length || totalLessonsCount || completedLessonsCount} lessons completed` 
+                      {isCourseComplete
+                        ? `All ${allOutlineLessons.length || totalLessonsCount || completedLessonsCount} lessons completed`
                         : `${completedLessonsCount} of ${totalLessonsCount || details.lessons || allOutlineLessons.length || 0} lessons completed`}
                     </p>
                   </div>
@@ -2273,8 +2240,8 @@ export default function CourseDetailPage() {
                     }}
                     disabled={enrollLoading}
                     className={`w-full font-bold py-3.5 px-4 rounded-xl transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 mt-3 flex justify-center items-center gap-2 text-sm disabled:opacity-50 active:scale-95 cursor-pointer ${isUserEnrolled
-                        ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-200"
-                        : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-200"
+                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-200"
+                      : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-200"
                       }`}
                   >
                     {enrollLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}

@@ -86,6 +86,7 @@ export function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string>("");
+  const [userName, setUserName] = useState<string>("");
   const [myLiveClasses, setMyLiveClasses] = useState<LMSLiveClass[]>([]);
   const [adminLiveClasses, setAdminLiveClasses] = useState<LMSLiveClass[]>([]);
   const [loadingLiveClasses, setLoadingLiveClasses] = useState(false);
@@ -162,7 +163,9 @@ export function DashboardContent() {
       const apiKey = localStorage.getItem("apiKey");
       const apiSecret = localStorage.getItem("apiSecret");
       const email = localStorage.getItem("userEmail") || "";
+      const storedFullName = localStorage.getItem("fullName") || localStorage.getItem("userName") || "";
       setUserEmail(email);
+      setUserName(storedFullName);
 
       if (
         !apiKey ||
@@ -230,6 +233,14 @@ export function DashboardContent() {
         const unwrappedS = sData && typeof sData === "object"
           ? (sData.courses || sData.batches ? sData : (sData.message || sData.data || sData))
           : sData;
+
+        const studentName = unwrappedS?.full_name || unwrappedS?.student_name || unwrappedS?.first_name || unwrappedS?.user_name;
+        if (studentName) {
+          setUserName(studentName);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("fullName", studentName);
+          }
+        }
 
         let enrolledCourses = unwrappedS?.courses || (Array.isArray(unwrappedS) ? unwrappedS : []);
         let enrolledBatches = unwrappedS?.batches || [];
@@ -443,7 +454,21 @@ export function DashboardContent() {
       }
     };
 
+    const handleAuthChange = () => {
+      if (typeof window !== "undefined") {
+        const updatedEmail = localStorage.getItem("userEmail") || "";
+        const updatedName = localStorage.getItem("fullName") || localStorage.getItem("userName") || "";
+        setUserEmail(updatedEmail);
+        setUserName(updatedName);
+      }
+    };
+    window.addEventListener("auth-changed", handleAuthChange);
+
     fetchAllDashboardData();
+
+    return () => {
+      window.removeEventListener("auth-changed", handleAuthChange);
+    };
   }, [router]);
 
   const studentCourses = studentData?.courses || [];
@@ -746,7 +771,7 @@ export function DashboardContent() {
               <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
                 {isInstructorRole
                   ? "Instructor & Sales Dashboard"
-                  : `Welcome back${userEmail ? `, ${userEmail.split("@")[0]}` : ""}!`}
+                  : `Welcome back${userName ? `, ${userName}` : userEmail ? `, ${userEmail.split("@")[0]}` : ""}!`}
               </h1>
               <p className="text-indigo-200/80 mt-1 text-xs sm:text-sm max-w-2xl font-light">
                 {isInstructorRole
