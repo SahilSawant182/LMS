@@ -603,8 +603,61 @@ export const previewCertificate = async (template_name: string): Promise<any> =>
       template_name,
       no_user: true
     },
-    headers
+    headers,
+    responseType: 'blob'
   });
+};
+
+export interface CreateDefaultCertificatePayload {
+  instructor: string;
+  certificate: string;
+}
+
+export const createDefaultCertificate = async (payload: CreateDefaultCertificatePayload): Promise<any> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (API_TOKEN) {
+    headers['Authorization'] = `token ${API_TOKEN}`;
+  }
+  return apiService.post(
+    'method/lms.lms.doctype.default_certificate.default_certificate.create_default_certificate',
+    payload,
+    { headers }
+  );
+};
+
+export interface CreateStudentCertificatePayload {
+  course: string;
+}
+
+export const createStudentCertificate = async (payload: CreateStudentCertificatePayload): Promise<any> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (API_TOKEN) {
+    headers['Authorization'] = `token ${API_TOKEN}`;
+  }
+  const body = {
+    course: payload.course,
+  };
+  try {
+    return await apiService.post(
+      'method/lms.lms.doctype.lms_certificate.lms_certificate.create_student_certificate',
+      body,
+      { headers }
+    );
+  } catch (err: any) {
+    const msg = String(err?.response?.data?.message || err?.message || '');
+    if (msg.includes('create_student_certificate') && (msg.includes('has no attribute') || msg.includes('404'))) {
+      return await apiService.post(
+        'method/lms.lms.doctype.lms_certificate.lms_certificate.create_certificate',
+        body,
+        { headers }
+      );
+    }
+    throw err;
+  }
 };
 
 export const getCertificate = async (name: string) => {

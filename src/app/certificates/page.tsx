@@ -17,11 +17,16 @@ import {
   Sparkles,
   AlertCircle,
   Check,
+  Star,
+  Loader2,
+  X,
 } from 'lucide-react';
 import {
   getCertificates,
   getCertificateTemplates,
   previewCertificate,
+  createDefaultCertificate,
+  createStudentCertificate,
   CertificateTemplate,
 } from '@/services/lms.services';
 import { isAuthorizedInstructor } from '@/services/auth.services';
@@ -29,6 +34,7 @@ import { formatDate } from '@/utils/formatters';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Dropdown from '@/components/ui/Dropdown';
+import { showToast } from '@/components/ui/Toast';
 
 interface Certificate {
   name: string;
@@ -43,6 +49,7 @@ interface Certificate {
 export default function CertificatesPage() {
   const router = useRouter();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const prevBlobUrlRef = useRef<string | null>(null);
 
   // Role detection
   const [isInstructor, setIsInstructor] = useState<boolean>(false);
@@ -56,11 +63,121 @@ export default function CertificatesPage() {
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [isSettingDefault, setIsSettingDefault] = useState<boolean>(false);
+  const [defaultCertificate, setDefaultCertificate] = useState<string>('');
+
+  // Set selected template as default certificate for instructor
+  const handleSetDefaultCertificate = async () => {
+    if (!selectedTemplate) {
+      showToast.warning('Please select a certificate template first.');
+      return;
+    }
+
+    const instructorEmail =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('userEmail') ||
+          localStorage.getItem('user') ||
+          ''
+        : '';
+
+    if (!instructorEmail) {
+      showToast.error('Instructor email not found. Please log in again.');
+      return;
+    }
+
+    setIsSettingDefault(true);
+    try {
+      const res = await createDefaultCertificate({
+        instructor: instructorEmail.trim(),
+        certificate: selectedTemplate.trim(),
+      });
+
+      setDefaultCertificate(selectedTemplate);
+      const msg =
+        res?.message?.message ||
+        res?.message ||
+        `"${selectedTemplate}" has been set as your default certificate.`;
+      showToast.success(
+        typeof msg === 'string' ? msg : 'Default certificate set successfully!'
+      );
+    } catch (err: any) {
+      console.error('Failed to set default certificate:', err);
+      const errMsg =
+        err?.response?.data?.message?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to set default certificate.';
+      showToast.error(errMsg);
+    } finally {
+      setIsSettingDefault(false);
+    }
+  };
 
   // Student state
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [studentLoading, setStudentLoading] = useState<boolean>(false);
   const [studentError, setStudentError] = useState<string | null>(null);
+
+  // Student: Create Certificate modal state
+  const [isStudentClaimModalOpen, setIsStudentClaimModalOpen] = useState<boolean>(false);
+  const [studentClaimCourse, setStudentClaimCourse] = useState<string>('');
+  const [isStudentClaiming, setIsStudentClaiming] = useState<boolean>(false);
+
+  // Helper to fetch student's earned certificates
+  const fetchStudentCertificates = async () => {
+    setStudentLoading(true);
+    setStudentError(null);
+    try {
+      const rawResponse = await getCertificates();
+      const certArray = Array.isArray(rawResponse)
+        ? rawResponse
+        : (rawResponse?.message?.data || rawResponse?.data?.message || rawResponse?.data || rawResponse?.message || []);
+      const data = Array.isArray(certArray) ? certArray : [];
+      setCertificates(data);
+    } catch (err: any) {
+      setStudentError(err?.message || 'Failed to fetch certificates');
+    } finally {
+      setStudentLoading(false);
+    }
+  };
+
+  // Student handler to create certificate for a course (only course in payload)
+  const handleStudentCreateCertificate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!studentClaimCourse || !studentClaimCourse.trim()) {
+      showToast.warning('Please select a course.');
+      return;
+    }
+
+    setIsStudentClaiming(true);
+    try {
+      const res = await createStudentCertificate({
+        course: studentClaimCourse.trim(),
+      });
+
+      const msg =
+        res?.message?.message ||
+        res?.message ||
+        'Certificate generated successfully!';
+      showToast.success(
+        typeof msg === 'string' ? msg : 'Certificate generated successfully!'
+      );
+      setIsStudentClaimModalOpen(false);
+      setStudentClaimCourse('');
+      // Refresh certificates list for student
+      await fetchStudentCertificates();
+    } catch (err: any) {
+      console.error('Failed to create student certificate:', err);
+      const errMsg =
+        err?.response?.data?.message?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to generate certificate.';
+      showToast.error(errMsg);
+    } finally {
+      setIsStudentClaiming(false);
+    }
+  };
 
   // Helper to load preview for a given template
   const loadPreview = async (templateName: string) => {
@@ -70,14 +187,64 @@ export default function CertificatesPage() {
     try {
       const rawRes = await previewCertificate(templateName);
 
-      let htmlContent = '';
-      if (typeof rawRes === 'string') {
-        htmlContent = rawRes;
+      let content = '';
+
+      if (rawRes instanceof Blob) {
+        if (rawRes.type === 'application/pdf') {
+          content = URL.createObjectURL(rawRes);
+        } else {
+          try {
+            const text = await rawRes.text();
+            if (text.startsWith('%PDF') || text.includes('%PDF-')) {
+              content = URL.createObjectURL(
+                new Blob([rawRes], { type: 'application/pdf' })
+              );
+            } else {
+              try {
+                const parsed = JSON.parse(text);
+                content =
+                  parsed?.message?.html ||
+                  parsed?.message?.template ||
+                  parsed?.message ||
+                  parsed?.data ||
+                  text;
+              } catch {
+                content = text;
+              }
+            }
+          } catch {
+            content = URL.createObjectURL(rawRes);
+          }
+        }
+      } else if (typeof rawRes === 'string') {
+        const trimmed = rawRes.trim();
+        if (trimmed.startsWith('%PDF') || trimmed.includes('%PDF-')) {
+          const len = rawRes.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) {
+            bytes[i] = rawRes.charCodeAt(i) & 0xff;
+          }
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          content = URL.createObjectURL(blob);
+        } else {
+          content = rawRes;
+        }
       } else if (rawRes?.message !== undefined) {
         if (typeof rawRes.message === 'string') {
-          htmlContent = rawRes.message;
+          const trimmed = rawRes.message.trim();
+          if (trimmed.startsWith('%PDF') || trimmed.includes('%PDF-')) {
+            const len = rawRes.message.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+              bytes[i] = rawRes.message.charCodeAt(i) & 0xff;
+            }
+            const blob = new Blob([bytes], { type: 'application/pdf' });
+            content = URL.createObjectURL(blob);
+          } else {
+            content = rawRes.message;
+          }
         } else if (rawRes.message && typeof rawRes.message === 'object') {
-          htmlContent =
+          content =
             rawRes.message.html ||
             rawRes.message.template ||
             rawRes.message.preview ||
@@ -86,9 +253,20 @@ export default function CertificatesPage() {
         }
       } else if (rawRes?.data !== undefined) {
         if (typeof rawRes.data === 'string') {
-          htmlContent = rawRes.data;
+          const trimmed = rawRes.data.trim();
+          if (trimmed.startsWith('%PDF') || trimmed.includes('%PDF-')) {
+            const len = rawRes.data.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+              bytes[i] = rawRes.data.charCodeAt(i) & 0xff;
+            }
+            const blob = new Blob([bytes], { type: 'application/pdf' });
+            content = URL.createObjectURL(blob);
+          } else {
+            content = rawRes.data;
+          }
         } else if (rawRes.data && typeof rawRes.data === 'object') {
-          htmlContent =
+          content =
             rawRes.data.html ||
             rawRes.data.template ||
             rawRes.data.preview ||
@@ -96,12 +274,21 @@ export default function CertificatesPage() {
             JSON.stringify(rawRes.data);
         }
       } else if (rawRes?.html) {
-        htmlContent = rawRes.html;
+        content = rawRes.html;
       } else if (rawRes?.template) {
-        htmlContent = rawRes.template;
+        content = rawRes.template;
       }
 
-      setPreviewContent(htmlContent);
+      if (content.startsWith('blob:')) {
+        if (prevBlobUrlRef.current) {
+          try {
+            URL.revokeObjectURL(prevBlobUrlRef.current);
+          } catch {}
+        }
+        prevBlobUrlRef.current = content;
+      }
+
+      setPreviewContent(content);
     } catch (err: any) {
       setPreviewError(err?.message || 'Failed to load certificate preview');
     } finally {
@@ -154,22 +341,6 @@ export default function CertificatesPage() {
       fetchTemplates();
     } else {
       // Student role flow: fetch earned certificates
-      const fetchStudentCertificates = async () => {
-        setStudentLoading(true);
-        setStudentError(null);
-        try {
-          const rawResponse = await getCertificates();
-          const certArray = Array.isArray(rawResponse)
-            ? rawResponse
-            : (rawResponse?.message?.data || rawResponse?.data?.message || rawResponse?.data || rawResponse?.message || []);
-          const data = Array.isArray(certArray) ? certArray : [];
-          setCertificates(data);
-        } catch (err: any) {
-          setStudentError(err?.message || 'Failed to fetch certificates');
-        } finally {
-          setStudentLoading(false);
-        }
-      };
       fetchStudentCertificates();
     }
   }, []);
@@ -184,6 +355,7 @@ export default function CertificatesPage() {
     if (typeof val !== 'string') return false;
     const v = val.trim();
     return (
+      v.startsWith('blob:') ||
       v.startsWith('http://') ||
       v.startsWith('https://') ||
       v.startsWith('data:image/') ||
@@ -337,7 +509,7 @@ export default function CertificatesPage() {
                   />
                 </div>
 
-                {/* Actions: Refresh, Fullscreen, Print */}
+                {/* Actions: Refresh, Fullscreen, Print, Set as Default */}
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -370,21 +542,71 @@ export default function CertificatesPage() {
                     <Printer className="w-4 h-4" />
                     <span className="hidden sm:inline">Print</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleSetDefaultCertificate}
+                    disabled={
+                      isSettingDefault ||
+                      !selectedTemplate ||
+                      templatesLoading
+                    }
+                    title="Set as Default Certificate"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {isSettingDefault ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="hidden sm:inline">Saving Default...</span>
+                      </>
+                    ) : defaultCertificate === selectedTemplate ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span className="hidden sm:inline">Default Template</span>
+                      </>
+                    ) : (
+                      <>
+                        <Star className="w-4 h-4 fill-white/20" />
+                        <span className="hidden sm:inline">Set as Default</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
 
             {/* Template Status / Meta Bar */}
             {selectedTemplate && (
-              <div className="flex items-center justify-between mt-4 px-4 py-2.5 bg-amber-50/60 rounded-xl border border-amber-100 text-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4 px-4 py-2.5 bg-amber-50/60 rounded-xl border border-amber-100 text-xs">
                 <div className="flex items-center gap-2 text-amber-900 font-semibold truncate">
                   <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0" />
                   <span className="truncate">
                     Current Template: <strong className="text-amber-950 font-bold">{selectedTemplate}</strong>
                   </span>
+                  {defaultCertificate === selectedTemplate && (
+                    <span className="inline-flex items-center gap-1 bg-amber-200/90 text-amber-950 font-bold text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider ml-1">
+                      <Check className="w-3 h-3" /> Default
+                    </span>
+                  )}
                 </div>
-                <div className="text-slate-500 font-medium flex-shrink-0">
-                  {templates.length} template{templates.length === 1 ? '' : 's'} loaded
+                <div className="flex items-center gap-3">
+                  <span className="text-slate-500 font-medium flex-shrink-0">
+                    {templates.length} template{templates.length === 1 ? '' : 's'} loaded
+                  </span>
+                  {defaultCertificate !== selectedTemplate && (
+                    <button
+                      type="button"
+                      onClick={handleSetDefaultCertificate}
+                      disabled={isSettingDefault || !selectedTemplate}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold text-[11px] rounded-lg transition-all cursor-pointer"
+                    >
+                      {isSettingDefault ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Star className="w-3 h-3" />
+                      )}
+                      <span>Set as Default</span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -467,15 +689,28 @@ export default function CertificatesPage() {
         ) : (
           /* STUDENT ROLE VIEW */
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 md:p-8 mb-8 min-h-[400px]">
-            <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-4">
-              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-indigo-600" />
-                Issued Certificates
-              </h2>
-              <div className="flex items-center gap-4">
-                <div className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-indigo-600" />
+                  Issued Certificates
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Certificates earned from completing your courses and programs.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
                   {certificates.length} Total
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setIsStudentClaimModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm shadow-indigo-600/20 cursor-pointer"
+                >
+                  <Award className="w-4 h-4" />
+                  <span>Create Certificate</span>
+                </button>
               </div>
             </div>
 
@@ -585,10 +820,110 @@ export default function CertificatesPage() {
                 <h3 className="text-lg font-bold text-slate-900 mb-1">
                   No certificates found
                 </h3>
-                <p className="text-slate-500 max-w-sm mx-auto">
-                  Complete courses and batches to earn your certificates. They
-                  will appear here once issued.
+                <p className="text-slate-500 max-w-sm mx-auto mb-4">
+                  Complete courses to earn your certificates, or create your certificate for a completed course.
                 </p>
+                <button
+                  type="button"
+                  onClick={() => setIsStudentClaimModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+                >
+                  <Award className="w-4 h-4" />
+                  <span>Create Certificate</span>
+                </button>
+              </div>
+            )}
+
+            {/* Modal: Create Certificate for Student Role */}
+            {isStudentClaimModalOpen && (
+              <div
+                role="dialog"
+                aria-modal="true"
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in"
+                onClick={() => !isStudentClaiming && setIsStudentClaimModalOpen(false)}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-scale-up"
+                >
+                  {/* Modal Header */}
+                  <div className="flex items-center justify-between p-6 bg-slate-50 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                        <Award className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900">
+                          Create Course Certificate
+                        </h3>
+                        <p className="text-xs text-slate-500">
+                          Select your course to generate your official completion certificate.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => !isStudentClaiming && setIsStudentClaimModalOpen(false)}
+                      className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Modal Form */}
+                  <form onSubmit={handleStudentCreateCertificate} className="p-6 space-y-5">
+                    {/* Course Selection */}
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                        Select Course <span className="text-red-500">*</span>
+                      </label>
+                      <Dropdown
+                        id="student-claim-course-select"
+                        value={studentClaimCourse}
+                        onChange={(val: string) => setStudentClaimCourse(val)}
+                        endpoint="https://devlms.stridenex.ai/api/method/lms.lms.master.get_dropdown_options"
+                        params={{ doctype: 'LMS Course' }}
+                        placeholder="Search and select course"
+                        modalTitle="SELECT COURSE"
+                        searchable
+                        required
+                        triggerClassName="!bg-slate-50 !border-slate-200 hover:!border-slate-300 !rounded-xl !text-sm !font-semibold !py-2.5 !px-3.5"
+                      />
+                      <p className="text-[11px] text-slate-400 mt-1.5">
+                        Choose the completed course you wish to generate a certificate for.
+                      </p>
+                    </div>
+
+                    {/* Footer Buttons */}
+                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        disabled={isStudentClaiming}
+                        onClick={() => setIsStudentClaimModalOpen(false)}
+                        className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isStudentClaiming || !studentClaimCourse}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
+                      >
+                        {isStudentClaiming ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Creating Certificate...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4" />
+                            <span>Create Certificate</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             )}
           </div>
