@@ -448,18 +448,16 @@ export default function NotificationBell() {
         onClick={handleToggle}
         aria-label="Notifications"
         aria-expanded={isOpen}
-        className={`relative p-2 rounded-xl transition-all duration-200 cursor-pointer ${
-          isOpen
-            ? "bg-indigo-50 text-indigo-600 shadow-xs ring-2 ring-indigo-200/60"
-            : "text-slate-600 hover:text-indigo-600 hover:bg-slate-100/80"
+        className={`relative p-2 text-slate-600 hover:bg-slate-50 rounded-full transition-colors cursor-pointer ${
+          isOpen ? "bg-slate-50 text-slate-900" : ""
         }`}
       >
-        <Bell className="w-4 h-4 transition-transform duration-200 hover:scale-110" />
+        <Bell className="w-5 h-5" />
 
         {/* Unread Counter Badge */}
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-black text-white bg-gradient-to-r from-rose-500 to-pink-500 rounded-full ring-2 ring-white shadow-xs animate-in zoom-in-50 duration-200">
-            {unreadCount > 99 ? "99+" : unreadCount}
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center font-bold px-1">
+            {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet, TrendingUp, Settings, ClipboardCheck, BookOpen, Users, Tag, X, Loader2, ArrowRight, GraduationCap } from 'lucide-react';
+import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet, TrendingUp, Settings, ClipboardCheck, BookOpen, Users, Tag, X, Loader2, ArrowRight, GraduationCap, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/services/auth.services';
@@ -14,6 +14,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  const [userImage, setUserImage] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isInstructor, setIsInstructor] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -59,6 +60,8 @@ export default function Navbar() {
       if (apiKey || userEmail) {
         setUserName(fullName || userEmail?.split("@")[0] || "Learner");
         setUserEmail(userEmail || "");
+        const userImg = localStorage.getItem("user_image") || localStorage.getItem("userImage") || "";
+        setUserImage(userImg);
         setIsAuthenticated(true);
         let hasInstructorRole = false;
         try {
@@ -78,6 +81,7 @@ export default function Navbar() {
         setIsInstructor(hasInstructorRole);
       } else {
         setIsAuthenticated(false);
+        setUserImage("");
         setIsInstructor(false);
       }
     }
@@ -296,38 +300,28 @@ export default function Navbar() {
       />
 
       {/* Main Top Navbar */}
-      <nav className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-xs text-gray-800 transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-20 items-center">
-            {/* Left side: Sidebar Toggle & Quick Explorer */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={toggleSidebar}
-                className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/70 rounded-xl transition-all duration-200 border border-slate-200/70 shadow-2xs group"
-                title={isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
-                aria-label="Toggle Sidebar Navigation"
-              >
-                <PanelLeft className="w-5 h-5 group-hover:scale-105 transition-transform" />
-              </button>
+      <nav className="h-16 sticky top-0 z-40 px-4 lg:px-8 flex items-center justify-between bg-white border-b border-slate-200 text-slate-800 shadow-sm transition-colors duration-300">
+        {/* Left Section: Sidebar Toggle & "Back to StrideNex" Button */}
+        <div className="flex items-center gap-3">
+          {/* Mobile / Sidebar Toggle (w-5 h-5 in p-2 rounded-lg) */}
+          <button
+            onClick={toggleSidebar}
+            className="p-2 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+            aria-label="Toggle menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
 
-              <Link
-                href="/dashboard"
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
-              >
-                Dashboard
-              </Link>
-
-              <Link
-                href="/badges"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-amber-800 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200/70 hover:shadow-xs transition-all duration-200 hover:border-amber-300"
-              >
-                <Medal className="w-3.5 h-3.5 text-amber-500" />
-                <span>Badges</span>
-                <span className="bg-amber-500 text-white text-[9px] px-1.5 py-0.2 rounded-full font-extrabold uppercase">
-                  New
-                </span>
-              </Link>
-            </div>
+          {/* "Back to StrideNex" Button */}
+          <Link
+            href="/student/dashboard"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200/70 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 text-slate-500" />
+            <span className="hidden sm:inline">Back to StrideNex</span>
+            <span className="sm:hidden">Back</span>
+          </Link>
+        </div>
 
             {/* Middle: Search Bar with Dropdown Results */}
             <div className="hidden md:flex flex-1 max-w-md mx-6 relative" ref={searchContainerRef}>
@@ -371,7 +365,7 @@ export default function Navbar() {
                     }
                   }}
                   placeholder="Search courses, batches, programs, skills..."
-                  className="w-full pl-10 pr-9 py-2 bg-gray-50/80 border border-gray-200/80 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-xs font-medium transition-all duration-300 shadow-2xs focus:bg-white"
+                  className="w-full pl-10 pr-9 py-2 bg-slate-100 border border-slate-200/80 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-xs text-slate-800 placeholder:text-slate-400 transition-all duration-300 focus:bg-white"
                 />
                 {searchQuery && (
                   <button
@@ -567,215 +561,107 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Right side: Streamlined Clean Actions & Auth */}
-            <div className="flex items-center space-x-3 text-sm font-semibold whitespace-nowrap flex-shrink-0">
-              {isInstructor && (
-                <Link
-                  href="/badges/create"
-                  className="hidden md:inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+        {/* Right Section: Notification Bell & Profile Pill */}
+        <div className="flex items-center gap-3">
+          {/* Mobile search toggle */}
+          <button
+            onClick={() => {
+              setIsMobileSearchOpen(!isMobileSearchOpen);
+              if (!isMobileSearchOpen) {
+                loadSearchData();
+              }
+            }}
+            className="p-2 text-slate-600 hover:bg-slate-50 rounded-full transition-colors cursor-pointer md:hidden"
+            aria-label="Toggle Search"
+          >
+            <Search className="w-5 h-5" />
+          </button>
+
+          {isAuthenticated ? (
+            <>
+              {/* Exact StrideNex Notification Bell */}
+              <NotificationBell />
+
+              {/* Exact StrideNex User Profile Pill */}
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="flex items-center gap-2 p-1 pl-2 pr-3 rounded-full border bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700 transition-colors cursor-pointer"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Create Badge</span>
-                </Link>
-              )}
-
-              {isAuthenticated ? (
-                <div className="flex items-center space-x-3 relative">
-                  <div className="whitespace-normal">
-                    <NotificationBell />
-                  </div>
-
-                  <div className="relative" ref={dropdownRef}>
-                    <button
-                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                      className="flex items-center space-x-2 bg-gray-50 hover:bg-gray-100 border border-gray-200/80 rounded-full py-1 px-1.5 pr-3 transition-all duration-200"
-                    >
-                      <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs border border-indigo-200">
-                        {(userName || 'U').charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-xs font-semibold text-gray-700 max-w-[100px] truncate">
-                        {userName || 'User'}
-                      </span>
-                      <ChevronDown className="w-3 h-3 text-gray-400" />
-                    </button>
-
-                    {/* Dropdown Menu */}
-                    {isDropdownOpen && (
-                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50 animate-fade-in-up origin-top-right">
-                        {userEmail && (
-                          <div className="px-4 py-2.5 border-b border-gray-100">
-                            <p className="text-[11px] text-gray-400 font-medium">Signed in as</p>
-                            <p className="text-xs font-bold text-gray-900 truncate">{userEmail}</p>
-                            {isInstructor && (
-                              <span className="inline-block mt-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                                Instructor
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="py-1 border-b border-gray-100">
-                          <Link
-                            href="/badges"
-                            onClick={() => setIsDropdownOpen(false)}
-                            className="flex items-center justify-between px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="flex items-center gap-2">
-                              <Medal className="w-4 h-4 text-amber-500" />
-                              Badges & Achievements
-                            </div>
-                            <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">New</span>
-                          </Link>
-                          {isInstructor && (
-                            <>
-                              <Link
-                                href="/coupons"
-                                onClick={() => setIsDropdownOpen(false)}
-                                className="flex items-center gap-2 px-4 py-2 text-xs text-emerald-700 hover:bg-emerald-50 transition-colors font-semibold"
-                              >
-                                <Sparkles className="w-4 h-4 text-emerald-600" />
-                                Coupons & Discounts
-                              </Link>
-                              <Link
-                                href="/badges/create"
-                                onClick={() => setIsDropdownOpen(false)}
-                                className="flex items-center gap-2 px-4 py-2 text-xs text-indigo-600 hover:bg-indigo-50 transition-colors font-semibold"
-                              >
-                                <Sparkles className="w-4 h-4 text-indigo-500" />
-                                Create Badge
-                              </Link>
-                              <Link
-                                href="/certificate-evaluations"
-                                onClick={() => setIsDropdownOpen(false)}
-                                className="flex items-center gap-2 px-4 py-2 text-xs text-indigo-700 hover:bg-indigo-50 transition-colors font-semibold"
-                              >
-                                <ClipboardCheck className="w-4 h-4 text-indigo-600" />
-                                Manage Evaluations
-                              </Link>
-                              <Link
-                                href="/course-evaluators"
-                                onClick={() => setIsDropdownOpen(false)}
-                                className="flex items-center gap-2 px-4 py-2 text-xs text-violet-700 hover:bg-violet-50 transition-colors font-semibold"
-                              >
-                                <UserCheck className="w-4 h-4 text-violet-600" />
-                                Course Evaluators
-                              </Link>
-                              <Link
-                                href="/settings"
-                                onClick={() => setIsDropdownOpen(false)}
-                                className="flex items-center gap-2 px-4 py-2 text-xs text-indigo-700 hover:bg-indigo-50 transition-colors font-semibold"
-                              >
-                                <Settings className="w-4 h-4 text-indigo-600" />
-                                LMS Settings
-                              </Link>
-                            </>
-                          )}
-                          <Link
-                            href="/dashboard"
-                            onClick={() => setIsDropdownOpen(false)}
-                            className="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
-                          >
-                            My Dashboard
-                          </Link>
-                          {/* <Link
-                            href="/plans"
-                            onClick={() => setIsDropdownOpen(false)}
-                            className="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
-                          >
-                            <CreditCard className="w-4 h-4 mr-2 text-gray-400" />
-                            Plans
-                          </Link> */}
-                          {isInstructor ? (
-                            <Link
-                              href="/sales-earnings"
-                              onClick={() => setIsDropdownOpen(false)}
-                              className="flex items-center px-4 py-2 text-xs text-emerald-700 hover:bg-emerald-50 transition-colors font-medium"
-                            >
-                              <TrendingUp className="w-4 h-4 mr-2 text-emerald-600" />
-                              Sales & Earnings
-                            </Link>
-                          ) : (
-                            <Link
-                              href="/my-payments"
-                              onClick={() => setIsDropdownOpen(false)}
-                              className="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
-                            >
-                              <Receipt className="w-4 h-4 mr-2 text-gray-400" />
-                              My Payments
-                            </Link>
-                          )}
-                          {/* <Link
-                            href="/profile"
-                            onClick={() => setIsDropdownOpen(false)}
-                            className="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
-                          >
-                            <User className="w-4 h-4 mr-2 text-gray-400" />
-                            Profile
-                          </Link> */}
-                        </div>
-
-                        <div className="py-1">
-                          <button
-                            onClick={() => {
-                              setIsDropdownOpen(false);
-                              handleLogout();
-                            }}
-                            className="w-full flex items-center px-4 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors"
-                          >
-                            <LogOut className="w-4 h-4 mr-2" />
-                            Sign out
-                          </button>
-                        </div>
-                      </div>
+                  {/* 32px Avatar Circle */}
+                  <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-white font-medium text-sm shrink-0 bg-gradient-to-tr from-amber-500 to-orange-500">
+                    {userImage ? (
+                      <img src={userImage} alt={userName} className="w-full h-full object-cover" />
+                    ) : (
+                      userName ? userName.charAt(0).toUpperCase() : "U"
                     )}
                   </div>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-2">
-                  <Link
-                    href="/login"
-                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-50/50 transition-colors"
-                  >
-                    Log in
-                  </Link>
-                  <Link
-                    href="/signup"
-                    className="text-xs font-semibold bg-indigo-600 text-white px-3.5 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-2xs"
-                  >
-                    Sign up
-                  </Link>
-                </div>
-              )}
 
-              {/* Mobile search toggle */}
-              <button
-                onClick={() => {
-                  setIsMobileSearchOpen(!isMobileSearchOpen);
-                  if (!isMobileSearchOpen) {
-                    loadSearchData();
-                  }
-                }}
-                className="p-2 text-gray-600 hover:text-indigo-600 bg-gray-50 rounded-xl focus:outline-none md:hidden"
-                aria-label="Toggle Search"
-              >
-                <Search className="w-5 h-5" />
-              </button>
+                  {/* Name and Role Icon */}
+                  <span className="text-sm font-medium hidden sm:flex items-center gap-2 text-slate-700">
+                    <span className="truncate max-w-[120px]">{userName || "Learner"}</span>
+                    <GraduationCap className="w-5 h-5 text-orange-500" />
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-slate-400 hidden sm:block" />
+                </button>
 
-              {/* Mobile sidebar opener */}
-              <button
-                onClick={() => setIsMobileSidebarOpen(true)}
-                className="p-2 text-gray-600 hover:text-indigo-600 bg-gray-50 rounded-xl focus:outline-none lg:hidden"
-                aria-label="Open Mobile Menu"
+                {/* Dropdown Menu (Exact StrideNex dimensions) */}
+                {isDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 z-50 p-2 space-y-1">
+                    <div className="px-3 py-2 border-b border-slate-100 mb-1">
+                      <p className="text-xs text-slate-400 font-medium">Signed in as</p>
+                      <p className="text-sm font-semibold text-slate-800 truncate">{userEmail || userName}</p>
+                    </div>
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                    >
+                      My Dashboard
+                    </Link>
+                    <Link
+                      href="/student/dashboard"
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                    >
+                      Portal Dashboard
+                    </Link>
+                    <div className="border-t border-slate-100 my-1" />
+                    <button
+                      onClick={() => {
+                        setIsDropdownOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <Link
+                href="/login"
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-50/50 transition-colors"
               >
-                <Menu className="w-5 h-5" />
-              </button>
+                Log in
+              </Link>
+              <Link
+                href="/signup"
+                className="text-xs font-semibold bg-indigo-600 text-white px-3.5 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-2xs"
+              >
+                Sign up
+              </Link>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Mobile Search Bar Expandable Drawer */}
         {isMobileSearchOpen && (
-          <div className="md:hidden border-t border-gray-100 bg-white px-4 py-3 relative" ref={mobileSearchContainerRef}>
+          <div className="md:hidden absolute top-16 left-0 right-0 border-b border-slate-200 bg-white px-4 py-3 shadow-md z-50" ref={mobileSearchContainerRef}>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 {searchLoading ? (
@@ -812,7 +698,7 @@ export default function Navbar() {
                   }
                 }}
                 placeholder="Search courses, batches, programs, skills..."
-                className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                className="w-full pl-9 pr-8 py-2 bg-slate-100 border border-slate-200/80 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white"
               />
               {searchQuery && (
                 <button
