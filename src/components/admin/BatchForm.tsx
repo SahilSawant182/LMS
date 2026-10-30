@@ -153,13 +153,16 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
 
   const handleZoomSuccess = async (savedAccount?: ZoomSetting) => {
     const updated = await fetchConferencing();
+    const available = (updated?.zoom_accounts || []).filter(
+      (a) => updated?.is_admin ? true : a.is_owner !== false
+    );
     if (savedAccount?.name || savedAccount?.account_name) {
       setFormData((prev: any) => ({
         ...prev,
         zoom_account: savedAccount.name || savedAccount.account_name,
       }));
-    } else if (updated?.zoom_accounts && updated.zoom_accounts.length > 0) {
-      const last = updated.zoom_accounts[updated.zoom_accounts.length - 1];
+    } else if (available.length > 0) {
+      const last = available[available.length - 1];
       setFormData((prev: any) => ({
         ...prev,
         zoom_account: last.name,
@@ -245,10 +248,21 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
     
-    setFormData((prev: any) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? (checked ? 1 : 0) : value
-    }));
+    setFormData((prev: any) => {
+      const next = {
+        ...prev,
+        [name]: type === 'checkbox' ? (checked ? 1 : 0) : value
+      };
+      if (name === 'conferencing_provider' && value === 'Zoom' && !prev.zoom_account) {
+        const availableZoom = conferencingSettings.zoom_accounts.filter(
+          (a) => conferencingSettings.is_admin ? true : a.is_owner !== false
+        );
+        if (availableZoom.length > 0) {
+          next.zoom_account = availableZoom[0].name;
+        }
+      }
+      return next;
+    });
   };
 
   const handleArrayAdd = (field: string, defaultObj: any) => {
@@ -312,10 +326,36 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
         instructorsList.push({ instructor: currentUserEmail });
       }
 
+      if (formData.conferencing_provider === 'Zoom') {
+        const availableZoom = conferencingSettings.zoom_accounts.filter(
+          (a) => conferencingSettings.is_admin ? true : a.is_owner !== false
+        );
+        if (!formData.zoom_account) {
+          setError('Please select a Zoom account.');
+          setLoading(false);
+          return;
+        }
+        if (availableZoom.length === 0) {
+          setError('No connected Zoom account found. Please connect your Zoom account first.');
+          setLoading(false);
+          return;
+        }
+        const isAuthorized = availableZoom.some(
+          (a) => a.name === formData.zoom_account || a.account_name === formData.zoom_account
+        );
+        if (!isAuthorized) {
+          setError('The selected Zoom account is orphaned or unauthorized. Please select or connect your own Zoom account.');
+          setLoading(false);
+          return;
+        }
+      }
+
       const isPub = formData.published === 1 || formData.published === '1' || formData.published === true;
 
       const payload = {
         ...formData,
+        zoom_account: formData.conferencing_provider === 'Zoom' ? (formData.zoom_account || '') : '',
+        google_meet_account: formData.conferencing_provider === 'Google Meet' ? (formData.google_meet_account || '') : '',
         published: isPub ? 1 : 0,
         instructors: instructorsList,
         assessment: validAssessments,
@@ -485,22 +525,36 @@ export default function BatchForm({ initialData, isEdit }: BatchFormProps) {
                           <span>+ Connect Zoom</span>
                         </button>
                       </div>
-                      {conferencingSettings.zoom_accounts.length > 0 ? (
-                        <select name="zoom_account" value={formData.zoom_account || ''} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors">
-                          <option value="">Select Zoom Account</option>
-                          {conferencingSettings.zoom_accounts.map((a) => (
-                            <option key={a.name} value={a.name}>{a.account_name}</option>
-                          ))}
-                        </select>
+                      {conferencingSettings.zoom_accounts.filter((a) => conferencingSettings.is_admin ? true : a.is_owner !== false).length > 0 ? (
+                        <>
+                          <select name="zoom_account" value={formData.zoom_account || ''} onChange={handleChange} className="w-full px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors">
+                            <option value="">Select Zoom Account</option>
+                            {conferencingSettings.zoom_accounts
+                              .filter((a) => conferencingSettings.is_admin ? true : a.is_owner !== false)
+                              .map((a) => (
+                                <option key={a.name} value={a.name}>{a.account_name}</option>
+                            ))}
+                          </select>
+                          {formData.zoom_account && !conferencingSettings.zoom_accounts
+                            .filter((a) => conferencingSettings.is_admin ? true : a.is_owner !== false)
+                            .some((a) => a.name === formData.zoom_account || a.account_name === formData.zoom_account) && (
+                            <p className="text-xs text-amber-600 mt-1">
+                              ⚠️ The previously selected Zoom account is orphaned or unauthorized for your user. Please select one of your own Zoom accounts.
+                            </p>
+                          )}
+                        </>
                       ) : (
-                        <div className="flex items-center gap-2">
-                          <input type="text" name="zoom_account" value={formData.zoom_account || ''} onChange={handleChange} className="flex-1 px-3 py-1.5 h-9 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none transition-colors" placeholder="Zoom Account ID or Name" />
+                        <div className="py-2 px-3 bg-amber-50/60 border border-amber-200/80 rounded-lg">
+                          <p className="text-xs text-amber-800 mb-1.5">
+                            No Zoom accounts configured. You must connect your own Zoom account to schedule classes using Zoom.
+                          </p>
                           <button
                             type="button"
                             onClick={() => setZoomModalOpen(true)}
-                            className="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-md hover:bg-indigo-100 transition-colors shrink-0 cursor-pointer"
+                            className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-1 cursor-pointer shadow-sm"
                           >
-                            + Connect Zoom
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Connect your Zoom account</span>
                           </button>
                         </div>
                       )}

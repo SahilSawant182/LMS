@@ -160,9 +160,10 @@ export default function ScheduleLiveClassModal({
           }
         }
       }
-      // Auto-select first accounts
-      if (!form.zoom_account && s.zoom_accounts.length > 0) {
-        setForm((p) => ({ ...p, zoom_account: s.zoom_accounts[0].name }));
+      // Only auto-select from the user's available accounts
+      const availableZoomAccounts = s.zoom_accounts.filter((a) => s.is_admin ? true : a.is_owner !== false);
+      if (!form.zoom_account && availableZoomAccounts.length > 0) {
+        setForm((p) => ({ ...p, zoom_account: availableZoomAccounts[0].name }));
       }
       if (!form.google_meet_account && s.google_meet_accounts.length > 0) {
         setForm((p) => ({ ...p, google_meet_account: s.google_meet_accounts[0].name }));
@@ -173,15 +174,16 @@ export default function ScheduleLiveClassModal({
 
   const handleZoomSuccess = async (savedAccount?: ZoomSetting) => {
     const s = await fetchSettings();
+    const available = (s?.zoom_accounts || []).filter((a) => s?.is_admin ? true : a.is_owner !== false);
     if (savedAccount?.name || savedAccount?.account_name) {
       setForm((p) => ({
         ...p,
         zoom_account: savedAccount.name || savedAccount.account_name,
       }));
-    } else if (s?.zoom_accounts && s.zoom_accounts.length > 0) {
+    } else if (available.length > 0) {
       setForm((p) => ({
         ...p,
-        zoom_account: s.zoom_accounts[s.zoom_accounts.length - 1].name,
+        zoom_account: available[available.length - 1].name,
       }));
     }
   };
@@ -217,6 +219,20 @@ export default function ScheduleLiveClassModal({
     }
     if (form.conferencing_provider === "Custom" && !form.join_url.trim()) {
       return "Join URL is required for Custom provider.";
+    }
+    if (form.conferencing_provider === "Zoom") {
+      const availableZoom = settings.zoom_accounts.filter(
+        (a) => settings.is_admin ? true : a.is_owner !== false
+      );
+      if (!form.zoom_account) {
+        return "Please select a Zoom account.";
+      }
+      if (availableZoom.length === 0) {
+        return "No connected Zoom account found. Please connect your Zoom account first.";
+      }
+      if (!availableZoom.some((a) => a.name === form.zoom_account || a.account_name === form.zoom_account)) {
+        return "Selected Zoom account is not authorized or does not belong to you.";
+      }
     }
     return null;
   };
@@ -468,7 +484,7 @@ export default function ScheduleLiveClassModal({
                         <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
                           <Loader2 className="w-3 h-3 animate-spin" /> Loading accounts…
                         </div>
-                      ) : settings.zoom_accounts.length > 0 ? (
+                      ) : settings.zoom_accounts.filter((a) => settings.is_admin ? true : a.is_owner !== false).length > 0 ? (
                         <div className="relative">
                           <select
                             name="zoom_account"
@@ -477,10 +493,12 @@ export default function ScheduleLiveClassModal({
                             className={`${inputClass} appearance-none pr-8`}
                           >
                             <option value="">Select account</option>
-                            {settings.zoom_accounts.map((a) => (
-                              <option key={a.name} value={a.name}>
-                                {a.account_name}
-                              </option>
+                            {settings.zoom_accounts
+                              .filter((a) => settings.is_admin ? true : a.is_owner !== false)
+                              .map((a) => (
+                                <option key={a.name} value={a.name}>
+                                  {a.account_name}
+                                </option>
                             ))}
                           </select>
                           <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />

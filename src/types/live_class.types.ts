@@ -95,14 +95,17 @@ export interface ConferencingSettings {
     member?: string;
     member_name?: string;
     enabled: number;
+    is_owner?: boolean;
   }>;
   google_meet_accounts: Array<{
     name: string;
     account_name: string;
     google_calendar?: string;
     enabled: number;
+    is_owner?: boolean;
   }>;
   providers: string[];
+  is_admin?: boolean;
 }
 
 export interface CreateLiveClassPayload {
