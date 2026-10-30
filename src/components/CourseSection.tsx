@@ -163,7 +163,22 @@ export default function CourseSection() {
                       status={course.status || undefined}
                       cardGradient={course.card_gradient || undefined}
                       description={course.short_introduction || course.description || undefined}
-                      isEnrolled={Boolean(course.is_enrolled)}
+                      isEnrolled={Boolean(course.is_enrolled || course.membership)}
+                      certificateAchieved={Boolean(
+                        course.certificate_achieved === 1 ||
+                        course.certificate_achieved === true ||
+                        course.certificate_achieved === '1' ||
+                        course.membership?.certificate_achieved === 1 ||
+                        course.membership?.certificate_achieved === true ||
+                        course.membership?.certificate_achieved === '1'
+                      )}
+                      progress={
+                        course.membership?.progress !== undefined && course.membership?.progress !== null
+                          ? Number(course.membership.progress)
+                          : course.progress !== undefined && course.progress !== null
+                          ? Number(course.progress)
+                          : undefined
+                      }
                       hasCertificate={Boolean(
                         course.enable_certification === 1 ||
                         course.enable_certification === true ||

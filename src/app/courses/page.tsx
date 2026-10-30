@@ -337,8 +337,26 @@ export default function CoursesPage() {
           <div className="space-y-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {paginatedCourses.map((course, index) => {
+                const courseProgress =
+                  course.membership?.progress !== undefined && course.membership?.progress !== null
+                    ? Number(course.membership.progress)
+                    : course.progress !== undefined && course.progress !== null
+                    ? Number(course.progress)
+                    : undefined;
+
+                const isCertAchieved = Boolean(
+                  course.certificate_achieved === 1 ||
+                  course.certificate_achieved === true ||
+                  course.certificate_achieved === '1' ||
+                  course.membership?.certificate_achieved === 1 ||
+                  course.membership?.certificate_achieved === true ||
+                  course.membership?.certificate_achieved === '1'
+                );
+
                 const isCourseComplete = Boolean(
+                  isCertAchieved ||
                   selectedFilter === "Completed" ||
+                  (courseProgress !== undefined && courseProgress >= 100) ||
                   course.is_completed ||
                   course.completed === 1 ||
                   course.completed === true ||
@@ -371,8 +389,11 @@ export default function CoursesPage() {
                         status={course.status || undefined}
                         cardGradient={course.card_gradient || undefined}
                         description={course.short_introduction || course.description || undefined}
-                        isEnrolled={Boolean(course.is_enrolled)}
+                        isEnrolled={Boolean(course.is_enrolled || course.membership)}
                         isCompleted={isCourseComplete}
+                        certificateAchieved={!isInstructor ? isCertAchieved : undefined}
+                        certificate_achieved={!isInstructor ? course.certificate_achieved : undefined}
+                        progress={!isInstructor || course.is_enrolled ? courseProgress : undefined}
                         hasCertificate={Boolean(
                           course.enable_certification === 1 ||
                           course.enable_certification === true ||
@@ -383,7 +404,9 @@ export default function CoursesPage() {
                         )}
                         enable_certification={course.enable_certification}
                         price={
-                          isCourseComplete
+                          !isInstructor && isCertAchieved
+                            ? "Certificate Achieved"
+                            : isCourseComplete
                             ? "Completed"
                             : course.is_enrolled
                             ? "Enrolled"

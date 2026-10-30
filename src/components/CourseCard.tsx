@@ -28,7 +28,10 @@ export interface CourseCardProps {
   isEnrolled?: boolean;
   isCompleted?: boolean;
   hasCertificate?: boolean;
+  certificateAchieved?: boolean;
+  certificate_achieved?: boolean | number | string;
   enable_certification?: number | boolean | string;
+  progress?: number | null;
   published?: boolean | number;
   video_link?: string;
   onEdit?: (e: React.MouseEvent) => void;
@@ -51,7 +54,10 @@ export default function CourseCard({
   isEnrolled = false,
   isCompleted = false,
   hasCertificate = false,
+  certificateAchieved = false,
+  certificate_achieved,
   enable_certification,
+  progress,
   published,
   video_link,
   onEdit,
@@ -60,7 +66,15 @@ export default function CourseCard({
   const [videoModalOpen, setVideoModalOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
 
+  const isCertificateAchieved = Boolean(
+    certificateAchieved ||
+    certificate_achieved === 1 ||
+    certificate_achieved === true ||
+    certificate_achieved === '1'
+  );
+
   const includesCertificate = Boolean(
+    isCertificateAchieved ||
     hasCertificate ||
     enable_certification === 1 ||
     enable_certification === true ||
@@ -178,20 +192,12 @@ export default function CourseCard({
           </div>
         ) : null}
 
-        {/* Floating category & certificate badges over image */}
-        <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5 z-20">
-          {category && (
-            <div className="bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-bold text-indigo-700 shadow-sm border border-slate-100">
-              {category}
-            </div>
-          )}
-          {includesCertificate && (
-            <div className="bg-amber-500 text-white px-2.5 py-1 rounded-full text-[11px] font-bold shadow-md flex items-center gap-1.5 border border-amber-400">
-              <Award className="w-3.5 h-3.5 text-amber-100" />
-              <span>Certificate</span>
-            </div>
-          )}
-        </div>
+        {/* Floating category badge over image */}
+        {category && (
+          <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-bold text-indigo-700 shadow-sm border border-slate-100 z-20">
+            {category}
+          </div>
+        )}
 
         {providerLogo && (
           <div className="absolute bottom-4 left-4 bg-white p-2 rounded-lg shadow-lg z-20 transform group-hover:-translate-y-1 transition-transform duration-300">
@@ -236,13 +242,35 @@ export default function CourseCard({
               <span>{enrollments} Enrolled</span>
             </div>
           )}
-          {includesCertificate && (
+          {includesCertificate && !enrolled && !isCertificateAchieved && (
             <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-800 border border-amber-200/80 rounded font-bold text-[11px]" title="Includes Certificate of Completion">
               <Award className="w-3.5 h-3.5 text-amber-600" />
               <span>Certificate</span>
             </div>
           )}
         </div>
+
+        {/* Progress Bar (for enrolled students) */}
+        {progress !== undefined && progress !== null && (
+          <div className="mt-auto mb-3 pt-2">
+            <div className="flex justify-between items-center text-xs font-semibold mb-1.5">
+              <span className="text-slate-600 text-[11px] font-medium">Course Progress</span>
+              <span className={`text-xs font-bold ${Number(progress) >= 100 ? 'text-teal-600' : 'text-indigo-600'}`}>
+                {Math.round(Number(progress))}%
+              </span>
+            </div>
+            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  Number(progress) >= 100
+                    ? 'bg-teal-500'
+                    : 'bg-gradient-to-r from-indigo-500 to-emerald-500'
+                }`}
+                style={{ width: `${Math.min(Math.max(Number(progress), 0), 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between">
           <div className="flex items-center text-sm">
@@ -251,7 +279,11 @@ export default function CourseCard({
               <Star className="w-3.5 h-3.5 fill-current" />
             </div>
           </div>
-          {isCompleted ? (
+          {isCertificateAchieved ? (
+            <span className="font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full text-xs border border-emerald-200 group-hover:bg-emerald-100 transition-colors flex items-center gap-1 shadow-2xs">
+              Certificate Achieved <Award className="w-3.5 h-3.5 ml-0.5 text-emerald-600" />
+            </span>
+          ) : isCompleted ? (
             <span className="font-bold text-teal-700 bg-teal-50 px-3 py-1 rounded-full text-xs border border-teal-200 group-hover:bg-teal-100 transition-colors flex items-center gap-1">
               Completed <CheckCircle className="w-3.5 h-3.5 ml-0.5 text-teal-600" />
             </span>
