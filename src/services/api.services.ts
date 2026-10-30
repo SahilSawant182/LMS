@@ -122,6 +122,14 @@ export const isCouponApi = (url?: string): boolean => {
 
 // Helper to check whether user param should NOT be automatically attached
 const shouldBypassUserParam = (url?: string, params?: any): boolean => {
+  const hasExplicitUser =
+    (typeof params === "object" && params !== null && typeof params.user === "string" && params.user.trim().length > 0) ||
+    (params instanceof URLSearchParams && !!params.get("user"));
+
+  if (hasExplicitUser) {
+    return false;
+  }
+
   if (
     typeof url === "string" &&
     (url.includes("resource/") ||
@@ -162,7 +170,12 @@ api.interceptors.request.use((reqConfig) => {
   }
   const method = (reqConfig.method || "GET").toUpperCase();
   if (method === "GET") {
+    const hasExplicitUser =
+      (typeof reqConfig.params === "object" && reqConfig.params !== null && typeof reqConfig.params.user === "string" && reqConfig.params.user.trim().length > 0) ||
+      (reqConfig.params instanceof URLSearchParams && !!reqConfig.params.get("user"));
+
     const isDropdownOrResource =
+      !hasExplicitUser &&
       typeof reqConfig.url === "string" &&
       (reqConfig.url.includes("resource/") ||
         reqConfig.url.includes("get_dropdown_options") ||
@@ -251,7 +264,12 @@ const apiRequest = async (config: AxiosRequestConfig) => {
   const method = (config.method || "GET").toUpperCase();
   let params = config.params;
   if (method === "GET") {
+    const hasExplicitUser =
+      (typeof params === "object" && params !== null && typeof params.user === "string" && params.user.trim().length > 0) ||
+      (params instanceof URLSearchParams && !!params.get("user"));
+
     const isDropdownOrResource =
+      !hasExplicitUser &&
       typeof config.url === "string" &&
       (config.url.includes("resource/") ||
         config.url.includes("get_dropdown_options") ||

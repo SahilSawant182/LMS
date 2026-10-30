@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Navbar from '@/components/Navbar';
 import {
   createCertificateEvaluation,
@@ -9,10 +9,11 @@ import {
   deleteCertificateEvaluation,
   updateCertificateEvaluation
 } from '@/services/lms.services';
+import { getCurrentUserEmail } from '@/services/api.services';
 import {
   CheckCircle, Trash2, PlusCircle,
   User, BookOpen, Star, Calendar, Clock, FileText, XCircle, RefreshCw, Edit2,
-  LayoutGrid, LayoutList, X
+  LayoutGrid, LayoutList, X, Search, RotateCcw, Filter, Layers
 } from 'lucide-react';
 import Dropdown from '@/components/ui/Dropdown';
 import { useRouter } from 'next/navigation';
@@ -41,6 +42,94 @@ export default function CertificateEvaluationsPage() {
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
+  // Filter States: Name, Status, Course, Batch
+  const [nameFilter, setNameFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [courseFilter, setCourseFilter] = useState('');
+  const [selectedCourseLabel, setSelectedCourseLabel] = useState('');
+  const [batchFilter, setBatchFilter] = useState('');
+  const [selectedBatchLabel, setSelectedBatchLabel] = useState('');
+
+  // User
+  const [currentUser, setCurrentUser] = useState<string>('');
+
+  // Status Options
+  const statusOptions = useMemo(() => {
+    const set = new Set<string>();
+    evaluations.forEach((e) => {
+      if (e.status && typeof e.status === 'string') {
+        set.add(e.status.trim());
+      }
+    });
+    ['Pass', 'Fail', 'Pending'].forEach((s) => set.add(s));
+    return Array.from(set);
+  }, [evaluations]);
+
+  // Filtered Evaluations
+  const filteredEvaluations = useMemo(() => {
+    return evaluations.filter((item) => {
+      // 1. Name / Member filter
+      if (nameFilter.trim()) {
+        const q = nameFilter.toLowerCase().trim();
+        const memberName = (item.member_name || '').toLowerCase();
+        const memberEmail = (item.member || '').toLowerCase();
+        const evalName = (item.name || '').toLowerCase();
+        const matchesName = memberName.includes(q) || memberEmail.includes(q) || evalName.includes(q);
+        if (!matchesName) return false;
+      }
+
+      // 2. Status filter
+      if (statusFilter && statusFilter !== 'all') {
+        const itemStatus = (item.status || '').toLowerCase().trim();
+        if (itemStatus !== statusFilter.toLowerCase().trim()) return false;
+      }
+
+      // 3. Course filter (via Dropdown master API)
+      if (courseFilter && courseFilter !== 'all') {
+        const itemCourse = (item.course || item.course_name || item.course_title || '').toLowerCase().trim();
+        const selectedCourse = courseFilter.toLowerCase().trim();
+        const selectedLabel = selectedCourseLabel.toLowerCase().trim();
+        const matchesCourse =
+          itemCourse === selectedCourse ||
+          (selectedLabel && itemCourse === selectedLabel) ||
+          itemCourse.includes(selectedCourse) ||
+          (selectedLabel && selectedLabel.includes(itemCourse));
+        if (!matchesCourse) return false;
+      }
+
+      // 4. Batch filter (via Dropdown master API)
+      if (batchFilter && batchFilter !== 'all') {
+        const itemBatch = (item.batch_name || item.batch || item.batch_title || '').toLowerCase().trim();
+        const selectedBatch = batchFilter.toLowerCase().trim();
+        const selectedLabel = selectedBatchLabel.toLowerCase().trim();
+        const matchesBatch =
+          itemBatch === selectedBatch ||
+          (selectedLabel && itemBatch === selectedLabel) ||
+          itemBatch.includes(selectedBatch) ||
+          (selectedLabel && selectedLabel.includes(itemBatch));
+        if (!matchesBatch) return false;
+      }
+
+      return true;
+    });
+  }, [evaluations, nameFilter, statusFilter, courseFilter, selectedCourseLabel, batchFilter, selectedBatchLabel]);
+
+  const hasActiveFilters = Boolean(
+    nameFilter.trim() ||
+    (statusFilter && statusFilter !== 'all') ||
+    (courseFilter && courseFilter !== 'all') ||
+    (batchFilter && batchFilter !== 'all')
+  );
+
+  const handleResetFilters = () => {
+    setNameFilter('');
+    setStatusFilter('all');
+    setCourseFilter('');
+    setSelectedCourseLabel('');
+    setBatchFilter('');
+    setSelectedBatchLabel('');
+  };
+
   // Form / Modal State
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
@@ -49,6 +138,8 @@ export default function CertificateEvaluationsPage() {
   const [createError, setCreateError] = useState('');
 
   React.useEffect(() => {
+    const email = getCurrentUserEmail();
+    if (email) setCurrentUser(email);
     fetchEvaluationsList();
   }, []);
 
@@ -211,13 +302,166 @@ export default function CertificateEvaluationsPage() {
 
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full -mt-6 relative z-20 space-y-6">
 
+        {/* Filters & Search Bar */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
+            {/* Search by student name / email */}
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+                placeholder="Search by student name, email, or evaluation ID..."
+                className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-all placeholder:text-slate-400"
+              />
+              {nameFilter && (
+                <button
+                  type="button"
+                  onClick={() => setNameFilter('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Filter Dropdowns: Status, Course, Batch */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Status Filter */}
+              <div className="w-[130px] sm:w-[140px]">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 cursor-pointer transition-colors"
+                >
+                  <option value="all">All Statuses</option>
+                  {statusOptions.map((st) => (
+                    <option key={st} value={st}>
+                      {st}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Course Filter (Dropdown master API with doctype LMS Course) */}
+              <div className="w-[180px] sm:w-[200px]">
+                <Dropdown
+                  id="filter-course"
+                  value={courseFilter}
+                  onChange={(val) => {
+                    setCourseFilter(val || '');
+                    if (!val) setSelectedCourseLabel('');
+                  }}
+                  onSelectOption={(opt) => setSelectedCourseLabel(opt?.label || '')}
+                  endpoint="https://devlms.stridenex.ai/api/method/lms.lms.master.get_dropdown_options"
+                  params={{ doctype: "LMS Course", user: currentUser }}
+                  placeholder="All Courses"
+                  modalTitle="SELECT COURSE"
+                  clearable
+                  searchable
+                  triggerClassName="!h-10 !min-h-[40px] !bg-slate-50 !border-slate-200 !rounded-xl !text-xs !font-semibold !text-slate-700 hover:!border-slate-300 !px-3 !py-0 flex items-center shadow-none cursor-pointer"
+                />
+              </div>
+
+              {/* Batch Filter (Dropdown master API with doctype LMS Batch) */}
+              <div className="w-[160px] sm:w-[180px]">
+                <Dropdown
+                  id="filter-batch"
+                  value={batchFilter}
+                  onChange={(val) => {
+                    setBatchFilter(val || '');
+                    if (!val) setSelectedBatchLabel('');
+                  }}
+                  onSelectOption={(opt) => setSelectedBatchLabel(opt?.label || '')}
+                  endpoint="https://devlms.stridenex.ai/api/method/lms.lms.master.get_dropdown_options"
+                  params={{ doctype: "LMS Batch", user: currentUser }}
+                  placeholder="All Batches"
+                  modalTitle="SELECT BATCH"
+                  clearable
+                  searchable
+                  triggerClassName="!h-10 !min-h-[40px] !bg-slate-50 !border-slate-200 !rounded-xl !text-xs !font-semibold !text-slate-700 hover:!border-slate-300 !px-3 !py-0 flex items-center shadow-none cursor-pointer"
+                />
+              </div>
+
+              {/* Reset Filters button */}
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="h-10 inline-flex items-center gap-1.5 px-3.5 text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded-xl border border-red-200/60 transition-colors cursor-pointer"
+                  title="Reset all filters"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Active filter pills row */}
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100 text-xs">
+              <span className="text-slate-400 font-semibold text-[11px] flex items-center gap-1">
+                <Filter className="w-3 h-3 text-indigo-500" /> Active filters:
+              </span>
+              {nameFilter && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg font-semibold text-xs border border-indigo-100">
+                  Name: {nameFilter}
+                  <button type="button" onClick={() => setNameFilter('')} className="hover:text-indigo-900 ml-0.5 cursor-pointer">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {statusFilter && statusFilter !== 'all' && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg font-semibold text-xs border border-indigo-100">
+                  Status: {statusFilter}
+                  <button type="button" onClick={() => setStatusFilter('all')} className="hover:text-indigo-900 ml-0.5 cursor-pointer">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {courseFilter && courseFilter !== 'all' && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg font-semibold text-xs border border-indigo-100">
+                  Course: {selectedCourseLabel || courseFilter}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCourseFilter('');
+                      setSelectedCourseLabel('');
+                    }}
+                    className="hover:text-indigo-900 ml-0.5 cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {batchFilter && batchFilter !== 'all' && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg font-semibold text-xs border border-indigo-100">
+                  Batch: {selectedBatchLabel || batchFilter}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBatchFilter('');
+                      setSelectedBatchLabel('');
+                    }}
+                    className="hover:text-indigo-900 ml-0.5 cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Toolbar */}
         <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
             All Evaluations
             {evaluations.length > 0 && (
-              <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                {evaluations.length}
+              <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                {hasActiveFilters ? `${filteredEvaluations.length} of ${evaluations.length}` : evaluations.length}
               </span>
             )}
           </h2>
@@ -285,17 +529,37 @@ export default function CertificateEvaluationsPage() {
             <p className="text-slate-500 text-sm mb-6">There are currently no certificate evaluations in the system.</p>
             <button
               onClick={openCreateForm}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" /> Create First Evaluation
             </button>
           </div>
         )}
 
+        {/* Filtered Empty State */}
+        {!listLoading && evaluations.length > 0 && filteredEvaluations.length === 0 && !listError && (
+          <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-16 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3">
+              <Search className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 mb-1">No matching evaluations found</h3>
+            <p className="text-xs text-slate-500 max-w-md mx-auto mb-4">
+              No evaluations match your search criteria. Try adjusting or resetting your status, course, batch, or name filters.
+            </p>
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-100 transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Reset All Filters
+            </button>
+          </div>
+        )}
+
         {/* Grid View */}
-        {!listLoading && evaluations.length > 0 && viewMode === 'grid' && (
+        {!listLoading && filteredEvaluations.length > 0 && viewMode === 'grid' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {evaluations.map((evaluation, idx) => (
+            {filteredEvaluations.map((evaluation, idx) => (
               <div
                 key={evaluation.name || idx}
                 onClick={() => handleCardClick(evaluation.name)}
@@ -357,7 +621,7 @@ export default function CertificateEvaluationsPage() {
 
                 {/* Footer Actions */}
                 <div
-                  className="px-5 py-3 bg-slate-50/70 border-t border-slate-100 flex items-center justify-end gap-2"
+                  className="px-5 py-3 bg-slate-50/70 border-t border-slate-100 flex items-center justify-end"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
@@ -366,14 +630,6 @@ export default function CertificateEvaluationsPage() {
                   >
                     <Edit2 className="w-3.5 h-3.5" /> Edit
                   </button>
-                  <button
-                    onClick={() => handleDelete(evaluation.name)}
-                    disabled={deleteLoading === evaluation.name}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 text-xs font-bold transition-colors disabled:opacity-50"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    {deleteLoading === evaluation.name ? 'Deleting...' : 'Delete'}
-                  </button>
                 </div>
               </div>
             ))}
@@ -381,7 +637,7 @@ export default function CertificateEvaluationsPage() {
         )}
 
         {/* List View */}
-        {!listLoading && evaluations.length > 0 && viewMode === 'list' && (
+        {!listLoading && filteredEvaluations.length > 0 && viewMode === 'list' && (
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
@@ -396,7 +652,7 @@ export default function CertificateEvaluationsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {evaluations.map((evaluation, idx) => (
+                  {filteredEvaluations.map((evaluation, idx) => (
                     <tr
                       key={evaluation.name || idx}
                       onClick={() => handleCardClick(evaluation.name)}
@@ -434,20 +690,12 @@ export default function CertificateEvaluationsPage() {
                         </span>
                       </td>
                       <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end">
                           <button
                             onClick={() => openEditForm(evaluation)}
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 text-xs font-bold transition-colors"
                           >
                             <Edit2 className="w-3.5 h-3.5" /> Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(evaluation.name)}
-                            disabled={deleteLoading === evaluation.name}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 text-xs font-bold transition-colors disabled:opacity-50"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            {deleteLoading === evaluation.name ? 'Deleting...' : 'Delete'}
                           </button>
                         </div>
                       </td>
@@ -516,7 +764,7 @@ export default function CertificateEvaluationsPage() {
                       id="course" label="Course" value={formData.course}
                       onChange={(value) => setFormData(prev => ({ ...prev, course: value }))}
                       endpoint="https://devlms.stridenex.ai/api/method/lms.lms.master.get_dropdown_options"
-                      params={{ doctype: "LMS Course" }}
+                      params={{ doctype: "LMS Course", user: currentUser }}
                       placeholder="Select Course" required searchable
                     />
                   </div>
@@ -526,7 +774,7 @@ export default function CertificateEvaluationsPage() {
                       id="batch_name" label="Batch Name" value={formData.batch_name}
                       onChange={(value) => setFormData(prev => ({ ...prev, batch_name: value }))}
                       endpoint="https://devlms.stridenex.ai/api/method/lms.lms.master.get_dropdown_options"
-                      params={{ doctype: "LMS Batch" }}
+                      params={{ doctype: "LMS Batch", user: currentUser }}
                       placeholder="Select Batch" searchable
                     />
                   </div>

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, X, Check, Search, Loader2 } from "lucide-react";
+import { ChevronDown, X, Check, Search, Loader2, RotateCcw } from "lucide-react";
 import { apiService, getCurrentUserEmail } from "@/services/api.services";
 
 interface DropdownProps {
@@ -22,6 +22,8 @@ interface DropdownProps {
   searchable?: boolean;
   modalTitle?: string;
   triggerClassName?: string;
+  clearable?: boolean;
+  onSelectOption?: (option: { value: string; label: string } | null) => void;
 }
 
 export default function Dropdown({
@@ -41,6 +43,8 @@ export default function Dropdown({
   searchable = true,
   modalTitle,
   triggerClassName,
+  clearable = false,
+  onSelectOption,
 }: DropdownProps) {
   const [options, setOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [loading, setLoading] = useState(false);
@@ -116,8 +120,10 @@ export default function Dropdown({
 
       const isDropdownOptions = relEndpoint.includes("get_dropdown_options");
       if (isDropdownOptions) {
-        delete queryParams.user;
-        queryParams.no_user = true;
+        if (!params?.user) {
+          delete queryParams.user;
+          queryParams.no_user = true;
+        }
       } else if (!queryParams.user) {
         const currentUser = getCurrentUserEmail();
         if (currentUser) {
@@ -304,7 +310,14 @@ export default function Dropdown({
 
   // For single select
   const handleSingleSelect = (selectedValue: string) => {
-    onChange(selectedValue);
+    if (clearable && selectedValue === value) {
+      onChange("");
+      onSelectOption?.(null);
+    } else {
+      onChange(selectedValue);
+      const opt = options.find(o => o.value === selectedValue) || { value: selectedValue, label: selectedValue };
+      onSelectOption?.(opt);
+    }
     setIsOpen(false);
     setSearchTerm("");
   };
@@ -362,7 +375,7 @@ export default function Dropdown({
   );
 
   return (
-    <div className="relative space-y-1 w-full" ref={containerRef}>
+    <div className={`relative w-full ${label ? "space-y-1" : ""}`} ref={containerRef}>
       {label && (
         <label htmlFor={id} className="text-sm font-medium text-slate-700">
           {label} {required && <span className="text-red-500">*</span>}
@@ -395,9 +408,23 @@ export default function Dropdown({
             ))}
           </div>
         ) : (
-          <span className={`flex-1 truncate pr-6 ${!value || (Array.isArray(value) && value.length === 0) ? "text-slate-400" : ""}`}>
+          <span className={`flex-1 truncate ${clearable && Boolean(value) ? 'pr-8' : 'pr-6'} ${!value || (Array.isArray(value) && value.length === 0) ? "text-slate-400" : ""}`}>
             {loading ? "Loading..." : fetchError ? "Failed to load" : getSelectedLabel()}
           </span>
+        )}
+        {clearable && !multiSelect && Boolean(value) && !disabled && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange("");
+              onSelectOption?.(null);
+            }}
+            className="p-1 hover:text-slate-700 text-slate-400 absolute right-7 top-1/2 -translate-y-1/2 z-10 transition-colors cursor-pointer"
+            title="Clear selection"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         )}
         <ChevronDown className={`w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </div>
@@ -442,6 +469,20 @@ export default function Dropdown({
               {loading && (
                 <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-[1px]">
                   <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+                </div>
+              )}
+              {clearable && Boolean(value) && !loading && (
+                <div
+                  onClick={() => {
+                    onChange("");
+                    onSelectOption?.(null);
+                    setIsOpen(false);
+                    setSearchTerm("");
+                  }}
+                  className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl cursor-pointer text-indigo-600 hover:bg-indigo-50/70 text-xs font-bold mb-2 border border-indigo-100/60 bg-indigo-50/30 transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Show All / Clear Selection</span>
                 </div>
               )}
               {fetchError ? (

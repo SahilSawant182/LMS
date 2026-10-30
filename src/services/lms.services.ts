@@ -148,10 +148,12 @@ export const getMasterData = async (doctype: string, additionalPayload: any = {}
   try {
     const payload: Record<string, any> = {
       doctype,
-      no_user: true,
       ...additionalPayload
     };
-    delete payload.user;
+    if (!additionalPayload?.user) {
+      payload.no_user = true;
+      delete payload.user;
+    }
 
     let response: any = null;
     try {
@@ -209,10 +211,12 @@ export const getMasterDropdownItems = async (doctype: string, additionalPayload:
   try {
     const payload: Record<string, any> = {
       doctype,
-      no_user: true,
       ...additionalPayload
     };
-    delete payload.user;
+    if (!additionalPayload?.user) {
+      payload.no_user = true;
+      delete payload.user;
+    }
 
     let response: any = null;
     try {
