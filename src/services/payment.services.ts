@@ -13,7 +13,15 @@ import {
   PaymentStatus,
   PaymentHistoryResponse,
   CourseWithEnrollment,
-  BatchWithEnrollment
+  BatchWithEnrollment,
+  UnifiedPaymentHistoryData,
+  UnifiedPaymentHistoryResponse,
+  UserInfo,
+  ActivePlan,
+  PaymentSummary,
+  MentorEarningsSummary,
+  CategoryTab,
+  PaymentItem
 } from "@/types/payment.types";
 
 export type {
@@ -29,7 +37,15 @@ export type {
   PaymentStatus,
   PaymentHistoryResponse,
   CourseWithEnrollment,
-  BatchWithEnrollment
+  BatchWithEnrollment,
+  UnifiedPaymentHistoryData,
+  UnifiedPaymentHistoryResponse,
+  UserInfo,
+  ActivePlan,
+  PaymentSummary,
+  MentorEarningsSummary,
+  CategoryTab,
+  PaymentItem
 };
 
 const METHOD_PREFIX = "method/lms.lms.stride_lms";
@@ -419,4 +435,28 @@ export const getInstructorDashboard = async (): Promise<InstructorDashboardData>
     }
   }
   return data as InstructorDashboardData;
+};
+
+/**
+ * 11) Unified User Payment History & Subscriptions
+ * Endpoint: GET /api/method/lms.lms.stride_lms.get_user_payment_history
+ */
+export const getUserPaymentHistory = async (params?: {
+  category?: string;
+  page?: number;
+  page_length?: number;
+}): Promise<UnifiedPaymentHistoryData> => {
+  const category = params?.category || "all";
+  const page = params?.page || 1;
+  const page_length = params?.page_length || 20;
+
+  const res = await apiService.get(`${METHOD_PREFIX}.get_user_payment_history`, {
+    params: {
+      category,
+      page,
+      page_length,
+    },
+    headers: authHeaders(),
+  });
+  return extractData<UnifiedPaymentHistoryData>(res);
 };

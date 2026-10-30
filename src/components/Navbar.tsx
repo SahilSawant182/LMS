@@ -626,6 +626,14 @@ export default function Navbar() {
                     >
                       Portal Dashboard
                     </Link>
+                    <Link
+                      href="/profile/payments"
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                    >
+                      <CreditCard className="w-4 h-4 text-slate-500" />
+                      Payments & Invoices
+                    </Link>
                     <div className="border-t border-slate-100 my-1" />
                     <button
                       onClick={() => {
