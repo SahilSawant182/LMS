@@ -17,6 +17,7 @@ import {
 import { isAuthorizedInstructor } from '@/services/auth.services';
 import { showToast } from '@/components/ui/Toast';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import Dropdown from '@/components/ui/Dropdown';
 import {
   Search,
   Plus,
@@ -89,6 +90,7 @@ export function CreateQuizContent({ initialQuizName }: { initialQuizName?: strin
 
   // Quiz Details State
   const [title, setTitle] = useState('');
+  const [category, setCategory] = useState('');
   const [maxAttempts, setMaxAttempts] = useState<number>(3);
   const [duration, setDuration] = useState<number>(60);
   const [passingPercentage, setPassingPercentage] = useState<number>(100);
@@ -171,6 +173,7 @@ export function CreateQuizContent({ initialQuizName }: { initialQuizName?: strin
       const data = res?.data || res?.message?.data || res?.message || res;
       if (data) {
         setTitle(data.title || data.name || '');
+        if (data.category) setCategory(data.category);
         if (data.max_attempts !== undefined) setMaxAttempts(Number(data.max_attempts));
         if (data.duration !== undefined) setDuration(Number(data.duration));
         if (data.passing_percentage !== undefined) setPassingPercentage(Number(data.passing_percentage));
@@ -688,6 +691,7 @@ export function CreateQuizContent({ initialQuizName }: { initialQuizName?: strin
 
       const payload: CreateQuizPayload = {
         title: title.trim(),
+        category: category.trim() || undefined,
         max_attempts: Number(maxAttempts) || 3,
         duration: Number(duration) || 60,
         passing_percentage: Number(passingPercentage) || 100,
@@ -1355,6 +1359,27 @@ export function CreateQuizContent({ initialQuizName }: { initialQuizName?: strin
                     handleFieldChange();
                   }}
                   className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Category
+                </label>
+                <Dropdown
+                  id="quiz-category"
+                  value={category}
+                  onChange={(val: string) => {
+                    setCategory(val);
+                    handleFieldChange();
+                  }}
+                  endpoint="https://devlms.stridenex.ai/api/method/lms.lms.master.get_dropdown_options"
+                  params={{ doctype: "LMS Category" }}
+                  placeholder="Select Category"
+                  modalTitle="SELECT CATEGORY"
+                  searchable
+                  triggerClassName="!bg-[#0F172A] !border-slate-700 !text-white !rounded-xl !text-xs !py-2 !px-3.5 hover:!border-slate-600 focus:!ring-1 focus:!ring-indigo-500"
                 />
               </div>
 

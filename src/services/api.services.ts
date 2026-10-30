@@ -126,7 +126,9 @@ const shouldBypassUserParam = (url?: string, params?: any): boolean => {
     typeof url === "string" &&
     (url.includes("resource/") ||
       url.includes("get_dropdown_options") ||
-      url.includes("master.get_dropdown_options"))
+      url.includes("master.get_dropdown_options") ||
+      url.includes("preview_certificate") ||
+      url.includes("get_certificate_templates"))
   ) {
     return true;
   }

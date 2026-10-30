@@ -21,6 +21,7 @@ interface DropdownProps {
   multiSelect?: boolean;
   searchable?: boolean;
   modalTitle?: string;
+  triggerClassName?: string;
 }
 
 export default function Dropdown({
@@ -38,7 +39,8 @@ export default function Dropdown({
   placeholder = "Select option",
   multiSelect = false,
   searchable = true,
-  modalTitle
+  modalTitle,
+  triggerClassName,
 }: DropdownProps) {
   const [options, setOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [loading, setLoading] = useState(false);
@@ -372,7 +374,7 @@ export default function Dropdown({
         onClick={handleClick}
         className={`w-full min-h-9 px-3 py-1.5 rounded-md border ${error ? "border-red-500" : fetchError ? "border-red-500" : "border-slate-200"
           } bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-accent focus:border-indigo-600 cursor-pointer flex flex-wrap items-center gap-1 relative hover:border-slate-300 transition-colors ${disabled ? "bg-slate-50 cursor-not-allowed opacity-60" : ""
-          }`}
+          } ${triggerClassName || ""}`}
       >
         {multiSelect && Array.isArray(value) && value.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1 flex-1 pr-6">

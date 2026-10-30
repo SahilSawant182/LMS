@@ -574,6 +574,39 @@ export const getCertificates = async () => {
   });
 };
 
+export interface CertificateTemplate {
+  name: string;
+  doc_type?: string;
+  custom_format?: number;
+  [key: string]: any;
+}
+
+export const getCertificateTemplates = async (): Promise<CertificateTemplate[]> => {
+  const headers: Record<string, string> = {};
+  if (API_TOKEN) {
+    headers['Authorization'] = `token ${API_TOKEN}`;
+  }
+  const res: any = await apiService.get(`method/lms.lms.stride_lms.get_certificate_templates`, {
+    headers
+  });
+  const data = res?.message?.data || res?.data?.message || res?.data || res?.message || res;
+  return Array.isArray(data) ? data : [];
+};
+
+export const previewCertificate = async (template_name: string): Promise<any> => {
+  const headers: Record<string, string> = {};
+  if (API_TOKEN) {
+    headers['Authorization'] = `token ${API_TOKEN}`;
+  }
+  return apiService.get(`method/lms.lms.stride_lms.preview_certificate`, {
+    params: {
+      template_name,
+      no_user: true
+    },
+    headers
+  });
+};
+
 export const getCertificate = async (name: string) => {
   return apiService.get(`method/${API_METHOD_PREFIX}.get_certificate`, {
     params: { name },
@@ -1244,6 +1277,7 @@ export const getQuizResult = async (submission: string | { submission: string })
 
 export interface CreateQuizPayload {
   title: string;
+  category?: string;
   max_attempts?: number;
   passing_percentage?: number;
   duration?: number;
