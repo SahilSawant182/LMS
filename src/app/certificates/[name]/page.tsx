@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import { Award, Calendar, User, Clock, CheckCircle2, Download, Share2, ArrowLeft } from 'lucide-react';
-import { getCertificate } from '@/services/lms.services';
+import { Award, Calendar, User, Clock, CheckCircle2, Download, Share2, ArrowLeft, Loader2 } from 'lucide-react';
+import { getCertificate, downloadCertificatePdf, getCertificatePdfUrl } from '@/services/lms.services';
+import { showToast } from '@/components/ui/Toast';
 import { formatDate } from '@/utils/formatters';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -30,6 +31,37 @@ export default function CertificateDetailsPage({ params }: { params: Promise<{ n
   const [certificate, setCertificate] = useState<CertificateDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    if (!certificate) return;
+    setDownloading(true);
+    try {
+      showToast.info('Downloading certificate PDF...');
+      const blob = await downloadCertificatePdf(
+        certificate.name,
+        certificate.template || 'StrideNEX Creative Pathways'
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${certificate.course_title || certificate.name}-certificate.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast.success('Certificate downloaded successfully!');
+    } catch (err: any) {
+      console.error('Download error:', err);
+      const directUrl = getCertificatePdfUrl(
+        certificate.name,
+        certificate.template || 'StrideNEX Creative Pathways'
+      );
+      window.open(directUrl, '_blank');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchCertificate = async () => {
@@ -179,8 +211,23 @@ export default function CertificateDetailsPage({ params }: { params: Promise<{ n
 
               {/* Actions */}
               <div className="mt-8 space-y-3">
-                <button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm shadow-indigo-200">
-                  <Download className="w-4 h-4" /> Download PDF
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm shadow-indigo-200 cursor-pointer"
+                >
+                  {downloading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Downloading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span>Download PDF</span>
+                    </>
+                  )}
                 </button>
                 <button className="w-full bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-semibold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2">
                   <Share2 className="w-4 h-4" /> Share Credential

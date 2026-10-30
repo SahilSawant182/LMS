@@ -1,4 +1,4 @@
-import { apiService, API_TOKEN, API_METHOD_PREFIX, uploadFile } from "./api.services";
+import { apiService, API_TOKEN, API_METHOD_PREFIX, uploadFile, BASE_URL } from "./api.services";
 import { isAuthorizedInstructor, isCourseInstructorOrOwner, isBatchInstructorOrOwner, isProgramInstructorOrOwner } from "./auth.services";
 
 // Define interfaces if needed, or use any/generic for now
@@ -182,7 +182,7 @@ export const getMasterData = async (doctype: string, additionalPayload: any = {}
         if (Array.isArray(resList) && resList.length > 0) {
           arr = resList;
         }
-      } catch {}
+      } catch { }
     }
 
     return arr.map((item: any) => {
@@ -243,7 +243,7 @@ export const getMasterDropdownItems = async (doctype: string, additionalPayload:
         if (Array.isArray(resList) && resList.length > 0) {
           arr = resList;
         }
-      } catch {}
+      } catch { }
     }
 
     return arr.map((item: any) => {
@@ -566,12 +566,43 @@ export const updateBatch = async (payload: any) => {
   return rpcResult;
 };
 
-export const getCertificates = async () => {
-  return apiService.get(`method/${API_METHOD_PREFIX}.get_certificates`, {
-    headers: {
-      'Authorization': `token ${API_TOKEN}`
+export interface GetStudentCertificatePayload {
+  student: string;
+}
+
+export const getStudentCertificates = async (studentEmail?: string): Promise<any> => {
+  const email = studentEmail || getCurrentUserEmail();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (API_TOKEN) {
+    headers['Authorization'] = `token ${API_TOKEN}`;
+  }
+  const payload: GetStudentCertificatePayload = { student: email };
+
+  try {
+    return await apiService.post(
+      'method/lms.lms.doctype.lms_certificate.lms_certificate.get_student_certificate',
+      payload,
+      { headers }
+    );
+  } catch (err: any) {
+    const status = err?.response?.status;
+    if (status === 405 || status === 417 || String(err?.message || '').includes('405')) {
+      return await apiService.get(
+        'method/lms.lms.doctype.lms_certificate.lms_certificate.get_student_certificate',
+        {
+          params: { student: email },
+          headers,
+        }
+      );
     }
-  });
+    throw err;
+  }
+};
+
+export const getCertificates = async (studentEmail?: string): Promise<any> => {
+  return getStudentCertificates(studentEmail);
 };
 
 export interface CertificateTemplate {
@@ -658,6 +689,29 @@ export const createStudentCertificate = async (payload: CreateStudentCertificate
     }
     throw err;
   }
+};
+
+export const getCertificatePdfUrl = (certificateName: string, format?: string): string => {
+  const tpl = format || 'StrideNEX Creative Pathways';
+  const base = BASE_URL.endsWith('/') ? BASE_URL : `${BASE_URL}/`;
+  return `${base}method/frappe.utils.print_format.download_pdf?doctype=LMS+Certificate&name=${encodeURIComponent(certificateName)}&format=${encodeURIComponent(tpl)}`;
+};
+
+export const downloadCertificatePdf = async (certificateName: string, format?: string): Promise<Blob> => {
+  const tpl = format || 'StrideNEX Creative Pathways';
+  const headers: Record<string, string> = {};
+  if (API_TOKEN) {
+    headers['Authorization'] = `token ${API_TOKEN}`;
+  }
+  return apiService.get('method/frappe.utils.print_format.download_pdf', {
+    params: {
+      doctype: 'LMS Certificate',
+      name: certificateName,
+      format: tpl,
+    },
+    headers,
+    responseType: 'blob',
+  });
 };
 
 export const getCertificate = async (name: string) => {
@@ -919,7 +973,7 @@ export const deleteBatch = async (name: string) => {
   });
 };
 
-export const createChapter = async (data: FormData | { course: string; title: string; [key: string]: any }) => {
+export const createChapter = async (data: FormData | { course: string; title: string;[key: string]: any }) => {
   const token = typeof window !== "undefined" && localStorage.getItem("apiKey") && localStorage.getItem("apiSecret")
     ? `token ${localStorage.getItem("apiKey")}:${localStorage.getItem("apiSecret")}`
     : (API_TOKEN ? `token ${API_TOKEN}` : undefined);
@@ -1004,7 +1058,7 @@ export const createLesson = async (data: any) => {
         return await apiService.post(`method/${API_METHOD_PREFIX}.create_lesson`, data, {
           headers: authHeaders
         });
-      } catch (fdErr) {}
+      } catch (fdErr) { }
     }
     throw err;
   }
@@ -1472,7 +1526,7 @@ export const getQuestions = async (payload?: any): Promise<any> => {
     if (!q || typeof q !== 'object') return;
     const qKey = String(q.question || q.name || '').trim().toLowerCase();
     const qText = String(q.question_detail || q.question_title || q.question_text || q.title || (typeof q.question === 'string' && !q.question.startsWith('QTS-') ? q.question : '') || '').trim().toLowerCase();
-    
+
     // Check if ID or distinct text already added
     if (qKey && seenQuestionIds.has(qKey)) return;
     if (qKey) seenQuestionIds.add(qKey);
@@ -1530,10 +1584,10 @@ export const getQuestions = async (payload?: any): Promise<any> => {
     const qtsCode = (typeof q.question === 'string' && q.question.startsWith('QTS-'))
       ? q.question
       : (typeof q.name === 'string' && q.name.startsWith('QTS-'))
-      ? q.name
-      : (typeof q.question_id === 'string' && q.question_id.startsWith('QTS-'))
-      ? q.question_id
-      : null;
+        ? q.name
+        : (typeof q.question_id === 'string' && q.question_id.startsWith('QTS-'))
+          ? q.question_id
+          : null;
 
     const qId = qtsCode || q.question || q.name;
     const qText = q.question_detail || q.question_title || q.question_text || q.title || (typeof q.question === 'string' && !q.question.startsWith('QTS-') ? q.question : '') || q.question || q.name;
@@ -1678,7 +1732,7 @@ export const createQuestion = async (data: CreateQuestionPayload) => {
     try {
       const recent = JSON.parse(sessionStorage.getItem("lms_recent_questions") || "[]");
       const createdId = createdRes?.data?.name || createdRes?.name || createdRes?.message?.name || createdRes?.data?.question || createdRes?.question || (typeof createdRes === 'string' && !createdRes.includes(' ') ? createdRes : `QTS-${Date.now()}`);
-      
+
       const newQuestionObj = {
         ...data,
         name: createdId,
@@ -1925,22 +1979,22 @@ export const parseProgressBarValue = (response: any): ParsedProgressBar => {
       typeof payload.completed_lessons === "number"
         ? payload.completed_lessons
         : typeof payload.completed === "number"
-        ? payload.completed
-        : undefined;
+          ? payload.completed
+          : undefined;
 
     const total =
       typeof payload.total_lessons === "number"
         ? payload.total_lessons
         : typeof payload.total === "number"
-        ? payload.total
-        : undefined;
+          ? payload.total
+          : undefined;
 
     const pending =
       typeof payload.pending_lessons === "number"
         ? payload.pending_lessons
         : typeof payload.pending === "number"
-        ? payload.pending
-        : undefined;
+          ? payload.pending
+          : undefined;
 
     const status = payload.progress_status || payload.status || "";
     const isCompleted =
@@ -2515,7 +2569,7 @@ export const getAssignmentSubmissions = async (filters?: {
       );
       const list = extractList(res);
       if (list !== null && list.length > 0) return list;
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // 3. Try with no extra params (returns logged-in user's submissions)
@@ -2526,7 +2580,7 @@ export const getAssignmentSubmissions = async (filters?: {
     );
     const list = extractList(res);
     if (list !== null && list.length > 0) return list;
-  } catch (e) {}
+  } catch (e) { }
 
   // 4. Resource fallback to 'resource/LMS Assignment Submission' with valid Frappe schema fields
   try {
@@ -2631,11 +2685,11 @@ export const getAssignmentResult = async (submission: string, user?: string) => 
     if (!raw || typeof raw !== "object") return raw;
     const answerVal =
       raw.answer !== undefined ? raw.answer :
-      raw.anwer !== undefined ? raw.anwer :
-      raw.content !== undefined ? raw.content :
-      raw.submission_content !== undefined ? raw.submission_content :
-      raw.solution !== undefined ? raw.solution :
-      raw.text !== undefined ? raw.text : '';
+        raw.anwer !== undefined ? raw.anwer :
+          raw.content !== undefined ? raw.content :
+            raw.submission_content !== undefined ? raw.submission_content :
+              raw.solution !== undefined ? raw.solution :
+                raw.text !== undefined ? raw.text : '';
 
     return {
       ...raw,
@@ -3175,7 +3229,7 @@ export const getBadgeAssignmentList = async (filters?: { member?: string; badge?
       headers,
     });
     const resourceData = Array.isArray(fallbackRes?.data) ? fallbackRes.data : (Array.isArray(fallbackRes) ? fallbackRes : []);
-    
+
     if (resourceData.length > 0) {
       if (list.length > 0) {
         const ownerMap = new Map<string, string>();
@@ -3869,14 +3923,14 @@ const normalizeExercise = (item: any): LMSProgrammingExercise => {
   }
   const normalizedTestCases = Array.isArray(testCases)
     ? testCases.map((tc: any) => {
-        const out = tc?.expected_output !== undefined ? String(tc.expected_output) : (tc?.output !== undefined ? String(tc.output) : '');
-        return {
-          input: tc?.input !== undefined ? String(tc.input) : (tc?.test_input !== undefined ? String(tc.test_input) : ''),
-          output: out,
-          expected_output: out,
-          explanation: tc?.explanation !== undefined ? String(tc.explanation) : undefined,
-        };
-      })
+      const out = tc?.expected_output !== undefined ? String(tc.expected_output) : (tc?.output !== undefined ? String(tc.output) : '');
+      return {
+        input: tc?.input !== undefined ? String(tc.input) : (tc?.test_input !== undefined ? String(tc.test_input) : ''),
+        output: out,
+        expected_output: out,
+        explanation: tc?.explanation !== undefined ? String(tc.explanation) : undefined,
+      };
+    })
     : [];
 
   return {
@@ -3988,14 +4042,14 @@ export const createProgrammingExercise = async (
       const parsed = JSON.parse(payload.test_cases);
       testCasesArray = Array.isArray(parsed)
         ? parsed.map((tc: any) => {
-            const out = tc?.expected_output !== undefined ? String(tc.expected_output) : (tc?.output !== undefined ? String(tc.output) : '');
-            return {
-              input: typeof tc === 'object' && tc?.input !== undefined ? String(tc.input) : String(tc),
-              output: out,
-              expected_output: out,
-              explanation: typeof tc === 'object' && tc?.explanation !== undefined ? String(tc.explanation) : undefined,
-            };
-          })
+          const out = tc?.expected_output !== undefined ? String(tc.expected_output) : (tc?.output !== undefined ? String(tc.output) : '');
+          return {
+            input: typeof tc === 'object' && tc?.input !== undefined ? String(tc.input) : String(tc),
+            output: out,
+            expected_output: out,
+            explanation: typeof tc === 'object' && tc?.explanation !== undefined ? String(tc.explanation) : undefined,
+          };
+        })
         : [];
     } catch {
       testCasesArray = [];
@@ -4055,7 +4109,7 @@ export const deleteProgrammingExercise = async (name: string): Promise<any> => {
 };
 
 export const getProgrammingExerciseSubmissionList = async (
-  filters?: { exercise?: string; member?: string; status?: string; [key: string]: any }
+  filters?: { exercise?: string; member?: string; status?: string;[key: string]: any }
 ): Promise<LMSProgrammingExerciseSubmission[]> => {
   const headers = getProgrammingAuthHeaders();
 
@@ -4448,8 +4502,8 @@ export const getBatchDiscussionReplies = async (
     const replies = Array.isArray(postData)
       ? postData
       : Array.isArray(postData?.replies)
-      ? postData.replies
-      : null;
+        ? postData.replies
+        : null;
 
     if (replies !== null) {
       return { topic: topicName, replies };
@@ -4470,8 +4524,8 @@ export const getBatchDiscussionReplies = async (
     const replies = Array.isArray(directData)
       ? directData
       : Array.isArray(directData?.replies)
-      ? directData.replies
-      : null;
+        ? directData.replies
+        : null;
 
     if (replies !== null) {
       return { topic: topicName, replies };
@@ -4494,8 +4548,8 @@ export const getBatchDiscussionReplies = async (
     const repliesList: BatchDiscussionReply[] = Array.isArray(rawReplies)
       ? rawReplies
       : Array.isArray(rawReplies?.replies)
-      ? rawReplies.replies
-      : [];
+        ? rawReplies.replies
+        : [];
 
     return {
       topic: topicName,

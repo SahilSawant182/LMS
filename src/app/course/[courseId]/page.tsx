@@ -7,7 +7,7 @@ import {
   createChapter, createLesson, getCourseProgress, getCourseProgressBar, parseProgressBarValue, getAssignments, 
   getAssignmentSubmissions, enrollInCourse, updateCourse,
   getCourseReviewList, createCourseReview, deleteCourseReview, LMSCourseReview,
-  getQuizSubmissions
+  getQuizSubmissions, createStudentCertificate, downloadCertificatePdf, getCertificatePdfUrl
 } from '@/services/lms.services';
 import { getCourseWithEnrollment } from '@/services/payment.services';
 import { getImageUrl, getCurrentUserEmail } from '@/services/api.services';
@@ -21,7 +21,7 @@ import {
   Globe, Tags, ChevronRight, Star, CheckCircle2,
   BookMarked, ArrowLeft, Edit, Plus, Loader2, FileText, CheckCircle,
   MessageSquare, Sparkles, Send, Check, Trash2, Lock, HelpCircle,
-  RotateCcw, Trophy, AlertCircle
+  RotateCcw, Trophy, AlertCircle, Download, X
 } from 'lucide-react';
 import InlineBlockEditor from '@/components/admin/InlineBlockEditor';
 import Pagination from '@/components/ui/Pagination';
@@ -148,6 +148,47 @@ export default function CourseDetailPage() {
   const [reviewPage, setReviewPage] = useState<number>(1);
   const REVIEWS_PER_PAGE = 4;
   const totalReviewPages = Math.max(1, Math.ceil(reviews.length / REVIEWS_PER_PAGE));
+
+  // Certificate Generation State for Student Role
+  const [generatingCertificate, setGeneratingCertificate] = useState(false);
+  const [createdCertificate, setCreatedCertificate] = useState<any>(null);
+  const [showCertificateModal, setShowCertificateModal] = useState(false);
+  const [certPdfBlobUrl, setCertPdfBlobUrl] = useState<string | null>(null);
+  const [certPdfLoading, setCertPdfLoading] = useState(false);
+
+  const handleGenerateCertificate = async () => {
+    setGeneratingCertificate(true);
+    try {
+      const res = await createStudentCertificate({
+        course: courseId,
+      });
+      const certData = res?.message?.data || res?.data?.message || res?.data || res?.message || res;
+      setCreatedCertificate(certData);
+      showToast.success('Certificate generated successfully!');
+
+      const certName = certData?.name || (typeof certData === 'string' ? certData : '') || details?.certificate || '';
+      const certTemplate = certData?.template || certData?.format || 'StrideNEX Creative Pathways';
+      if (certName) {
+        const url = getCertificatePdfUrl(certName, certTemplate);
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (err: any) {
+      console.error('Failed to generate certificate:', err);
+      const errMsg =
+        err?.response?.data?.message?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to generate certificate.';
+      showToast.error(errMsg);
+    } finally {
+      setGeneratingCertificate(false);
+    }
+  };
+
+  const handleOpenCertificate = (certName: string, format?: string) => {
+    const url = getCertificatePdfUrl(certName, format || 'StrideNEX Creative Pathways');
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
   const paginatedReviews = reviews.slice(
     (reviewPage - 1) * REVIEWS_PER_PAGE,
     reviewPage * REVIEWS_PER_PAGE
@@ -2196,14 +2237,42 @@ export default function CourseDetailPage() {
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       Status: Course Completed
                     </div>
-                    {hasCertificate && (
-                      <Link
-                        href="/certificates"
+                    {Boolean(createdCertificate || hasCertificate) ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cName = createdCertificate?.name || details?.certificate || enrollmentData?.certificate || '';
+                          const cFormat = createdCertificate?.template || createdCertificate?.format || 'StrideNEX Creative Pathways';
+                          if (cName) {
+                            handleOpenCertificate(cName, cFormat);
+                          } else {
+                            setShowCertificateModal(true);
+                          }
+                        }}
                         className="w-full font-bold py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm transition-all flex justify-center items-center gap-2 text-xs cursor-pointer active:scale-95"
                       >
                         <Award className="w-4 h-4" />
                         View Certificate
-                      </Link>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleGenerateCertificate}
+                        disabled={generatingCertificate}
+                        className="w-full font-bold py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white shadow-sm transition-all flex justify-center items-center gap-2 text-xs cursor-pointer active:scale-95"
+                      >
+                        {generatingCertificate ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Generating Certificate...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Award className="w-4 h-4" />
+                            <span>Generate Certificate</span>
+                          </>
+                        )}
+                      </button>
                     )}
                     <button
                       onClick={() => {
@@ -2387,6 +2456,104 @@ export default function CourseDetailPage() {
                 referrerPolicy="strict-origin-when-cross-origin"
                 allowFullScreen
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Certificate PDF Viewer Modal */}
+      {showCertificateModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/75 backdrop-blur-xs animate-fade-in"
+          onClick={() => setShowCertificateModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[92vh] animate-scale-up"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 line-clamp-1">
+                    Course Completion Certificate
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {details?.title || courseId}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {certPdfBlobUrl && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const certName = createdCertificate?.name || details?.certificate || courseId;
+                      const certFormat = createdCertificate?.template || createdCertificate?.format || 'StrideNEX Creative Pathways';
+                      try {
+                        const blob = await downloadCertificatePdf(certName, certFormat);
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${details?.title || courseId}-certificate.pdf`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        showToast.success('Certificate downloaded successfully!');
+                      } catch {
+                        const directUrl = getCertificatePdfUrl(certName, certFormat);
+                        window.open(directUrl, '_blank');
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">Download PDF</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowCertificateModal(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body: PDF Preview */}
+            <div className="flex-1 p-4 bg-slate-100 flex items-center justify-center min-h-[450px] overflow-hidden">
+              {certPdfLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-3" />
+                  <p className="text-sm font-semibold text-slate-700">Loading Certificate PDF...</p>
+                  <p className="text-xs text-slate-400 mt-1">Rendering official certificate from server</p>
+                </div>
+              ) : certPdfBlobUrl ? (
+                <iframe
+                  src={certPdfBlobUrl}
+                  title="Certificate PDF Preview"
+                  className="w-full h-[550px] md:h-[650px] rounded-xl border border-slate-200 bg-white shadow-sm"
+                />
+              ) : (
+                <div className="text-center py-20">
+                  <AlertCircle className="w-10 h-10 text-amber-500 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-slate-800">Your certificate has been issued!</p>
+                  <Link
+                    href="/certificates"
+                    className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold"
+                  >
+                    <Award className="w-4 h-4" /> Go to Certificates Page
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </div>

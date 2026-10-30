@@ -20,15 +20,19 @@ import {
   Star,
   Loader2,
   X,
+  Download,
 } from 'lucide-react';
 import {
   getCertificates,
   getCertificateTemplates,
   previewCertificate,
   createDefaultCertificate,
-  createStudentCertificate,
+  getStudentCertificates,
+  getCertificatePdfUrl,
+  downloadCertificatePdf,
   CertificateTemplate,
 } from '@/services/lms.services';
+import { getCurrentUserEmail } from '@/services/api.services';
 import { isAuthorizedInstructor } from '@/services/auth.services';
 import { formatDate } from '@/utils/formatters';
 import Link from 'next/link';
@@ -38,12 +42,15 @@ import { showToast } from '@/components/ui/Toast';
 
 interface Certificate {
   name: string;
-  member_name: string;
-  evaluator_name: string;
-  issue_date: string;
-  expiry_date: string;
-  course_title: string;
-  batch_title: string;
+  member_name?: string;
+  evaluator_name?: string;
+  issue_date?: string;
+  expiry_date?: string;
+  course_title?: string;
+  course?: string;
+  batch_title?: string;
+  template?: string;
+  format?: string;
 }
 
 export default function CertificatesPage() {
@@ -118,65 +125,41 @@ export default function CertificatesPage() {
   const [studentLoading, setStudentLoading] = useState<boolean>(false);
   const [studentError, setStudentError] = useState<string | null>(null);
 
-  // Student: Create Certificate modal state
-  const [isStudentClaimModalOpen, setIsStudentClaimModalOpen] = useState<boolean>(false);
-  const [studentClaimCourse, setStudentClaimCourse] = useState<string>('');
-  const [isStudentClaiming, setIsStudentClaiming] = useState<boolean>(false);
-
-  // Helper to fetch student's earned certificates
+  // Helper to fetch student's earned certificates using the dedicated get_student_certificate API
   const fetchStudentCertificates = async () => {
     setStudentLoading(true);
     setStudentError(null);
     try {
-      const rawResponse = await getCertificates();
+      const email = getCurrentUserEmail();
+      const rawResponse = await getStudentCertificates(email);
       const certArray = Array.isArray(rawResponse)
         ? rawResponse
         : (rawResponse?.message?.data || rawResponse?.data?.message || rawResponse?.data || rawResponse?.message || []);
       const data = Array.isArray(certArray) ? certArray : [];
       setCertificates(data);
     } catch (err: any) {
-      setStudentError(err?.message || 'Failed to fetch certificates');
+      console.error('Failed to fetch student certificates:', err);
+      try {
+        const fallbackRes = await getCertificates();
+        const certArray = Array.isArray(fallbackRes)
+          ? fallbackRes
+          : (fallbackRes?.message?.data || fallbackRes?.data?.message || fallbackRes?.data || fallbackRes?.message || []);
+        setCertificates(Array.isArray(certArray) ? certArray : []);
+      } catch {
+        setStudentError(err?.message || 'Failed to fetch certificates');
+      }
     } finally {
       setStudentLoading(false);
     }
   };
 
-  // Student handler to create certificate for a course (only course in payload)
-  const handleStudentCreateCertificate = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!studentClaimCourse || !studentClaimCourse.trim()) {
-      showToast.warning('Please select a course.');
-      return;
-    }
-
-    setIsStudentClaiming(true);
-    try {
-      const res = await createStudentCertificate({
-        course: studentClaimCourse.trim(),
-      });
-
-      const msg =
-        res?.message?.message ||
-        res?.message ||
-        'Certificate generated successfully!';
-      showToast.success(
-        typeof msg === 'string' ? msg : 'Certificate generated successfully!'
-      );
-      setIsStudentClaimModalOpen(false);
-      setStudentClaimCourse('');
-      // Refresh certificates list for student
-      await fetchStudentCertificates();
-    } catch (err: any) {
-      console.error('Failed to create student certificate:', err);
-      const errMsg =
-        err?.response?.data?.message?.message ||
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to generate certificate.';
-      showToast.error(errMsg);
-    } finally {
-      setIsStudentClaiming(false);
-    }
+  // Open Certificate PDF directly in a new tab using the Frappe download_pdf print format
+  const handleOpenCertificate = (cert: Certificate) => {
+    const url = getCertificatePdfUrl(
+      cert.name,
+      cert.template || cert.format || 'StrideNEX Creative Pathways'
+    );
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   // Helper to load preview for a given template
@@ -703,14 +686,6 @@ export default function CertificatesPage() {
                 <div className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
                   {certificates.length} Total
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setIsStudentClaimModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm shadow-indigo-600/20 cursor-pointer"
-                >
-                  <Award className="w-4 h-4" />
-                  <span>Create Certificate</span>
-                </button>
               </div>
             </div>
 
@@ -725,12 +700,12 @@ export default function CertificatesPage() {
             ) : certificates.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {certificates.map((cert) => (
-                  <Link
-                    href={`/certificates/${cert.name}`}
+                  <div
                     key={cert.name}
-                    className="block group"
+                    className="block group cursor-pointer"
+                    onClick={() => handleOpenCertificate(cert)}
                   >
-                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-amber-300 transition-all flex flex-col h-full">
+                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-indigo-300 transition-all flex flex-col h-full">
                       {/* Card Header (Design) */}
                       <div className="h-24 bg-gradient-to-br from-slate-800 to-slate-900 relative">
                         <div className="absolute -bottom-6 left-6 p-2 bg-white rounded-xl shadow-sm border border-slate-100">
@@ -749,67 +724,80 @@ export default function CertificatesPage() {
                       {/* Card Body */}
                       <div className="p-6 pt-10 flex-grow flex flex-col">
                         <h3 className="text-lg font-bold text-slate-900 leading-tight mb-1 group-hover:text-indigo-600 transition-colors">
-                          {cert.course_title}
+                          {cert.course_title || cert.course}
                         </h3>
-                        <p className="text-sm text-indigo-600 font-medium mb-5">
-                          {cert.batch_title}
-                        </p>
+                        {cert.batch_title && (
+                          <p className="text-sm text-indigo-600 font-medium mb-4">
+                            {cert.batch_title}
+                          </p>
+                        )}
 
-                        <div className="space-y-3 mt-auto">
-                          <div className="flex items-start gap-3">
-                            <User className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                            <div>
-                              <p className="text-xs text-slate-500 font-medium">
-                                Issued To
-                              </p>
-                              <p className="text-sm font-semibold text-slate-800">
-                                {cert.member_name}
-                              </p>
+                        <div className="space-y-3 mt-auto pt-3">
+                          {cert.member_name && (
+                            <div className="flex items-start gap-3">
+                              <User className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                              <div>
+                                <p className="text-xs text-slate-500 font-medium">
+                                  Issued To
+                                </p>
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {cert.member_name}
+                                </p>
+                              </div>
                             </div>
-                          </div>
+                          )}
 
-                          <div className="flex items-start gap-3">
-                            <Calendar className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                            <div>
-                              <p className="text-xs text-slate-500 font-medium">
-                                Issue Date
-                              </p>
-                              <p className="text-sm font-medium text-slate-800">
-                                {formatDate(cert.issue_date)}
-                              </p>
+                          {cert.issue_date && (
+                            <div className="flex items-start gap-3">
+                              <Calendar className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                              <div>
+                                <p className="text-xs text-slate-500 font-medium">
+                                  Issue Date
+                                </p>
+                                <p className="text-sm font-medium text-slate-800">
+                                  {formatDate(cert.issue_date)}
+                                </p>
+                              </div>
                             </div>
-                          </div>
+                          )}
 
-                          <div className="flex items-start gap-3">
-                            <Clock className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                            <div>
-                              <p className="text-xs text-slate-500 font-medium">
-                                Expiry Date
-                              </p>
-                              <p className="text-sm font-medium text-slate-800">
-                                {cert.expiry_date
-                                  ? formatDate(cert.expiry_date)
-                                  : 'No Expiry'}
-                              </p>
+                          {cert.expiry_date && (
+                            <div className="flex items-start gap-3">
+                              <Clock className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                              <div>
+                                <p className="text-xs text-slate-500 font-medium">
+                                  Expiry Date
+                                </p>
+                                <p className="text-sm font-medium text-slate-800">
+                                  {formatDate(cert.expiry_date)}
+                                </p>
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       </div>
 
-                      {/* Footer */}
-                      <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-between items-center text-xs">
-                        <span className="text-slate-500">
-                          ID:{' '}
-                          <span className="font-mono text-slate-700">
-                            {cert.name}
+                      {/* Footer Actions */}
+                      <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end items-center text-xs">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenCertificate(cert);
+                            }}
+                            title="View / Download Certificate PDF"
+                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                          <span className="text-indigo-600 font-semibold group-hover:underline flex items-center gap-1">
+                            View &rarr;
                           </span>
-                        </span>
-                        <span className="text-slate-500 group-hover:text-indigo-600 font-medium transition-colors">
-                          View Details &rarr;
-                        </span>
+                        </div>
                       </div>
                     </div>
-                  </Link>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -820,110 +808,9 @@ export default function CertificatesPage() {
                 <h3 className="text-lg font-bold text-slate-900 mb-1">
                   No certificates found
                 </h3>
-                <p className="text-slate-500 max-w-sm mx-auto mb-4">
-                  Complete courses to earn your certificates, or create your certificate for a completed course.
+                <p className="text-slate-500 max-w-sm mx-auto">
+                  Complete courses to earn your official completion certificates. They will appear here once earned.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setIsStudentClaimModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer"
-                >
-                  <Award className="w-4 h-4" />
-                  <span>Create Certificate</span>
-                </button>
-              </div>
-            )}
-
-            {/* Modal: Create Certificate for Student Role */}
-            {isStudentClaimModalOpen && (
-              <div
-                role="dialog"
-                aria-modal="true"
-                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in"
-                onClick={() => !isStudentClaiming && setIsStudentClaimModalOpen(false)}
-              >
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-scale-up"
-                >
-                  {/* Modal Header */}
-                  <div className="flex items-center justify-between p-6 bg-slate-50 border-b border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-                        <Award className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-bold text-slate-900">
-                          Create Course Certificate
-                        </h3>
-                        <p className="text-xs text-slate-500">
-                          Select your course to generate your official completion certificate.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => !isStudentClaiming && setIsStudentClaimModalOpen(false)}
-                      className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  {/* Modal Form */}
-                  <form onSubmit={handleStudentCreateCertificate} className="p-6 space-y-5">
-                    {/* Course Selection */}
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                        Select Course <span className="text-red-500">*</span>
-                      </label>
-                      <Dropdown
-                        id="student-claim-course-select"
-                        value={studentClaimCourse}
-                        onChange={(val: string) => setStudentClaimCourse(val)}
-                        endpoint="https://devlms.stridenex.ai/api/method/lms.lms.master.get_dropdown_options"
-                        params={{ doctype: 'LMS Course' }}
-                        placeholder="Search and select course"
-                        modalTitle="SELECT COURSE"
-                        searchable
-                        required
-                        triggerClassName="!bg-slate-50 !border-slate-200 hover:!border-slate-300 !rounded-xl !text-sm !font-semibold !py-2.5 !px-3.5"
-                      />
-                      <p className="text-[11px] text-slate-400 mt-1.5">
-                        Choose the completed course you wish to generate a certificate for.
-                      </p>
-                    </div>
-
-                    {/* Footer Buttons */}
-                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                      <button
-                        type="button"
-                        disabled={isStudentClaiming}
-                        onClick={() => setIsStudentClaimModalOpen(false)}
-                        className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isStudentClaiming || !studentClaimCourse}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
-                      >
-                        {isStudentClaiming ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>Creating Certificate...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-4 h-4" />
-                            <span>Create Certificate</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </form>
-                </div>
               </div>
             )}
           </div>
