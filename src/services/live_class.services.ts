@@ -26,6 +26,7 @@ export const getConferencingSettings = async (): Promise<ConferencingSettings> =
     zoom_accounts: Array.isArray(zoomAccounts) ? zoomAccounts : [],
     google_meet_accounts: Array.isArray(googleMeetAccounts) ? googleMeetAccounts : [],
     providers: Array.isArray(providers) ? providers : [],
+    is_admin: Boolean(raw?.is_admin),
   };
 };
 
