@@ -164,6 +164,15 @@ export default function CourseSection() {
                       cardGradient={course.card_gradient || undefined}
                       description={course.short_introduction || course.description || undefined}
                       isEnrolled={Boolean(course.is_enrolled)}
+                      hasCertificate={Boolean(
+                        course.enable_certification === 1 ||
+                        course.enable_certification === true ||
+                        course.enable_certification === '1' ||
+                        course.has_certificate ||
+                        course.certificate ||
+                        course.paid_certificate
+                      )}
+                      enable_certification={course.enable_certification}
                       price={
                         course.is_enrolled
                           ? 'Enrolled'

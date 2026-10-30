@@ -81,12 +81,13 @@ const getInstructorFilterParams = (payload?: any) => {
 
   const params: Record<string, any> = { ...rawParams };
 
-  // Set type query param based on user selection: All, Enrolled, Free, Paid, Unpaid, Published, Unpublished
+  // Set type query param based on user selection: All, Enrolled, Free, Paid, Unpaid, Published, Unpublished, Completed
   if (params.type !== undefined && params.type !== null && params.type !== "") {
     const t = String(params.type).trim();
     const tLower = t.toLowerCase();
     if (tLower === "all") params.type = "All";
     else if (tLower === "enrolled") params.type = "Enrolled";
+    else if (tLower === "completed") params.type = "Completed";
     else if (tLower === "free") params.type = "Free";
     else if (tLower === "paid") params.type = "Paid";
     else if (tLower === "unpaid") params.type = "Unpaid";
@@ -97,10 +98,13 @@ const getInstructorFilterParams = (payload?: any) => {
     params.type = "All";
   }
 
-  // For students, NEVER pass user as a query param - just pass type
+  // For student role, pass student as query param with student's email id, and do NOT pass user
   if (!isInstructor) {
     delete params.user;
     params.no_user = true;
+    if (currentUser) {
+      params.student = params.student || currentUser;
+    }
     return params;
   }
 

@@ -2129,11 +2129,18 @@ export function DashboardContent() {
                             )}
                           </div>
 
-                          {course.category && (
-                            <span className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm text-indigo-700 text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm">
-                              {course.category}
-                            </span>
-                          )}
+                          <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5 z-10">
+                            {course.category && (
+                              <span className="bg-white/90 backdrop-blur-sm text-indigo-700 text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm">
+                                {course.category}
+                              </span>
+                            )}
+                            {Boolean((course as any).enable_certification || (course as any).has_certificate || (course as any).certificate) && (
+                              <span className="bg-amber-500/95 text-white backdrop-blur-sm text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 border border-amber-400">
+                                <Award className="w-3 h-3" /> Certificate
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="p-5 flex-grow flex flex-col justify-between">
@@ -2178,7 +2185,7 @@ export function DashboardContent() {
                                 >
                                   <span>Review Course</span>
                                 </Link>
-                                {Boolean((course as any).has_certificate || (course as any).certificate) && (
+                                {Boolean((course as any).enable_certification || (course as any).has_certificate || (course as any).certificate) && (
                                   <Link
                                     href="/certificates"
                                     className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-sm active:scale-95"

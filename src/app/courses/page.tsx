@@ -35,7 +35,7 @@ export default function CoursesPage() {
   const [selectedFilter, setSelectedFilter] = useState<string>("All");
 
   const instructorFilterOptions = ["All", "Paid", "Unpaid", "Published", "Unpublished"] as const;
-  const studentFilterOptions = ["All", "Enrolled", "Free", "Paid"] as const;
+  const studentFilterOptions = ["All", "Paid", "Unpaid", "Enrolled", "Completed"] as const;
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -105,6 +105,27 @@ export default function CoursesPage() {
         if (selectedFilter === "Paid") {
           const isPaid = c.paid_course === 1 || c.paid_course === true || Number(c.course_price || c.amount || 0) > 0;
           if (!isPaid) return false;
+        }
+      } else {
+        // Student role filter checks
+        if (selectedFilter === "Unpaid" || selectedFilter === "Free") {
+          const isPaid = c.paid_course === 1 || c.paid_course === true || Number(c.course_price || c.amount || 0) > 0 || c.is_paid;
+          if (isPaid) return false;
+        }
+        if (selectedFilter === "Paid") {
+          const isPaid = c.paid_course === 1 || c.paid_course === true || Number(c.course_price || c.amount || 0) > 0 || c.is_paid;
+          if (!isPaid) return false;
+        }
+        if (selectedFilter === "Enrolled") {
+          if (c.is_enrolled !== undefined && !c.is_enrolled && !c.enrolled) {
+            return false;
+          }
+        }
+        if (selectedFilter === "Completed") {
+          // The API get_courses?type=Completed&student=... already returns completed courses for the student
+          if (c.is_completed === false) {
+            return false;
+          }
         }
       }
 
@@ -315,46 +336,71 @@ export default function CoursesPage() {
         ) : (
           <div className="space-y-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {paginatedCourses.map((course, index) => (
-                <div
-                  key={course.name || index}
-                  className="animate-fade-in-up"
-                  style={{ animationDelay: `${index * 0.05}s` }}
-                >
-                  <Link
-                    href={`/course/${course.name}`}
-                    className="block h-full transition-transform hover:-translate-y-1 duration-300"
+              {paginatedCourses.map((course, index) => {
+                const isCourseComplete = Boolean(
+                  selectedFilter === "Completed" ||
+                  course.is_completed ||
+                  course.completed === 1 ||
+                  course.completed === true ||
+                  (course.progress || 0) >= 100 ||
+                  course.progress_status === "Completed" ||
+                  course.status === "Completed" ||
+                  (course.completed_lessons > 0 && course.total_lessons > 0 && course.completed_lessons >= course.total_lessons)
+                );
+
+                return (
+                  <div
+                    key={course.name || index}
+                    className="animate-fade-in-up"
+                    style={{ animationDelay: `${index * 0.05}s` }}
                   >
-                    <CourseCard
-                      image={getImageUrl(course.image)}
-                      video_link={course.video_link}
-                      providerLogo={getImageUrl(course.instructors?.[0]?.user_image)}
-                      providerName={course.instructors?.[0]?.full_name}
-                      title={course.title || course.name}
-                      rating={course.rating}
-                      enrollments={course.enrollments}
-                      category={course.category || undefined}
-                      lessons={course.lessons}
-                      status={course.status || undefined}
-                      cardGradient={course.card_gradient || undefined}
-                      description={course.short_introduction || course.description || undefined}
-                      isEnrolled={Boolean(course.is_enrolled)}
-                      price={
-                        course.is_enrolled
-                          ? "Enrolled"
-                          : course.paid_course || course.is_paid
-                          ? `${course.currency === "INR" ? "₹" : course.currency || "₹"} ${Number(
-                              course.course_price || 0
-                            ).toLocaleString("en-IN")}`
-                          : "Free"
-                      }
-                      published={course.published}
-                      onPublish={isInstructor && !course.published ? () => handlePublish(course) : undefined}
-                      onEdit={isInstructor ? () => handleEdit(course.name) : undefined}
-                    />
-                  </Link>
-                </div>
-              ))}
+                    <Link
+                      href={`/course/${course.name}`}
+                      className="block h-full transition-transform hover:-translate-y-1 duration-300"
+                    >
+                      <CourseCard
+                        image={getImageUrl(course.image)}
+                        video_link={course.video_link}
+                        providerLogo={getImageUrl(course.instructors?.[0]?.user_image)}
+                        providerName={course.instructors?.[0]?.full_name}
+                        title={course.title || course.name}
+                        rating={course.rating}
+                        enrollments={course.enrollments}
+                        category={course.category || undefined}
+                        lessons={course.lessons}
+                        status={course.status || undefined}
+                        cardGradient={course.card_gradient || undefined}
+                        description={course.short_introduction || course.description || undefined}
+                        isEnrolled={Boolean(course.is_enrolled)}
+                        isCompleted={isCourseComplete}
+                        hasCertificate={Boolean(
+                          course.enable_certification === 1 ||
+                          course.enable_certification === true ||
+                          course.enable_certification === "1" ||
+                          course.has_certificate ||
+                          course.certificate ||
+                          course.paid_certificate
+                        )}
+                        enable_certification={course.enable_certification}
+                        price={
+                          isCourseComplete
+                            ? "Completed"
+                            : course.is_enrolled
+                            ? "Enrolled"
+                            : course.paid_course || course.is_paid
+                            ? `${course.currency === "INR" ? "₹" : course.currency || "₹"} ${Number(
+                                course.course_price || 0
+                              ).toLocaleString("en-IN")}`
+                            : "Free"
+                        }
+                        published={course.published}
+                        onPublish={isInstructor && !course.published ? () => handlePublish(course) : undefined}
+                        onEdit={isInstructor ? () => handleEdit(course.name) : undefined}
+                      />
+                    </Link>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Courses Pagination Controls */}

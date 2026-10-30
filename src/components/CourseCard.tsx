@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Star, Users, BookOpen, ArrowRight, Edit2, CheckCircle, Globe, Lock, Play, PlayCircle, X } from 'lucide-react';
+import { Star, Users, BookOpen, ArrowRight, Edit2, CheckCircle, Globe, Lock, Play, PlayCircle, X, Award } from 'lucide-react';
 
 function getYouTubeVideoId(input?: string | null): string | null {
   if (!input || !input.trim()) return null;
@@ -26,6 +26,9 @@ export interface CourseCardProps {
   cardGradient?: string;
   description?: string;
   isEnrolled?: boolean;
+  isCompleted?: boolean;
+  hasCertificate?: boolean;
+  enable_certification?: number | boolean | string;
   published?: boolean | number;
   video_link?: string;
   onEdit?: (e: React.MouseEvent) => void;
@@ -46,6 +49,9 @@ export default function CourseCard({
   cardGradient,
   description,
   isEnrolled = false,
+  isCompleted = false,
+  hasCertificate = false,
+  enable_certification,
   published,
   video_link,
   onEdit,
@@ -53,6 +59,13 @@ export default function CourseCard({
 }: CourseCardProps) {
   const [videoModalOpen, setVideoModalOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
+
+  const includesCertificate = Boolean(
+    hasCertificate ||
+    enable_certification === 1 ||
+    enable_certification === true ||
+    enable_certification === '1'
+  );
 
   const youtubeId = getYouTubeVideoId(video_link);
   const videoThumbnail = youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null;
@@ -152,20 +165,33 @@ export default function CourseCard({
           </div>
         )}
 
-        {/* Enrolled Badge over Image */}
-        {enrolled && !(onEdit || onPublish) && (published !== false && published !== 0) && (
+        {/* Completed / Enrolled Badge over Image */}
+        {isCompleted && !(onEdit || onPublish) && (published !== false && published !== 0) ? (
+          <div className="absolute top-3 left-3 bg-teal-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md z-20 flex items-center gap-1 backdrop-blur-sm">
+            <CheckCircle className="w-3.5 h-3.5" />
+            <span>Completed</span>
+          </div>
+        ) : enrolled && !(onEdit || onPublish) && (published !== false && published !== 0) ? (
           <div className="absolute top-3 left-3 bg-emerald-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md z-20 flex items-center gap-1 backdrop-blur-sm">
             <CheckCircle className="w-3.5 h-3.5" />
             <span>Enrolled</span>
           </div>
-        )}
+        ) : null}
 
-        {/* Floating category badge over image */}
-        {category && (
-          <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-bold text-indigo-700 shadow-sm z-20">
-            {category}
-          </div>
-        )}
+        {/* Floating category & certificate badges over image */}
+        <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5 z-20">
+          {category && (
+            <div className="bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-bold text-indigo-700 shadow-sm border border-slate-100">
+              {category}
+            </div>
+          )}
+          {includesCertificate && (
+            <div className="bg-amber-500 text-white px-2.5 py-1 rounded-full text-[11px] font-bold shadow-md flex items-center gap-1.5 border border-amber-400">
+              <Award className="w-3.5 h-3.5 text-amber-100" />
+              <span>Certificate</span>
+            </div>
+          )}
+        </div>
 
         {providerLogo && (
           <div className="absolute bottom-4 left-4 bg-white p-2 rounded-lg shadow-lg z-20 transform group-hover:-translate-y-1 transition-transform duration-300">
@@ -192,7 +218,7 @@ export default function CourseCard({
         )}
 
         {/* Additional Details */}
-        <div className="flex flex-wrap gap-4 mb-4 text-xs text-gray-500 font-medium">
+        <div className="flex flex-wrap items-center gap-2.5 mb-4 text-xs text-gray-500 font-medium">
           {status && (
             <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded">
               <span>{status}</span>
@@ -210,6 +236,12 @@ export default function CourseCard({
               <span>{enrollments} Enrolled</span>
             </div>
           )}
+          {includesCertificate && (
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-800 border border-amber-200/80 rounded font-bold text-[11px]" title="Includes Certificate of Completion">
+              <Award className="w-3.5 h-3.5 text-amber-600" />
+              <span>Certificate</span>
+            </div>
+          )}
         </div>
 
         <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between">
@@ -219,7 +251,11 @@ export default function CourseCard({
               <Star className="w-3.5 h-3.5 fill-current" />
             </div>
           </div>
-          {enrolled ? (
+          {isCompleted ? (
+            <span className="font-bold text-teal-700 bg-teal-50 px-3 py-1 rounded-full text-xs border border-teal-200 group-hover:bg-teal-100 transition-colors flex items-center gap-1">
+              Completed <CheckCircle className="w-3.5 h-3.5 ml-0.5 text-teal-600" />
+            </span>
+          ) : enrolled ? (
             <span className="font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full text-xs border border-emerald-200 group-hover:bg-emerald-100 transition-colors flex items-center gap-1">
               Continue Learning <ArrowRight className="w-3.5 h-3.5 ml-0.5 transform group-hover:translate-x-0.5 transition-transform" />
             </span>
