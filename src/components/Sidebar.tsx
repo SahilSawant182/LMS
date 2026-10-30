@@ -449,6 +449,12 @@ export default function Sidebar({
               badgeColor: 'bg-emerald-100 text-emerald-700 font-semibold',
               instructorOnly: true,
             },
+            {
+              name: 'Payments & Subscriptions',
+              href: '/profile/payments',
+              icon: Receipt,
+              instructorOnly: true,
+            },
           ],
         },
         {
@@ -474,8 +480,8 @@ export default function Sidebar({
         },
         {
           type: 'link',
-          name: 'My Payments',
-          href: '/my-payments',
+          name: 'Payments & Subscriptions',
+          href: '/profile/payments',
           icon: Receipt,
         },
       ],
