@@ -36,16 +36,58 @@ export const getUserInfo = async () => {
   return apiService.get("method/lms.lms.api.get_user_info");
 };
 
+export const hasInstructorAccountRole = (): boolean => {
+  if (typeof window === "undefined") return false;
+  try {
+    const instructorRoles = [
+      "Instructor",
+      "Course Creator",
+      "Moderator",
+      "Administrator",
+      "System Manager",
+      "Instructor Admin",
+      "LMS Admin",
+      "Admin Instructor",
+    ];
+
+    const checkRoles = (raw: string | null): boolean => {
+      if (!raw) return false;
+      try {
+        const parsed = raw.startsWith("[") ? JSON.parse(raw) : raw;
+        if (Array.isArray(parsed)) {
+          return parsed.some((r: string) => instructorRoles.includes(r));
+        }
+      } catch {}
+      return instructorRoles.some((r: string) => raw.includes(r));
+    };
+
+    // 1. Check saved instructor roles (if instructor has switched to learner view)
+    const savedRoles = localStorage.getItem("lms_saved_instructor_roles");
+    if (checkRoles(savedRoles)) return true;
+
+    // 2. Check current roles
+    const currentRoles = localStorage.getItem("roles");
+    if (checkRoles(currentRoles)) return true;
+
+    return false;
+  } catch {
+    return false;
+  }
+};
+
 export const canUserSwitchView = (): boolean => {
   if (typeof window === "undefined") return false;
   try {
-    const canSwitch = localStorage.getItem("can_switch_view");
-    if (canSwitch === "true") return true;
-    const savedRoles = localStorage.getItem("lms_saved_instructor_roles");
-    if (savedRoles && (savedRoles.includes("Instructor") || savedRoles.includes("Administrator") || savedRoles.includes("System Manager"))) {
-      return true;
+    // If user does not have any instructor/admin role, they are purely a learner.
+    // Pure learners can NEVER switch views and must NEVER see the toggle button.
+    if (!hasInstructorAccountRole()) {
+      return false;
     }
-    return isAuthorizedInstructor();
+
+    const canSwitch = localStorage.getItem("can_switch_view");
+    if (canSwitch === "false") return false;
+
+    return true;
   } catch {
     return false;
   }
@@ -54,6 +96,9 @@ export const canUserSwitchView = (): boolean => {
 export const getActiveViewMode = (): "instructor" | "learner" => {
   if (typeof window === "undefined") return "learner";
   try {
+    // If not an instructor account, view mode is strictly 'learner'
+    if (!hasInstructorAccountRole()) return "learner";
+
     const saved = localStorage.getItem("lms_active_view_mode");
     if (saved === "learner" || saved === "instructor") {
       return saved;

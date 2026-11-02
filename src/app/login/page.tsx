@@ -59,7 +59,19 @@ export default function LoginPage() {
       const roles = res?.roles || res?.message?.roles || res?.data?.roles || [];
       const isInstructor = res?.is_instructor ?? res?.message?.is_instructor ?? res?.data?.is_instructor;
       const isStudent = res?.is_student ?? res?.message?.is_student ?? res?.data?.is_student;
-      const canSwitchView = res?.can_switch_view ?? res?.message?.can_switch_view ?? res?.data?.can_switch_view;
+
+      const instructorRoles = [
+        "Instructor",
+        "Course Creator",
+        "Moderator",
+        "Administrator",
+        "System Manager",
+        "Instructor Admin",
+        "LMS Admin",
+        "Admin Instructor",
+      ];
+      const hasInstructorRole = Array.isArray(roles) && roles.some((r: string) => instructorRoles.includes(r));
+      const isActualInstructor = Boolean(isInstructor || hasInstructorRole);
 
       if (keyDetails?.api_key) {
         localStorage.setItem("apiKey", keyDetails.api_key);
@@ -68,9 +80,19 @@ export default function LoginPage() {
       if (fullName) localStorage.setItem("fullName", fullName);
       if (user) localStorage.setItem("userEmail", user);
       if (roles) localStorage.setItem("roles", JSON.stringify(roles));
-      if (isInstructor !== undefined) localStorage.setItem("isInstructor", String(Boolean(isInstructor)));
-      if (isStudent !== undefined) localStorage.setItem("is_student", String(Boolean(isStudent)));
-      if (canSwitchView !== undefined) localStorage.setItem("can_switch_view", String(Boolean(canSwitchView)));
+      localStorage.setItem("is_student", String(Boolean(isStudent ?? !isActualInstructor)));
+
+      if (isActualInstructor) {
+        localStorage.setItem("isInstructor", "true");
+        localStorage.setItem("can_switch_view", "true");
+        localStorage.setItem("lms_saved_instructor_roles", JSON.stringify(roles));
+        localStorage.setItem("lms_active_view_mode", "instructor");
+      } else {
+        localStorage.setItem("isInstructor", "false");
+        localStorage.setItem("can_switch_view", "false");
+        localStorage.removeItem("lms_saved_instructor_roles");
+        localStorage.removeItem("lms_active_view_mode");
+      }
       
       // Notify Navbar & context of auth state change
       window.dispatchEvent(new Event("auth-changed"));

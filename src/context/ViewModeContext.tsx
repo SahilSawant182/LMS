@@ -35,22 +35,32 @@ export function ViewModeProvider({
 
   const [mounted, setMounted] = useState<boolean>(false);
   const [canSwitch, setCanSwitch] = useState<boolean>(() => {
-    if (user?.can_switch_view !== undefined) return Boolean(user.can_switch_view);
-    if (user?.is_instructor !== undefined) return Boolean(user.is_instructor);
+    if (typeof window !== 'undefined') {
+      return canUserSwitchView();
+    }
+    if (user?.roles) {
+      const instructorRoles = [
+        "Instructor",
+        "Course Creator",
+        "Moderator",
+        "Administrator",
+        "System Manager",
+        "Instructor Admin",
+        "LMS Admin",
+        "Admin Instructor",
+      ];
+      const rList = Array.isArray(user.roles) ? user.roles : [user.roles];
+      return rList.some((r: string) => instructorRoles.includes(r));
+    }
     return false;
   });
-  const [viewMode, setViewMode] = useState<ViewMode>('instructor');
+  const [viewMode, setViewMode] = useState<ViewMode>('learner');
 
   // Synchronize instructor ability and view mode safely from storage/APIs
   const syncViewMode = useCallback(() => {
     if (typeof window === 'undefined') return;
 
-    let switchable = false;
-    if (user?.can_switch_view !== undefined || user?.is_instructor !== undefined) {
-      switchable = Boolean(user?.can_switch_view || user?.is_instructor);
-    } else {
-      switchable = canUserSwitchView();
-    }
+    const switchable = canUserSwitchView();
     setCanSwitch(switchable);
 
     if (!switchable) {
@@ -64,7 +74,7 @@ export function ViewModeProvider({
     } else {
       setViewMode('instructor');
     }
-  }, [user]);
+  }, []);
 
   // Initial client mount synchronization
   useEffect(() => {
@@ -79,25 +89,47 @@ export function ViewModeProvider({
         .then((res: any) => {
           const data = res?.message || res?.data || res;
           if (data && typeof data === 'object') {
-            const activeMode = localStorage.getItem('lms_active_view_mode') as ViewMode | null;
-            if (data.can_switch_view !== undefined) {
-              localStorage.setItem('can_switch_view', String(Boolean(data.can_switch_view)));
+            const instructorRoles = [
+              "Instructor",
+              "Course Creator",
+              "Moderator",
+              "Administrator",
+              "System Manager",
+              "Instructor Admin",
+              "LMS Admin",
+              "Admin Instructor",
+            ];
+            const rawRoles = Array.isArray(data.roles) ? data.roles : [];
+            const hasInst = rawRoles.some((r: string) => instructorRoles.includes(r)) || Boolean(data.is_instructor);
+
+            if (!hasInst) {
+              // Pure learner account: purge instructor flags and disable view switching
+              localStorage.setItem('can_switch_view', 'false');
+              localStorage.setItem('isInstructor', 'false');
+              localStorage.removeItem('lms_saved_instructor_roles');
+              localStorage.removeItem('lms_active_view_mode');
+              if (Array.isArray(data.roles)) {
+                localStorage.setItem('roles', JSON.stringify(data.roles));
+              }
+              setCanSwitch(false);
+              setViewMode('learner');
+              return;
             }
-            if (data.is_instructor !== undefined) {
-              if (activeMode !== 'learner') {
-                localStorage.setItem('isInstructor', String(Boolean(data.is_instructor)));
+
+            // Authorized instructor account
+            localStorage.setItem('can_switch_view', 'true');
+            const activeMode = localStorage.getItem('lms_active_view_mode') as ViewMode | null;
+            if (activeMode !== 'learner') {
+              localStorage.setItem('isInstructor', 'true');
+              if (Array.isArray(data.roles)) {
+                localStorage.setItem('roles', JSON.stringify(data.roles));
               }
             }
             if (Array.isArray(data.roles)) {
               localStorage.setItem('lms_saved_instructor_roles', JSON.stringify(data.roles));
-              if (activeMode !== 'learner') {
-                localStorage.setItem('roles', JSON.stringify(data.roles));
-              }
             }
-            const updatedSwitchable = Boolean(data.can_switch_view || data.is_instructor || canUserSwitchView());
-            setCanSwitch(updatedSwitchable);
-            const active = getActiveViewMode();
-            setViewMode(active);
+            setCanSwitch(true);
+            setViewMode(activeMode === 'learner' ? 'learner' : 'instructor');
           }
         })
         .catch(() => {
@@ -151,7 +183,7 @@ export function ViewModeProvider({
     switchActiveViewMode(targetMode);
   };
 
-  const effectiveMode: ViewMode = mounted ? (canSwitch ? viewMode : 'learner') : 'instructor';
+  const effectiveMode: ViewMode = mounted ? (canSwitch ? viewMode : 'learner') : 'learner';
 
   return (
     <ViewModeContext.Provider
