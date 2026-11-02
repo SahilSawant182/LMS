@@ -364,6 +364,12 @@ export default function Sidebar({
                 icon: TrendingUp,
                 instructorOnly: true,
               },
+              {
+                name: 'Enrollments',
+                href: '/enrollments',
+                icon: Users,
+                instructorOnly: true,
+              },
             ],
           },
           {
