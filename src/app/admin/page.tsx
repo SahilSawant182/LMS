@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
@@ -32,6 +32,9 @@ import {
   Lock,
   X,
   FileSpreadsheet,
+  Mail,
+  Hash,
+  User,
 } from "lucide-react";
 import {
   AdminUserData,
@@ -47,7 +50,7 @@ import Navbar from "@/components/Navbar";
 
 type TabKey = "overview" | "courses" | "users" | "reports";
 
-export default function AdminDashboardPage() {
+function AdminDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -107,6 +110,42 @@ export default function AdminDashboardPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [loadingEnrolled, setLoadingEnrolled] = useState(false);
   const [enrolledCourses, setEnrolledCourses] = useState<StudentEnrolledCourseData[]>([]);
+  const [drawerSearch, setDrawerSearch] = useState("");
+
+  // Close drawer on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isDrawerOpen) {
+        setIsDrawerOpen(false);
+      }
+    };
+    if (isDrawerOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isDrawerOpen]);
+
+  // Filtered enrolled courses for drawer
+  const filteredEnrolledCourses = useMemo(() => {
+    if (!drawerSearch.trim()) return enrolledCourses;
+    const q = drawerSearch.toLowerCase();
+    return enrolledCourses.filter((item) => {
+      const title = (item.title || "").toLowerCase();
+      const courseId = (item.course || "").toLowerCase();
+      const owner = (item.owner || "").toLowerCase();
+      const enrollment = (item.enrollment || "").toLowerCase();
+      const intro = (item.short_introduction || "").toLowerCase();
+      return (
+        title.includes(q) ||
+        courseId.includes(q) ||
+        owner.includes(q) ||
+        enrollment.includes(q) ||
+        intro.includes(q)
+      );
+    });
+  }, [enrolledCourses, drawerSearch]);
 
   // 1. Initial Permission Verification
   useEffect(() => {
@@ -179,6 +218,7 @@ export default function AdminDashboardPage() {
   // 3. Open Student Enrolled Courses Modal
   const handleViewStudentEnrollments = async (student: AdminUserData) => {
     setSelectedStudent(student);
+    setDrawerSearch("");
     setIsDrawerOpen(true);
     setLoadingEnrolled(true);
     setEnrolledCourses([]);
@@ -1422,107 +1462,272 @@ export default function AdminDashboardPage() {
       {/* STUDENT ENROLLED COURSES MODAL / SLIDE-OVER DRAWER */}
       {/* ======================================================== */}
       {isDrawerOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end">
-          <div className="bg-white w-full max-w-xl h-full shadow-2xl flex flex-col transform transition-transform animate-in slide-in-from-right duration-200">
-            {/* Drawer Header */}
-            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/60">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm">
+        <div
+          onClick={() => setIsDrawerOpen(false)}
+          className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-xs flex justify-end transition-opacity duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-50 w-full sm:max-w-xl md:max-w-2xl h-full shadow-2xl flex flex-col border-l border-slate-200 transform transition-transform animate-in slide-in-from-right duration-300"
+          >
+            {/* Top Navigation Bar */}
+            <div className="bg-white border-b border-slate-200/90 px-6 py-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 shadow-2xs">
                   <GraduationCap className="w-5 h-5" />
                 </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Student Course Enrollments</h3>
-                  <p className="text-xs text-slate-500 truncate max-w-sm">
-                    {selectedStudent?.full_name || selectedStudent?.email || "Student details"}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-slate-900 truncate">
+                      Student Course Enrollments
+                    </h3>
+                    <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 uppercase tracking-wide">
+                      Admin Audit
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 truncate">
+                    Detailed record of enrolled courses and registration timestamps
                   </p>
                 </div>
               </div>
+
               <button
                 onClick={() => setIsDrawerOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition cursor-pointer"
+                className="w-9 h-9 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer shrink-0"
+                title="Close Drawer (Esc)"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Student Info Pill */}
-            <div className="px-5 py-3 bg-purple-50/60 border-b border-purple-100 flex items-center justify-between text-xs text-purple-900">
-              <div>
-                <span className="text-purple-600 font-medium">User ID: </span>
-                <span className="font-mono font-semibold">{selectedStudent?.user}</span>
+            {/* Student Profile Identity Card */}
+            <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-950 text-white p-5 sm:p-6 shadow-inner shrink-0">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-13 h-13 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/20 flex items-center justify-center text-xl font-black text-white shrink-0 shadow-md">
+                    {(selectedStudent?.full_name || selectedStudent?.user || "S").charAt(0).toUpperCase()}
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-base sm:text-lg font-bold text-white truncate">
+                        {selectedStudent?.full_name || selectedStudent?.user || "Student Account"}
+                      </h4>
+                      {Number(selectedStudent?.enabled) === 1 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                          Disabled
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-1.5 flex items-center gap-3 text-xs text-purple-200/80 flex-wrap">
+                      {selectedStudent?.email && (
+                        <div className="flex items-center gap-1.5 truncate max-w-[220px] sm:max-w-none">
+                          <Mail className="w-3.5 h-3.5 text-purple-300 shrink-0" />
+                          <span className="truncate">{selectedStudent.email}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1 font-mono text-[11px] text-purple-300">
+                        <Hash className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                        <span>{selectedStudent?.user}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0 bg-white/10 backdrop-blur-xs border border-white/15 px-3.5 py-2 rounded-xl">
+                  <div className="text-xl font-extrabold text-white">
+                    {enrolledCourses.length}
+                  </div>
+                  <div className="text-[10px] font-medium text-purple-200 uppercase tracking-wider">
+                    {enrolledCourses.length === 1 ? "Course" : "Courses"}
+                  </div>
+                </div>
               </div>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-200/60 text-purple-800">
-                {enrolledCourses.length} {enrolledCourses.length === 1 ? "Course" : "Courses"}
-              </span>
             </div>
 
-            {/* Drawer Body */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+            {/* Sub-header Filter & Count Strip */}
+            <div className="px-6 py-3 bg-white border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filter courses by title, owner, or enrollment ID..."
+                  value={drawerSearch}
+                  onChange={(e) => setDrawerSearch(e.target.value)}
+                  className="w-full pl-8.5 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-purple-500 focus:bg-white transition"
+                />
+                {drawerSearch && (
+                  <button
+                    onClick={() => setDrawerSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="text-xs text-slate-500 whitespace-nowrap">
+                Showing <span className="font-bold text-slate-900">{filteredEnrolledCourses.length}</span> of{" "}
+                <span className="font-semibold text-slate-700">{enrolledCourses.length}</span>
+              </div>
+            </div>
+
+            {/* Drawer Body - Scrollable Course List */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-3.5">
               {loadingEnrolled ? (
-                <div className="py-16 text-center text-slate-400">
-                  <RefreshCw className="w-8 h-8 mx-auto mb-2 text-purple-600 animate-spin" />
-                  <p className="text-sm font-semibold text-slate-700">Loading student enrolled courses...</p>
+                <div className="space-y-3.5">
+                  <div className="py-6 text-center text-slate-400">
+                    <RefreshCw className="w-6 h-6 mx-auto mb-2 text-purple-600 animate-spin" />
+                    <p className="text-xs font-semibold text-slate-600">Loading student enrolled courses...</p>
+                  </div>
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="p-4 bg-white rounded-2xl border border-slate-200/80 animate-pulse flex flex-col sm:flex-row gap-4"
+                    >
+                      <div className="w-full sm:w-32 h-24 bg-slate-200 rounded-xl shrink-0" />
+                      <div className="flex-1 space-y-2.5 py-1">
+                        <div className="h-4 bg-slate-200 rounded-md w-3/4" />
+                        <div className="h-3 bg-slate-200 rounded-md w-1/2" />
+                        <div className="h-3 bg-slate-200 rounded-md w-full" />
+                        <div className="h-3 bg-slate-200 rounded-md w-1/3" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : enrolledCourses.length === 0 ? (
-                <div className="py-16 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                  <BookOpen className="w-10 h-10 mx-auto mb-2 opacity-40 text-slate-500" />
-                  <p className="text-sm font-bold text-slate-700">No Course Enrollments Found</p>
-                  <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                    This user has not actively enrolled in any published courses yet.
+                <div className="py-16 text-center bg-white rounded-2xl border border-dashed border-slate-300 shadow-2xs p-6">
+                  <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mx-auto mb-3">
+                    <BookOpen className="w-7 h-7 text-purple-500" />
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-800">No Course Enrollments Found</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                    This student has not enrolled in any published courses yet. New enrollments will appear here automatically.
                   </p>
                 </div>
+              ) : filteredEnrolledCourses.length === 0 ? (
+                <div className="py-14 text-center bg-white rounded-2xl border border-dashed border-slate-300 shadow-2xs p-6">
+                  <Search className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                  <h4 className="text-sm font-bold text-slate-800">No Matching Courses</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                    No enrolled courses matched &ldquo;{drawerSearch}&rdquo;.
+                  </p>
+                  <button
+                    onClick={() => setDrawerSearch("")}
+                    className="mt-3 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 text-xs font-semibold transition cursor-pointer"
+                  >
+                    Clear Filter
+                  </button>
+                </div>
               ) : (
-                enrolledCourses.map((item) => (
+                filteredEnrolledCourses.map((item) => (
                   <div
                     key={item.enrollment}
-                    className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-purple-200 hover:shadow-xs transition flex flex-col gap-2"
+                    className="group p-4 rounded-2xl border border-slate-200/90 bg-white hover:border-purple-300 hover:shadow-md transition-all flex flex-col sm:flex-row gap-4 relative"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 shrink-0 border border-slate-200">
-                          {item.image ? (
-                            <img
-                              src={item.image}
-                              alt={item.title || item.course}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center font-bold text-slate-400 text-xs">
-                              {(item.title || item.course).charAt(0).toUpperCase()}
-                            </div>
-                          )}
+                    {/* Course Thumbnail */}
+                    <div className="relative w-full sm:w-32 h-28 sm:h-24 rounded-xl overflow-hidden bg-slate-100 shrink-0 border border-slate-200/80 shadow-2xs">
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.title || item.course}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-extrabold text-2xl group-hover:scale-105 transition-transform duration-300">
+                          {(item.title || item.course).charAt(0).toUpperCase()}
                         </div>
-                        <div className="min-w-0">
+                      )}
+
+                      {/* Status Pill Overlay */}
+                      <div className="absolute top-2 left-2">
+                        {Number(item.published) === 1 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-950/85 text-emerald-300 backdrop-blur-xs border border-emerald-500/30 shadow-xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            Published
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-950/85 text-amber-300 backdrop-blur-xs border border-amber-500/30 shadow-xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                            Draft
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Course Details */}
+                    <div className="flex-1 min-w-0 flex flex-col justify-between">
+                      <div>
+                        {/* Title and external link */}
+                        <div className="flex items-start justify-between gap-2">
                           <Link
                             href={`/course/${item.course}`}
-                            className="font-bold text-sm text-slate-900 hover:text-purple-600 truncate block"
+                            className="font-bold text-sm sm:text-base text-slate-900 group-hover:text-purple-600 line-clamp-1 transition"
+                            title={item.title || item.course}
                           >
                             {item.title || item.course}
                           </Link>
-                          <p className="text-xs text-slate-500">
-                            Instructor: <span className="font-mono text-slate-700">{item.owner}</span>
-                          </p>
+
+                          <Link
+                            href={`/course/${item.course}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition shrink-0"
+                            title="View Course Page"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </Link>
                         </div>
+
+                        {/* Instructor */}
+                        {item.owner && (
+                          <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 truncate">
+                            <span className="text-slate-400">Instructor:</span>
+                            <span className="font-semibold text-slate-700 truncate">{item.owner}</span>
+                          </p>
+                        )}
+
+                        {/* Short Introduction */}
+                        {item.short_introduction && (
+                          <p className="text-xs text-slate-500 line-clamp-2 mt-1.5 leading-relaxed">
+                            {item.short_introduction}
+                          </p>
+                        )}
                       </div>
 
-                      <Link
-                        href={`/course/${item.course}`}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50"
-                        title="View Course"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </Link>
-                    </div>
+                      {/* Card Footer / Meta */}
+                      <div className="pt-2.5 mt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap text-[11px]">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-mono text-[10px] font-semibold border border-slate-200/60">
+                            {item.enrollment}
+                          </span>
+                          {item.enrollment_status && (
+                            <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 font-medium text-[10px] border border-purple-100">
+                              {item.enrollment_status}
+                            </span>
+                          )}
+                        </div>
 
-                    {item.short_introduction && (
-                      <p className="text-xs text-slate-600 line-clamp-2 mt-1">
-                        {item.short_introduction}
-                      </p>
-                    )}
-
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                      <span>Enrollment: {item.enrollment}</span>
-                      <span>{item.creation ? new Date(item.creation).toLocaleDateString() : ""}</span>
+                        <div className="flex items-center gap-1 text-slate-400">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          <span>
+                            {item.creation
+                              ? new Date(item.creation).toLocaleDateString(undefined, {
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                })
+                              : "Enrolled"}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -1530,10 +1735,13 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Drawer Footer */}
-            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+            <div className="p-4 px-6 border-t border-slate-200 bg-white flex items-center justify-between shrink-0">
+              <div className="text-xs text-slate-500">
+                Total Enrolled: <span className="font-bold text-slate-900">{enrolledCourses.length}</span>
+              </div>
               <button
                 onClick={() => setIsDrawerOpen(false)}
-                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs transition cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition cursor-pointer shadow-2xs"
               >
                 Close Drawer
               </button>
@@ -1542,5 +1750,22 @@ export default function AdminDashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminDashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-slate-900 font-sans">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-slate-400 font-semibold text-sm">Loading Admin Console...</p>
+          </div>
+        </div>
+      }
+    >
+      <AdminDashboardContent />
+    </Suspense>
   );
 }
