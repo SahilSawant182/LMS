@@ -7,6 +7,7 @@ import { formatDate } from "@/utils/formatters";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
+import { useViewMode } from "@/context/ViewModeContext";
 import {
   Award,
   HelpCircle,
@@ -50,6 +51,7 @@ function QuizzesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
+  const { viewMode } = useViewMode();
 
   const [activeTab, setActiveTab] = useState<"quizzes" | "questions">(
     tabParam === "questions" ? "questions" : "quizzes"
@@ -61,7 +63,8 @@ function QuizzesContent() {
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [errorQuizzes, setErrorQuizzes] = useState<string | null>(null);
   const [errorQuestions, setErrorQuestions] = useState<string | null>(null);
-  const [isInstructor, setIsInstructor] = useState(false);
+  const [hasInstructorRole, setHasInstructorRole] = useState(false);
+  const isInstructor = hasInstructorRole && viewMode === 'instructor';
 
   // Search & Filter state for Questions tab
   const [questionSearch, setQuestionSearch] = useState("");
@@ -79,20 +82,22 @@ function QuizzesContent() {
     }
   }, [quizParam, router]);
 
-  // Sync tab with URL
+  // Sync tab with URL and viewMode
   useEffect(() => {
     const isInst = isAuthorizedInstructor();
-    setIsInstructor(isInst);
-    if (tabParam === "questions" && isInst) {
+    setHasInstructorRole(isInst);
+    const effectiveIsInstructor = isInst && viewMode === 'instructor';
+    if (tabParam === "questions" && effectiveIsInstructor) {
       setActiveTab("questions");
     } else {
       setActiveTab("quizzes");
     }
-  }, [tabParam]);
+  }, [tabParam, viewMode]);
 
   useEffect(() => {
     const isInst = isAuthorizedInstructor();
-    setIsInstructor(isInst);
+    setHasInstructorRole(isInst);
+    const effectiveIsInstructor = isInst && viewMode === 'instructor';
 
     // Fetch Quizzes
     const fetchQuizzesData = async () => {
@@ -111,10 +116,10 @@ function QuizzesContent() {
     };
 
     fetchQuizzesData();
-    if (isInst) {
+    if (effectiveIsInstructor) {
       fetchQuestionsData();
     }
-  }, []);
+  }, [viewMode]);
 
   const fetchQuestionsData = async () => {
     if (!isAuthorizedInstructor()) return;

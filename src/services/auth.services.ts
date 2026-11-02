@@ -32,10 +32,88 @@ export const validateEmailOtp = async (payload: { email: string, otp: string }) 
   return apiService.post("method/lms.lms.lms_login.validate_email_otp", payload);
 };
 
+export const getUserInfo = async () => {
+  return apiService.get("method/lms.lms.api.get_user_info");
+};
+
+export const canUserSwitchView = (): boolean => {
+  if (typeof window === "undefined") return false;
+  try {
+    const canSwitch = localStorage.getItem("can_switch_view");
+    if (canSwitch === "true") return true;
+    const savedRoles = localStorage.getItem("lms_saved_instructor_roles");
+    if (savedRoles && (savedRoles.includes("Instructor") || savedRoles.includes("Administrator") || savedRoles.includes("System Manager"))) {
+      return true;
+    }
+    return isAuthorizedInstructor();
+  } catch {
+    return false;
+  }
+};
+
+export const getActiveViewMode = (): "instructor" | "learner" => {
+  if (typeof window === "undefined") return "learner";
+  try {
+    const saved = localStorage.getItem("lms_active_view_mode");
+    if (saved === "learner" || saved === "instructor") {
+      return saved;
+    }
+    const isInst = localStorage.getItem("isInstructor");
+    if (isInst === "false") return "learner";
+    if (isInst === "true") return "instructor";
+    return isAuthorizedInstructor() ? "instructor" : "learner";
+  } catch {
+    return "learner";
+  }
+};
+
+export const setActiveViewMode = (mode: "instructor" | "learner") => {
+  switchActiveViewMode(mode);
+};
+
+export const switchActiveViewMode = (targetMode?: "instructor" | "learner") => {
+  if (typeof window === "undefined") return;
+
+  const currentMode = localStorage.getItem("lms_active_view_mode") || (localStorage.getItem("isInstructor") === "false" ? "learner" : "instructor");
+  const nextMode = targetMode || (currentMode === "instructor" ? "learner" : "instructor");
+
+  if (nextMode === "learner") {
+    // 1. Preserve original instructor roles so we can switch back
+    const currentRoles = localStorage.getItem("roles");
+    if (currentRoles && (currentRoles.includes("Instructor") || currentRoles.includes("Administrator") || currentRoles.includes("System Manager"))) {
+      localStorage.setItem("lms_saved_instructor_roles", currentRoles);
+    }
+    // 2. Soft-login as Student / Learner
+    localStorage.setItem("lms_active_view_mode", "learner");
+    localStorage.setItem("isInstructor", "false");
+    localStorage.setItem("roles", JSON.stringify(["Student", "LMS Student", "Website User"]));
+    localStorage.setItem("can_switch_view", "true");
+  } else {
+    // 1. Restore original instructor roles
+    const savedRoles = localStorage.getItem("lms_saved_instructor_roles") || JSON.stringify(["Instructor", "Student", "LMS Student", "Website User"]);
+    localStorage.setItem("lms_active_view_mode", "instructor");
+    localStorage.setItem("isInstructor", "true");
+    localStorage.setItem("roles", savedRoles);
+    localStorage.setItem("can_switch_view", "true");
+  }
+
+  // 3. Dispatch auth and view change events
+  window.dispatchEvent(new Event("auth-changed"));
+  window.dispatchEvent(new CustomEvent("view-mode-changed", { detail: { viewMode: nextMode } }));
+
+  // 4. Directly reload on dashboard as that role using LMS base path
+  const basePath = typeof window !== "undefined" && window.location.pathname.startsWith("/lms") ? "/lms" : "/lms";
+  window.location.href = `${basePath}/dashboard`;
+};
+
 export const isAuthorizedInstructor = (): boolean => {
   if (typeof window === "undefined") return false;
   try {
+    const activeMode = localStorage.getItem("lms_active_view_mode");
+    if (activeMode === "learner") return false;
+
     const isInst = localStorage.getItem("isInstructor");
+    if (isInst === "false") return false;
     if (isInst === "true") return true;
 
     const rolesStr = localStorage.getItem("roles");
@@ -57,16 +135,35 @@ export const isSystemAdmin = (): boolean => {
   if (typeof window === "undefined") return false;
   try {
     const rolesStr = localStorage.getItem("roles");
-    if (!rolesStr) return false;
-    const roles = rolesStr.startsWith("[") ? JSON.parse(rolesStr) : rolesStr;
-    const adminRoles = ["Administrator", "System Manager"];
-    if (Array.isArray(roles)) {
-      return roles.some((r: string) => adminRoles.includes(r));
-    }
-    return adminRoles.some((r: string) => String(rolesStr).includes(r));
+    const savedRolesStr = localStorage.getItem("lms_saved_instructor_roles");
+    const adminRoles = ["Administrator", "System Manager", "Instructor Admin", "LMS Admin", "Admin Instructor"];
+
+    const checkRoles = (raw: string | null): boolean => {
+      if (!raw) return false;
+      try {
+        const roles = raw.startsWith("[") ? JSON.parse(raw) : raw;
+        if (Array.isArray(roles)) {
+          return roles.some((r: string) => adminRoles.includes(r));
+        }
+        return adminRoles.some((r: string) => String(raw).includes(r));
+      } catch {
+        return adminRoles.some((r: string) => raw.includes(r));
+      }
+    };
+
+    if (checkRoles(rolesStr) || checkRoles(savedRolesStr)) return true;
+
+    const user = (localStorage.getItem("userEmail") || localStorage.getItem("user") || "").toLowerCase().trim();
+    if (user === "administrator") return true;
+
+    return false;
   } catch {
     return false;
   }
+};
+
+export const isAdminInstructor = (): boolean => {
+  return isSystemAdmin();
 };
 
 export const isCourseInstructorOrOwner = (course: any, userEmail?: string): boolean => {

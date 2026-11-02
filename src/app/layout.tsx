@@ -37,16 +37,19 @@ export const metadata: Metadata = {
 
 import { Suspense } from "react";
 import NavigationTracker from "@/components/NavigationTracker";
+import { ViewModeProvider } from "@/context/ViewModeContext";
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans bg-white text-slate-800">
-        <Suspense fallback={null}>
-          <NavigationTracker />
-        </Suspense>
-        <ToastContainer />
-        {children}
+        <ViewModeProvider>
+          <Suspense fallback={null}>
+            <NavigationTracker />
+          </Suspense>
+          <ToastContainer />
+          {children}
+        </ViewModeProvider>
       </body>
     </html>
   );

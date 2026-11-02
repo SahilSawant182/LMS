@@ -1,22 +1,26 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet, TrendingUp, Settings, ClipboardCheck, BookOpen, Users, Tag, X, Loader2, ArrowRight, GraduationCap, ArrowLeft } from 'lucide-react';
+import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet, TrendingUp, Settings, ClipboardCheck, BookOpen, Users, Tag, X, Loader2, ArrowRight, GraduationCap, ArrowLeft, Briefcase, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { logout } from '@/services/auth.services';
+import { logout, isAdminInstructor } from '@/services/auth.services';
 import { getCourses, getBatches, getProgramList } from '@/services/lms.services';
 import Sidebar from '@/components/Sidebar';
 import NotificationBell from '@/components/notifications/NotificationBell';
+import ViewSwitchButton from '@/components/Navbar/ViewSwitchButton';
+import { useViewMode } from '@/context/ViewModeContext';
 
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
+  const { viewMode, switchView, canSwitch } = useViewMode();
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [userImage, setUserImage] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isInstructor, setIsInstructor] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
@@ -70,7 +74,7 @@ export default function Navbar() {
             const parsedRoles = JSON.parse(rolesStr);
             if (Array.isArray(parsedRoles)) {
               hasInstructorRole = parsedRoles.some((r: string) =>
-                ["Instructor", "Course Creator", "Moderator", "Administrator", "System Manager"].includes(r)
+                ["Instructor", "Course Creator", "Moderator", "Administrator", "System Manager", "Instructor Admin", "LMS Admin"].includes(r)
               );
             }
           }
@@ -79,10 +83,12 @@ export default function Navbar() {
           hasInstructorRole = roles?.includes("Instructor") || false;
         }
         setIsInstructor(hasInstructorRole);
+        setIsAdmin(isAdminInstructor());
       } else {
         setIsAuthenticated(false);
         setUserImage("");
         setIsInstructor(false);
+        setIsAdmin(false);
       }
     }
   };
@@ -136,13 +142,14 @@ export default function Navbar() {
       logout().catch((err) => console.warn("Logout API warning:", err));
     } catch (e) { }
 
-    // Immediately clear all credentials and storage
     localStorage.removeItem("apiKey");
     localStorage.removeItem("apiSecret");
     localStorage.removeItem("userEmail");
     localStorage.removeItem("fullName");
     localStorage.removeItem("roles");
     localStorage.removeItem("isInstructor");
+    localStorage.removeItem("can_switch_view");
+    localStorage.removeItem("lms_active_view_mode");
     localStorage.clear();
     sessionStorage.clear();
 
@@ -150,7 +157,7 @@ export default function Navbar() {
     document.documentElement.style.removeProperty("--sidebar-width");
     setIsAuthenticated(false);
     window.dispatchEvent(new Event("auth-changed"));
-    window.location.href = "/login";
+    window.location.href = "/lms/login";
   };
 
   // Load courses, batches, and programs for search
@@ -561,8 +568,8 @@ export default function Navbar() {
               )}
             </div>
 
-        {/* Right Section: Notification Bell & Profile Pill */}
-        <div className="flex items-center gap-3">
+        {/* Right Section: View Switch, Notification Bell & Profile Pill */}
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
           {/* Mobile search toggle */}
           <button
             onClick={() => {
@@ -571,7 +578,7 @@ export default function Navbar() {
                 loadSearchData();
               }
             }}
-            className="p-2 text-slate-600 hover:bg-slate-50 rounded-full transition-colors cursor-pointer md:hidden"
+            className="p-2 text-slate-600 hover:bg-slate-50 rounded-full transition-colors cursor-pointer md:hidden shrink-0"
             aria-label="Toggle Search"
           >
             <Search className="w-5 h-5" />
@@ -579,17 +586,20 @@ export default function Navbar() {
 
           {isAuthenticated ? (
             <>
+              {/* Navbar Switch View Button for Instructors */}
+              <ViewSwitchButton />
+
               {/* Exact StrideNex Notification Bell */}
               <NotificationBell />
 
               {/* Exact StrideNex User Profile Pill */}
-              <div className="relative" ref={dropdownRef}>
+              <div className="relative shrink-0" ref={dropdownRef}>
                 <button
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="flex items-center gap-2 p-1 pl-2 pr-3 rounded-full border bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700 transition-colors cursor-pointer"
+                  className="flex items-center gap-2 p-0.5 pl-1 pr-3 rounded-full border bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700 transition-colors cursor-pointer shrink-0 h-8.5 shadow-2xs"
                 >
-                  {/* 32px Avatar Circle */}
-                  <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-white font-medium text-sm shrink-0 bg-gradient-to-tr from-amber-500 to-orange-500">
+                  {/* 30px Avatar Circle */}
+                  <div className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-white font-medium text-xs shrink-0 bg-gradient-to-tr from-amber-500 to-orange-500">
                     {userImage ? (
                       <img src={userImage} alt={userName} className="w-full h-full object-cover" />
                     ) : (
@@ -600,18 +610,93 @@ export default function Navbar() {
                   {/* Name and Role Icon */}
                   <span className="text-sm font-medium hidden sm:flex items-center gap-2 text-slate-700">
                     <span className="truncate max-w-[120px]">{userName || "Learner"}</span>
-                    <GraduationCap className="w-5 h-5 text-orange-500" />
+                    {isAdmin ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full border border-purple-200" title="Admin Instructor Access">
+                        <ShieldCheck className="w-3 h-3 text-purple-600" />
+                        <span>Admin</span>
+                      </span>
+                    ) : canSwitch ? (
+                      viewMode === 'instructor' ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full border border-blue-200" title="Instructor View">
+                          <Briefcase className="w-3 h-3 text-blue-600" />
+                          <span>Instructor</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full border border-emerald-200" title="Learner View">
+                          <GraduationCap className="w-3 h-3 text-emerald-600" />
+                          <span>Learner</span>
+                        </span>
+                      )
+                    ) : (
+                      <GraduationCap className="w-5 h-5 text-orange-500" />
+                    )}
                   </span>
                   <ChevronDown className="w-4 h-4 text-slate-400 hidden sm:block" />
                 </button>
 
                 {/* Dropdown Menu (Exact StrideNex dimensions) */}
                 {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 z-50 p-2 space-y-1">
+                  <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-slate-100 z-50 p-2 space-y-1">
                     <div className="px-3 py-2 border-b border-slate-100 mb-1">
                       <p className="text-xs text-slate-400 font-medium">Signed in as</p>
                       <p className="text-sm font-semibold text-slate-800 truncate">{userEmail || userName}</p>
+                      {isAdmin ? (
+                        <p className="text-[11px] font-semibold text-purple-700 mt-0.5 flex items-center gap-1">
+                          <ShieldCheck className="w-3 h-3" />
+                          Role: Administrator
+                        </p>
+                      ) : canSwitch ? (
+                        <p className="text-[11px] font-medium text-slate-500 mt-0.5">
+                          Mode: <span className="font-semibold text-indigo-600 capitalize">{viewMode}</span>
+                        </p>
+                      ) : null}
                     </div>
+
+                    {/* Switch to Admin Dashboard if user is Admin */}
+                    {isAdmin && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer mb-1 bg-gradient-to-r from-purple-50 to-indigo-50 text-purple-700 hover:from-purple-100 hover:to-indigo-100 border border-purple-200 shadow-2xs"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <ShieldCheck className="w-4 h-4 text-purple-600" />
+                          <span>Switch to Admin Dashboard</span>
+                        </span>
+                        <span className="text-[10px] bg-purple-600 text-white font-bold px-1.5 py-0.2 rounded-full">
+                          Portal
+                        </span>
+                      </Link>
+                    )}
+
+                    {canSwitch && (
+                      <button
+                        onClick={() => {
+                          setIsDropdownOpen(false);
+                          switchView();
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer mb-1 ${
+                          viewMode === 'instructor'
+                            ? 'text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200'
+                            : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          {viewMode === 'instructor' ? (
+                            <>
+                              <GraduationCap className="w-4 h-4 text-blue-600" />
+                              <span>Switch to Learner View</span>
+                            </>
+                          ) : (
+                            <>
+                              <Briefcase className="w-4 h-4 text-emerald-600" />
+                              <span>Switch to Instructor View</span>
+                            </>
+                          )}
+                        </span>
+                      </button>
+                    )}
+
                     <Link
                       href="/dashboard"
                       onClick={() => setIsDropdownOpen(false)}
@@ -626,6 +711,16 @@ export default function Navbar() {
                     >
                       Portal Dashboard
                     </Link>
+                    {isAdmin && (
+                      <Link
+                        href="/admin?tab=reports"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
+                      >
+                        <TrendingUp className="w-4 h-4 text-purple-600" />
+                        Admin Reports
+                      </Link>
+                    )}
                     <Link
                       href="/profile/payments"
                       onClick={() => setIsDropdownOpen(false)}

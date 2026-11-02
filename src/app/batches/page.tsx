@@ -7,13 +7,16 @@ import { Users, Calendar, Clock, ArrowRight, Search, Trash2, Plus, Edit } from '
 import { getBatches, deleteBatch } from '@/services/lms.services';
 import { getBatchesWithEnrollment } from '@/services/payment.services';
 import { isAuthorizedInstructor, isBatchInstructorOrOwner } from '@/services/auth.services';
+import { useViewMode } from '@/context/ViewModeContext';
 import { formatDate } from '@/utils/formatters';
 
 export default function BatchesPage() {
+  const { viewMode, canSwitch } = useViewMode();
+  const isEffectiveInstructor = canSwitch && viewMode === 'instructor';
   const [batches, setBatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isInstructor, setIsInstructor] = useState(false);
+  const isInstructor = isEffectiveInstructor;
   const [userEmail, setUserEmail] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -22,8 +25,7 @@ export default function BatchesPage() {
     setError(null);
     try {
       const email = typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
-      const isInst = isAuthorizedInstructor();
-      const batchPayload = isInst && email ? { user: email } : {};
+      const batchPayload = isEffectiveInstructor && email ? { user: email } : {};
       const [enrollRes, catalogRes] = await Promise.allSettled([
         getBatchesWithEnrollment(batchPayload),
         getBatches(batchPayload),
@@ -78,15 +80,9 @@ export default function BatchesPage() {
 
   useEffect(() => {
     fetchBatches();
-    const checkRoles = () => {
-      try {
-        setIsInstructor(isAuthorizedInstructor());
-        const email = typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
-        setUserEmail(email);
-      } catch (e) {}
-    };
-    checkRoles();
-  }, []);
+    const email = typeof window !== 'undefined' ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
+    setUserEmail(email);
+  }, [viewMode, isEffectiveInstructor]);
 
   const handleDelete = async (batchName: string) => {
     if (confirm('Are you sure you want to delete this batch?')) {

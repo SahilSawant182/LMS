@@ -55,6 +55,10 @@ export const getCurrentUserEmail = (): string => {
 export const isStudentUser = (): boolean => {
   if (typeof window === "undefined") return true;
   try {
+    const activeMode = localStorage.getItem("lms_active_view_mode");
+    if (activeMode === "learner") return true;
+    if (activeMode === "instructor") return false;
+
     const isInst = localStorage.getItem("isInstructor");
     if (isInst === "true") return false;
 
@@ -102,7 +106,11 @@ export const isInstructorOnlyUser = (): boolean => {
   try {
     const rolesStr = localStorage.getItem("roles") || "";
     const isInst = localStorage.getItem("isInstructor") === "true" || rolesStr.includes("Instructor");
-    const isAdmin = rolesStr.includes("Administrator") || rolesStr.includes("System Manager");
+    const isAdmin =
+      rolesStr.includes("Administrator") ||
+      rolesStr.includes("System Manager") ||
+      rolesStr.includes("Instructor Admin") ||
+      rolesStr.includes("LMS Admin");
     return isInst && !isAdmin;
   } catch {
     return false;
@@ -136,7 +144,9 @@ const shouldBypassUserParam = (url?: string, params?: any): boolean => {
       url.includes("get_dropdown_options") ||
       url.includes("master.get_dropdown_options") ||
       url.includes("preview_certificate") ||
-      url.includes("get_certificate_templates"))
+      url.includes("get_certificate_templates") ||
+      url.includes("admin.") ||
+      url.includes("lms.lms.admin."))
   ) {
     return true;
   }

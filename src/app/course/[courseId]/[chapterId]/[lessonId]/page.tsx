@@ -7,6 +7,7 @@ import { compareCurriculumItems } from '@/utils/curriculum';
 import { getCourseWithEnrollment } from '@/services/payment.services';
 import { getImageUrl, getCurrentUserEmail } from '@/services/api.services';
 import { isAuthorizedInstructor } from '@/services/auth.services';
+import { useViewMode } from '@/context/ViewModeContext';
 import { CourseWithEnrollment } from '@/types/payment.types';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
@@ -644,7 +645,10 @@ export default function LessonPage() {
   const [paywallMessage, setPaywallMessage] = useState<string>("This lesson is part of a paid course");
 
   const [userEmail, setUserEmail] = useState('');
-  const [isInstructor, setIsInstructor] = useState(false);
+  const { viewMode, canSwitch } = useViewMode();
+  const [hasInstructorRole, setHasInstructorRole] = useState(false);
+  const isInstructor = Boolean((hasInstructorRole || canSwitch) && viewMode === 'instructor');
+  const setIsInstructor = (val: boolean) => setHasInstructorRole(val);
   const [updatingProgress, setUpdatingProgress] = useState(false);
   const [isCompletedLocally, setIsCompletedLocally] = useState(false);
   const [isCourseCompletedLocally, setIsCourseCompletedLocally] = useState(false);
