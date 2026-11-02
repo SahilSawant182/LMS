@@ -25,6 +25,12 @@ const nextConfig: NextConfig = {
         permanent: false,
       },
       {
+        source: '/signup',
+        destination: '/lms/signup',
+        basePath: false,
+        permanent: false,
+      },
+      {
         source: '/courses',
         destination: '/lms/courses',
         basePath: false,
@@ -33,6 +39,12 @@ const nextConfig: NextConfig = {
       {
         source: '/batches',
         destination: '/lms/batches',
+        basePath: false,
+        permanent: false,
+      },
+      {
+        source: '/images/:path*',
+        destination: '/lms/images/:path*',
         basePath: false,
         permanent: false,
       },

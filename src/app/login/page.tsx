@@ -114,7 +114,7 @@ export default function LoginPage() {
           className="absolute inset-0 bg-cover bg-center"
           style={{
             backgroundImage:
-              "url('/images/auth-login-bg.jpg')",
+              "url('/lms/images/auth-login-bg.jpg'), url('/images/auth-login-bg.jpg')",
           }}
         ></div>
         {/* Overlay */}
@@ -132,9 +132,39 @@ export default function LoginPage() {
           </p>
           <div className="flex items-center space-x-4">
             <div className="flex -space-x-3">
-              <img className="w-10 h-10 rounded-full border-2 border-indigo-900" src="/images/student-avatar-1.jpg" alt="Student" />
-              <img className="w-10 h-10 rounded-full border-2 border-indigo-900" src="/images/student-avatar-2.jpg" alt="Student" />
-              <img className="w-10 h-10 rounded-full border-2 border-indigo-900" src="/images/student-avatar-3.jpg" alt="Student" />
+              <img
+                className="w-10 h-10 rounded-full border-2 border-indigo-900 object-cover"
+                src="/lms/images/student-avatar-1.jpg"
+                alt="Student"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (target.src.includes('/lms/')) {
+                    target.src = '/images/student-avatar-1.jpg';
+                  }
+                }}
+              />
+              <img
+                className="w-10 h-10 rounded-full border-2 border-indigo-900 object-cover"
+                src="/lms/images/student-avatar-2.jpg"
+                alt="Student"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (target.src.includes('/lms/')) {
+                    target.src = '/images/student-avatar-2.jpg';
+                  }
+                }}
+              />
+              <img
+                className="w-10 h-10 rounded-full border-2 border-indigo-900 object-cover"
+                src="/lms/images/student-avatar-3.jpg"
+                alt="Student"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (target.src.includes('/lms/')) {
+                    target.src = '/images/student-avatar-3.jpg';
+                  }
+                }}
+              />
               <div className="w-10 h-10 rounded-full border-2 border-indigo-900 bg-indigo-600 flex items-center justify-center text-xs font-bold">
                 +2k
               </div>
@@ -148,6 +178,19 @@ export default function LoginPage() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-24 bg-white">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center lg:text-left">
+            <Link href="/login" className="inline-block mb-6">
+              <img
+                src="/lms/images/Logo.png"
+                alt="StrideNex Logo"
+                className="h-9 w-auto object-contain"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (target.src.includes('/lms/')) {
+                    target.src = '/images/Logo.png';
+                  }
+                }}
+              />
+            </Link>
             <h2 className="text-3xl font-extrabold text-slate-900">
               Sign in to your account
             </h2>

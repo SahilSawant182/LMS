@@ -231,7 +231,7 @@ export default function SignupPage() {
           className="absolute inset-0 bg-cover bg-center"
           style={{
             backgroundImage:
-              "url('/images/auth-signup-bg.jpg')",
+              "url('/lms/images/auth-signup-bg.jpg'), url('/images/auth-signup-bg.jpg')",
           }}
         ></div>
         {/* Overlay */}
@@ -264,6 +264,19 @@ export default function SignupPage() {
       <div className="w-full lg:w-1/2 h-full flex items-center justify-center px-6 py-6 sm:px-10 lg:px-12 lg:py-6 bg-white overflow-y-auto">
         <div className="w-full max-w-md my-auto space-y-3.5">
           <div className="text-center lg:text-left">
+            <Link href="/login" className="inline-block mb-3 sm:mb-4">
+              <img
+                src="/lms/images/Logo.png"
+                alt="StrideNex Logo"
+                className="h-8 sm:h-9 w-auto object-contain"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (target.src.includes('/lms/')) {
+                    target.src = '/images/Logo.png';
+                  }
+                }}
+              />
+            </Link>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               Create an account
             </h2>

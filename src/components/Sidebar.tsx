@@ -663,9 +663,15 @@ export default function Sidebar({
           <Link href="/dashboard" className="flex items-center group py-2">
             {isExpanded ? (
               <img
-                src="/images/Logo.png"
+                src="/lms/images/Logo.png"
                 alt="StrideNex Logo"
                 className="h-8 w-auto max-w-[155px] object-contain transition-opacity duration-200 group-hover:opacity-85"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (target.src.includes('/lms/')) {
+                    target.src = '/images/Logo.png';
+                  }
+                }}
               />
             ) : (
               <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-black text-xl shadow-md shadow-indigo-500/20 shrink-0 transition-opacity duration-200 group-hover:opacity-90">
