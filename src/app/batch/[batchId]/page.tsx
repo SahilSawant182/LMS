@@ -6,7 +6,6 @@ import {
   getBatchDetails, 
   getBatchCourses, 
   getBatchFeedback, 
-  enrollStudent, 
   getEnrolledStudents,
   createBatchFeedback,
   deleteBatchFeedback,
@@ -221,42 +220,53 @@ export default function BatchDetailsPage() {
     fetchStudents();
   }, [isInstructor, batchId]);
 
-  const handleEnroll = async () => {
+  const handleEnroll = async (): Promise<boolean> => {
     if (!userEmail) {
-      alert("You must be logged in to enroll.");
+      showToast.dismissAll();
+      showToast.info("You must be logged in to enroll.");
       const redirectUrl = `/batch/${batchId}`;
       router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
-      return;
+      return false;
     }
     setEnrolling(true);
     try {
-      try {
-        await enrollInBatch({ batch: batchId });
-      } catch (primaryErr) {
-        // Fallback to legacy enrollStudent
-        await enrollStudent({ member: userEmail, batch: batchId });
-      }
+      await enrollInBatch({ batch: batchId });
 
+      showToast.dismissAll();
       setEnrollSuccess(true);
-      alert("Successfully enrolled in batch!");
+      setEnrollmentData((prev: any) => ({ ...(prev || {}), is_enrolled: true }));
+      showToast.success("Successfully enrolled in batch!");
+
+      // Refresh enrollment details in background
+      getBatchWithEnrollment(batchId).then((res) => {
+        if (res) setEnrollmentData(res);
+      }).catch(() => {});
+
+      return true;
     } catch (err: any) {
-      console.error(err);
-      let errorMsg = "Failed to enroll";
+      console.error("Batch enrollment error:", err);
+      showToast.dismissAll();
+      let errorMsg = "Failed to enroll in batch.";
       
-      if (err?.response?.data) {
-        const data = err.response.data;
-        if (data.message) {
-          if (typeof data.message === 'string') {
-            errorMsg = data.message;
-          } else if (typeof data.message === 'object' && typeof data.message.message === 'string') {
-            errorMsg = data.message.message;
+      const resData = err?.response?.data || err?.data;
+      if (resData) {
+        if (typeof resData === "string") {
+          errorMsg = resData;
+        } else if (resData.message) {
+          if (typeof resData.message === "string") {
+            errorMsg = resData.message;
+          } else if (typeof resData.message === "object") {
+            errorMsg = resData.message.message || resData.message.error || errorMsg;
           }
-        } else if (data._server_messages) {
+        } else if (resData.exception) {
+          const parts = String(resData.exception).split(":");
+          errorMsg = parts.length > 1 ? parts.slice(1).join(":").trim() : resData.exception;
+        } else if (resData._server_messages) {
           try {
-            const serverMsgs = JSON.parse(data._server_messages);
+            const serverMsgs = JSON.parse(resData._server_messages);
             if (Array.isArray(serverMsgs) && serverMsgs.length > 0) {
-              const parsed = JSON.parse(serverMsgs[0]);
-              errorMsg = parsed.message || errorMsg;
+              const parsed = typeof serverMsgs[0] === "string" ? JSON.parse(serverMsgs[0]) : serverMsgs[0];
+              errorMsg = parsed?.message || errorMsg;
             }
           } catch (e) {}
         }
@@ -264,7 +274,12 @@ export default function BatchDetailsPage() {
         errorMsg = err.message;
       }
       
-      alert(errorMsg);
+      if (typeof errorMsg === "string") {
+        errorMsg = errorMsg.replace(/<[^>]*>?/gm, "").trim();
+      }
+
+      showToast.error(errorMsg);
+      return false;
     } finally {
       setEnrolling(false);
     }
@@ -277,16 +292,17 @@ export default function BatchDetailsPage() {
     );
   };
 
-  const handleOpenFeedbackModal = (existing?: any) => {
+  const handleOpenFeedbackModal = (existing?: any, isAlreadyEnrolled = false) => {
     if (!userEmail) {
+      showToast.dismissAll();
       showToast.info("Please log in to submit your batch feedback.");
       const redirectUrl = `/batch/${batchId}#feedback`;
       router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
       return;
     }
 
-    if (!checkIsEnrolled()) {
-      showToast.error("You must be enrolled in this batch to give feedback.");
+    if (!isAlreadyEnrolled && !checkIsEnrolled()) {
+      showToast.dismissAll();
       setIsEnrollPromptOpen(true);
       return;
     }
@@ -1537,9 +1553,11 @@ export default function BatchDetailsPage() {
                   type="button"
                   disabled={enrolling}
                   onClick={async () => {
-                    setIsEnrollPromptOpen(false);
-                    await handleEnroll();
-                    handleOpenFeedbackModal();
+                    const enrolled = await handleEnroll();
+                    if (enrolled) {
+                      setIsEnrollPromptOpen(false);
+                      handleOpenFeedbackModal(undefined, true);
+                    }
                   }}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm hover:shadow-indigo-500/25 cursor-pointer"
                 >

@@ -14,6 +14,7 @@ export interface ToastItem {
 }
 
 const TOAST_EVENT = "stride_lms_toast_event";
+const TOAST_CLEAR_EVENT = "stride_lms_toast_clear_event";
 
 export const showToast = {
   success: (message: string, title?: string, duration = 5000) => {
@@ -27,6 +28,11 @@ export const showToast = {
   },
   warning: (message: string, title?: string, duration = 5000) => {
     emitToast({ type: "warning", message, title, duration });
+  },
+  dismissAll: () => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(TOAST_CLEAR_EVENT));
+    }
   },
 };
 
@@ -66,11 +72,17 @@ export function ToastContainer() {
       }
     };
 
+    const handleClearToasts = () => {
+      setToasts([]);
+    };
+
     window.addEventListener(TOAST_EVENT, handleNewToast);
+    window.addEventListener(TOAST_CLEAR_EVENT, handleClearToasts);
 
     return () => {
       window.alert = originalAlert;
       window.removeEventListener(TOAST_EVENT, handleNewToast);
+      window.removeEventListener(TOAST_CLEAR_EVENT, handleClearToasts);
     };
   }, []);
 

@@ -336,8 +336,18 @@ const apiRequest = async (config: AxiosRequestConfig) => {
   try {
     const response = await api({ ...config, headers, params });
     
-    if (response.data?.message?.success === false || response.data?.success === false) {
-      const errorMessage = response.data?.message?.message || response.data?.message || "Operation failed";
+    const msgStatus = Number(response.data?.message?.status ?? response.data?.status);
+    if (
+      response.data?.message?.success === false ||
+      response.data?.success === false ||
+      (!isNaN(msgStatus) && msgStatus >= 400)
+    ) {
+      const errorMessage =
+        response.data?.message?.message ||
+        response.data?.message?.error ||
+        response.data?.message ||
+        response.data?.error ||
+        "Operation failed";
       
       interface CustomApiError extends Error {
         status?: number;
@@ -347,7 +357,7 @@ const apiRequest = async (config: AxiosRequestConfig) => {
       
       const customError: CustomApiError = new Error(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
       
-      customError.status = 400; // Mock status
+      customError.status = !isNaN(msgStatus) && msgStatus >= 400 ? msgStatus : 400;
       customError.response = { data: response.data };
       customError.isCustomApiError = true;
       throw customError;
@@ -384,7 +394,7 @@ const apiRequest = async (config: AxiosRequestConfig) => {
         if (typeof data.message === 'string') {
           errMessage = data.message;
         } else if (typeof data.message === 'object') {
-          errMessage = data.message.message || JSON.stringify(data.message);
+          errMessage = data.message.message || data.message.error || JSON.stringify(data.message);
         }
       } else if (typeof data.exception === 'string') {
         const parts = data.exception.split(':');

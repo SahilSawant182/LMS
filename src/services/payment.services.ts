@@ -184,9 +184,21 @@ export const getMyPayments = async (params?: {
  * Endpoint: POST /api/method/lms.lms.stride_lms.enroll_in_batch_api
  */
 export const enrollInBatch = async (payload: { batch: string }): Promise<{ batch: string; member: string }> => {
-  const res = await apiService.post(`${METHOD_PREFIX}.enroll_in_batch_api`, payload, {
+  const res: any = await apiService.post(`${METHOD_PREFIX}.enroll_in_batch_api`, payload, {
     headers: authHeaders(),
   });
+  const msgObj = res?.message || res;
+  if (msgObj && typeof msgObj === "object") {
+    const status = Number(msgObj.status);
+    if (!isNaN(status) && status >= 400) {
+      const errMsg = typeof msgObj.message === "string" ? msgObj.message : "Failed to enroll in batch.";
+      throw new Error(errMsg);
+    }
+    if (msgObj.success === false) {
+      const errMsg = typeof msgObj.message === "string" ? msgObj.message : "Failed to enroll in batch.";
+      throw new Error(errMsg);
+    }
+  }
   return extractData<{ batch: string; member: string }>(res);
 };
 
