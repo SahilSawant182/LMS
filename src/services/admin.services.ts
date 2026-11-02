@@ -21,6 +21,8 @@ export interface AdminCourseData {
   modified?: string;
   short_introduction?: string | null;
   image?: string | null;
+  enrollment_count?: number;
+  completion_rate?: number;
 }
 
 export interface StudentEnrolledCourseData {
@@ -34,6 +36,28 @@ export interface StudentEnrolledCourseData {
   published?: number | boolean;
   image?: string | null;
   short_introduction?: string | null;
+}
+
+export interface CourseEnrollmentStudentData {
+  enrollment: string;
+  member: string;
+  course: string;
+  progress?: number | null;
+  enrollment_status?: string | null;
+  creation?: string;
+  full_name?: string | null;
+  email?: string;
+  enabled?: number | boolean;
+}
+
+export interface CourseEnrollmentStudentsResponse {
+  status: string;
+  course: string;
+  total: number;
+  count: number;
+  limit: number;
+  start: number;
+  data: CourseEnrollmentStudentData[];
 }
 
 export interface AdminCourseListParams {
@@ -130,6 +154,30 @@ export const getStudentEnrolledCourses = async (
     count: Number(payload?.count ?? (Array.isArray(payload?.data) ? payload.data.length : 0)),
     limit: Number(payload?.limit ?? 20),
     start: Number(payload?.start ?? 0),
+    data: Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [],
+  };
+};
+
+/**
+ * Fetch students enrolled in a specific course with progress and enrollment details
+ */
+export const getCourseEnrollmentStudents = async (
+  courseSlug: string,
+  limit: number = 50,
+  start: number = 0
+): Promise<CourseEnrollmentStudentsResponse> => {
+  const res: any = await apiService.get("method/lms.lms.admin.get_course_enrollment_students", {
+    params: { course: courseSlug, limit, start },
+  });
+
+  const payload = res?.message || res?.data || res;
+  return {
+    status: payload?.status || "success",
+    course: payload?.course || courseSlug,
+    total: Number(payload?.total ?? (Array.isArray(payload?.data) ? payload.data.length : 0)),
+    count: Number(payload?.count ?? (Array.isArray(payload?.data) ? payload.data.length : 0)),
+    limit: Number(payload?.limit ?? limit),
+    start: Number(payload?.start ?? start),
     data: Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [],
   };
 };
