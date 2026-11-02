@@ -2,7 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   basePath: '/lms',
-  assetPrefix: process.env.NODE_ENV === 'production' ? 'https://lms.stridenex.ai' : undefined,
   allowedDevOrigins: ['192.168.31.30', '192.168.1.20', 'localhost', '*.loca.lt'],
   async redirects() {
     return [
