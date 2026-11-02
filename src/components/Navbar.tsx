@@ -649,7 +649,11 @@ export default function Navbar() {
                         <p className="text-[11px] font-medium text-slate-500 mt-0.5">
                           Mode: <span className="font-semibold text-indigo-600 capitalize">{viewMode}</span>
                         </p>
-                      ) : null}
+                      ) : (
+                        <p className="text-[11px] font-medium text-slate-500 mt-0.5">
+                          Role: <span className="font-semibold text-emerald-600">Learner</span>
+                        </p>
+                      )}
                     </div>
 
                     {/* Switch to Admin Dashboard if user is Admin */}
