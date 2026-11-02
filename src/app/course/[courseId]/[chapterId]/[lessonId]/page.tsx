@@ -1839,7 +1839,13 @@ export default function LessonPage() {
   
   // Pricing and preview info
   const coursePrice = courseData?.course_price ?? 0;
+  const rawPaywallActual = Number(courseData?.actual_price || 0);
+  const rawPaywallDiscount = Number(courseData?.discount_price || 0);
+  const hasPaywallActual = !isNaN(rawPaywallActual) && rawPaywallActual > 0;
+  const hasPaywallDiscount = !isNaN(rawPaywallDiscount) && rawPaywallDiscount > 0;
+  const hasBothPaywall = hasPaywallActual && hasPaywallDiscount;
   const currencySymbol = courseData?.currency === "INR" || !courseData?.currency ? "₹" : courseData.currency;
+  const responsePaywallPrice = courseData?.price || (coursePrice > 0 ? `${currencySymbol} ${coursePrice.toLocaleString("en-IN")}` : "Free");
   const previewLesson = flatLessons.find(l => l.isPreview);
 
   if (loading) {
@@ -2229,6 +2235,31 @@ export default function LessonPage() {
                     {paywallMessage}
                   </p>
 
+                  {/* Price Tag if available */}
+                  {(hasBothPaywall || coursePrice > 0 || courseData?.price) && (
+                    <div className="flex items-baseline justify-center gap-3 mb-6 flex-wrap">
+                      {hasBothPaywall ? (
+                        <>
+                          <span className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                            {currencySymbol} {rawPaywallDiscount.toLocaleString("en-IN")}
+                          </span>
+                          <span className="text-slate-400 line-through text-base md:text-lg font-medium">
+                            {currencySymbol} {rawPaywallActual.toLocaleString("en-IN")}
+                          </span>
+                          {rawPaywallActual > rawPaywallDiscount && (
+                            <span className="inline-flex items-center text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full">
+                              {Math.round(((rawPaywallActual - rawPaywallDiscount) / rawPaywallActual) * 100)}% OFF
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                          {responsePaywallPrice}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {/* Action Buttons */}
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                     <button
@@ -2236,7 +2267,7 @@ export default function LessonPage() {
                       className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-indigo-600 via-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold text-sm md:text-base rounded-xl shadow-lg shadow-indigo-600/25 transition-all transform hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <Lock className="w-4 h-4 text-amber-300" />
-                      {coursePrice > 0 ? `Unlock Course for ${currencySymbol} ${coursePrice.toLocaleString("en-IN")}` : "Unlock Course"}
+                      Unlock Course for {hasBothPaywall ? `${currencySymbol} ${rawPaywallDiscount.toLocaleString("en-IN")}` : responsePaywallPrice}
                       <ArrowRight className="w-4 h-4" />
                     </button>
 

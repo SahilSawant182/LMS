@@ -414,6 +414,8 @@ export default function CoursesPage() {
                             ? "Completed"
                             : course.is_enrolled
                             ? "Enrolled"
+                            : course.price
+                            ? String(course.price)
                             : course.paid_course || course.is_paid
                             ? `${course.currency === "INR" ? "₹" : course.currency || "₹"} ${Number(
                                 course.course_price || 0

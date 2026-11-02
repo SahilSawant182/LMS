@@ -786,20 +786,58 @@ export default function CourseDetailPage() {
 
 
 
-  const isPaid = enrollmentData?.is_paid !== undefined
-    ? Boolean(enrollmentData.is_paid)
-    : Boolean(details?.paid_course && (Number(details?.course_price) > 0 || Number(details?.actual_price) > 0 || Number(details?.discount_price) > 0));
-  const currentPrice = enrollmentData?.course_price !== undefined
-    ? Number(enrollmentData.course_price)
-    : Number(details?.discount_price || details?.course_price || details?.amount_usd || details?.actual_price || 0);
-  const rawActualPrice = Number(details?.actual_price || 0);
-  const rawDiscountPrice = Number(details?.discount_price || 0);
-  const displayActualPrice = rawActualPrice > 0 ? rawActualPrice : 0;
-  const displayFinalPrice = rawDiscountPrice > 0 ? rawDiscountPrice : currentPrice;
+  const rawActual = details?.actual_price !== undefined && details?.actual_price !== null && details?.actual_price !== ''
+    ? Number(details.actual_price)
+    : (enrollmentData?.actual_price !== undefined && enrollmentData?.actual_price !== null && enrollmentData?.actual_price !== ''
+        ? Number(enrollmentData.actual_price)
+        : 0);
+  const numActual = !isNaN(rawActual) && rawActual > 0 ? rawActual : 0;
+  const hasActual = numActual > 0;
+
+  const rawDiscount = details?.discount_price !== undefined && details?.discount_price !== null && details?.discount_price !== ''
+    ? Number(details.discount_price)
+    : (enrollmentData?.discount_price !== undefined && enrollmentData?.discount_price !== null && enrollmentData?.discount_price !== ''
+        ? Number(enrollmentData.discount_price)
+        : 0);
+  const numDiscount = !isNaN(rawDiscount) && rawDiscount > 0 ? rawDiscount : 0;
+  const hasDiscount = numDiscount > 0;
+
+  // Only display actual and discount price if response contains non-zero values for both
+  const hasBothActualAndDiscount = hasActual && hasDiscount;
+
   const currencySymbol = (enrollmentData?.currency === "INR" || details?.currency === "INR")
     ? "₹"
     : (enrollmentData?.currency || details?.currency || "₹");
-  const isFree = !isPaid || displayFinalPrice === 0;
+
+  // Price from response price field, course_price, or amount
+  const responsePriceStr = typeof details?.price === 'string' && details.price.trim()
+    ? details.price.trim()
+    : (typeof enrollmentData?.price === 'string' && enrollmentData.price.trim()
+        ? enrollmentData.price.trim()
+        : null);
+
+  const responsePriceNum = Number(
+    details?.course_price ?? 
+    enrollmentData?.course_price ?? 
+    (typeof details?.price === 'number' ? details.price : 0) ??
+    details?.amount ?? 
+    details?.amount_usd ?? 
+    0
+  );
+
+  const formattedResponsePrice = responsePriceStr 
+    || (responsePriceNum > 0 ? `${currencySymbol} ${responsePriceNum.toLocaleString("en-IN")}` : "Free");
+
+  const displayActualPrice = numActual;
+  const displayFinalPrice = hasBothActualAndDiscount
+    ? numDiscount
+    : (responsePriceNum > 0 ? responsePriceNum : 0);
+
+  const isPaid = enrollmentData?.is_paid !== undefined
+    ? Boolean(enrollmentData.is_paid)
+    : Boolean(details?.paid_course || hasBothActualAndDiscount || responsePriceNum > 0);
+
+  const isFree = !isPaid || (!hasBothActualAndDiscount && responsePriceNum === 0 && (!responsePriceStr || responsePriceStr.toLowerCase() === 'free'));
 
   // Normalized progress calculations from backend sources
   const normalizedProgress = progress?.message?.data || progress?.data || progress?.message || progress || {};
@@ -2186,13 +2224,29 @@ export default function CourseDetailPage() {
               {/* Price & CTA */}
               <div className="mb-6">
                 {isInstructor ? (
-                  <div className="flex flex-col gap-1 mb-3">
+                  <div className="flex flex-col gap-1.5 mb-3">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80 w-fit">
                       <GraduationCap className="w-3.5 h-3.5 text-indigo-600" /> Instructor View
                     </span>
-                    <span className="text-2xl font-black text-slate-900 mt-1">
-                      {isFree ? 'Free Course' : `${currencySymbol} ${currentPrice.toLocaleString("en-IN")}`}
-                    </span>
+                    {hasBothActualAndDiscount ? (
+                      <div className="flex items-baseline gap-3 mt-1 flex-wrap">
+                        <span className="text-slate-400 line-through text-base sm:text-lg font-medium">
+                          {currencySymbol} {numActual.toLocaleString("en-IN")}
+                        </span>
+                        <span className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                          {currencySymbol} {numDiscount.toLocaleString("en-IN")}
+                        </span>
+                        {numActual > numDiscount && (
+                          <span className="inline-flex items-center text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-md">
+                            {Math.round(((numActual - numDiscount) / numActual) * 100)}% OFF
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-2xl font-black text-slate-900 mt-1">
+                        {formattedResponsePrice}
+                      </span>
+                    )}
                   </div>
                 ) : isUserEnrolled ? (
                   <div className="flex items-center gap-2 mb-3">
@@ -2201,13 +2255,24 @@ export default function CourseDetailPage() {
                     </span>
                   </div>
                 ) : (
-                  <div className="flex items-end gap-2.5 mb-2 flex-wrap">
-                    <span className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                      {isFree ? 'Free' : `${currencySymbol} ${displayFinalPrice.toLocaleString("en-IN")}`}
-                    </span>
-                    {!isFree && displayActualPrice > 0 && displayActualPrice > displayFinalPrice && (
-                      <span className="text-slate-400 line-through text-sm font-medium mb-1">
-                        {currencySymbol} {displayActualPrice.toLocaleString("en-IN")}
+                  <div className="flex items-baseline gap-3 mb-3 flex-wrap">
+                    {hasBothActualAndDiscount ? (
+                      <>
+                        <span className="text-slate-400 line-through text-lg sm:text-xl font-medium">
+                          {currencySymbol} {numActual.toLocaleString("en-IN")}
+                        </span>
+                        <span className="text-3xl font-black text-slate-900 tracking-tight">
+                          {currencySymbol} {numDiscount.toLocaleString("en-IN")}
+                        </span>
+                        {numActual > numDiscount && (
+                          <span className="inline-flex items-center text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full">
+                            {Math.round(((numActual - numDiscount) / numActual) * 100)}% OFF
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-3xl font-black text-slate-900 tracking-tight">
+                        {formattedResponsePrice}
                       </span>
                     )}
                   </div>
@@ -2383,7 +2448,7 @@ export default function CourseDetailPage() {
                     {isUserEnrolled
                       ? 'Continue Learning'
                       : isPaid && !isFree
-                        ? `Buy Now for ${currencySymbol} ${displayFinalPrice.toLocaleString("en-IN")}`
+                        ? `Buy Now for ${hasBothActualAndDiscount ? `${currencySymbol} ${numDiscount.toLocaleString("en-IN")}` : formattedResponsePrice}`
                         : (enrollLoading ? 'Enrolling...' : 'Enroll for Free')}
                     <ChevronRight className="w-4 h-4" />
                   </button>
