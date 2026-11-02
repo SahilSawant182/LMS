@@ -23,6 +23,11 @@ export interface CourseCardProps {
   lessons?: number;
   status?: string;
   price?: string;
+  actual_price?: number | string;
+  actualPrice?: number | string;
+  discount_price?: number | string;
+  discountPrice?: number | string;
+  currency?: string;
   cardGradient?: string;
   description?: string;
   isEnrolled?: boolean;
@@ -49,6 +54,11 @@ export default function CourseCard({
   lessons,
   status,
   price,
+  actual_price,
+  actualPrice,
+  discount_price,
+  discountPrice,
+  currency,
   cardGradient,
   description,
   isEnrolled = false,
@@ -65,6 +75,24 @@ export default function CourseCard({
 }: CourseCardProps) {
   const [videoModalOpen, setVideoModalOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
+
+  const rawActual = actual_price !== undefined ? actual_price : actualPrice;
+  const numActual = rawActual !== undefined && rawActual !== null && rawActual !== '' ? Number(rawActual) : 0;
+  const hasActual = !isNaN(numActual) && numActual > 0;
+
+  const rawDiscount = discount_price !== undefined ? discount_price : discountPrice;
+  const numDiscount = rawDiscount !== undefined && rawDiscount !== null && rawDiscount !== '' ? Number(rawDiscount) : 0;
+  const hasDiscount = !isNaN(numDiscount) && numDiscount > 0;
+
+  const parsedPriceNum = typeof price === 'string'
+    ? Number(price.replace(/[^0-9.]/g, ''))
+    : (typeof price === 'number' ? price : 0);
+  const effectiveDiscount = hasDiscount
+    ? numDiscount
+    : (hasActual && parsedPriceNum > 0 && parsedPriceNum < numActual ? parsedPriceNum : 0);
+  const effectiveHasDiscount = effectiveDiscount > 0;
+
+  const curr = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '₹';
 
   const isCertificateAchieved = Boolean(
     certificateAchieved ||
@@ -290,6 +318,23 @@ export default function CourseCard({
           ) : enrolled ? (
             <span className="font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full text-xs border border-emerald-200 group-hover:bg-emerald-100 transition-colors flex items-center gap-1">
               Continue Learning <ArrowRight className="w-3.5 h-3.5 ml-0.5 transform group-hover:translate-x-0.5 transition-transform" />
+            </span>
+          ) : hasActual && effectiveHasDiscount ? (
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <span className="line-through text-slate-400 text-xs font-semibold">
+                {curr} {numActual.toLocaleString('en-IN')}
+              </span>
+              <span className="font-black text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full text-xs sm:text-sm border border-indigo-200/80 shadow-2xs group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600 transition-all">
+                {curr} {effectiveDiscount.toLocaleString('en-IN')}
+              </span>
+            </div>
+          ) : effectiveHasDiscount ? (
+            <span className="font-black text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full text-xs sm:text-sm border border-indigo-200/80 shadow-2xs group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600 transition-all">
+              {curr} {effectiveDiscount.toLocaleString('en-IN')}
+            </span>
+          ) : hasActual ? (
+            <span className="font-bold text-gray-900 bg-gray-50 px-3 py-1 rounded-full text-xs sm:text-sm border border-gray-100 group-hover:bg-indigo-50 group-hover:text-indigo-700 transition-colors">
+              {curr} {numActual.toLocaleString('en-IN')}
             </span>
           ) : price ? (
             <span className="font-bold text-gray-900 bg-gray-50 px-3 py-1 rounded-full text-sm border border-gray-100 group-hover:bg-indigo-50 group-hover:text-indigo-700 transition-colors">{price}</span>

@@ -50,10 +50,12 @@ export default function EditCoursePage() {
             featured: data.featured ?? 1,
             disable_self_learning: data.disable_self_learning ?? 0,
             enforce_lesson_completion: data.enforce_lesson_completion ?? 0,
-            paid_course: data.paid_course ?? (Number(data.course_price || 0) > 0 ? 1 : 0),
+            paid_course: data.paid_course ?? ((Number(data.course_price || 0) > 0 || Number(data.actual_price || 0) > 0 || Number(data.discount_price || 0) > 0) ? 1 : 0),
             paid_certificate: data.paid_certificate ?? 0,
             enable_certification: data.enable_certification ?? 1,
             course_price: data.course_price !== undefined ? data.course_price : 0,
+            actual_price: data.actual_price !== undefined ? data.actual_price : 0,
+            discount_price: data.discount_price !== undefined ? data.discount_price : 0,
             currency: data.currency || 'INR',
             amount_usd: data.amount_usd !== undefined ? data.amount_usd : 0,
           });

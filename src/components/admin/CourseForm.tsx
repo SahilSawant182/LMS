@@ -50,6 +50,8 @@ interface CourseFormProps {
     paid_certificate?: number;
     enable_certification?: number;
     course_price?: number;
+    actual_price?: number;
+    discount_price?: number;
     currency?: string;
     amount_usd?: number;
   };
@@ -100,10 +102,12 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
     featured: Boolean(initialData?.featured !== undefined ? initialData?.featured : 1),
     disable_self_learning: Boolean(initialData?.disable_self_learning),
     enforce_lesson_completion: Boolean(initialData?.enforce_lesson_completion),
-    paid_course: Boolean(initialData?.paid_course || (Number(initialData?.course_price || 0) > 0)),
+    paid_course: Boolean(initialData?.paid_course || (Number(initialData?.course_price || 0) > 0) || (Number(initialData?.actual_price || 0) > 0) || (Number(initialData?.discount_price || 0) > 0)),
     paid_certificate: Boolean(initialData?.paid_certificate),
     enable_certification: Boolean(initialData?.enable_certification !== undefined ? initialData?.enable_certification : 1),
     course_price: initialData?.course_price !== undefined ? initialData.course_price : 0,
+    actual_price: initialData?.actual_price !== undefined ? initialData.actual_price : 0,
+    discount_price: initialData?.discount_price !== undefined ? initialData.discount_price : 0,
     currency: initialData?.currency || 'INR',
     amount_usd: initialData?.amount_usd !== undefined ? initialData.amount_usd : 0,
   });
@@ -145,10 +149,12 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
         featured: Boolean(initialData.featured !== undefined ? initialData.featured : 1),
         disable_self_learning: Boolean(initialData.disable_self_learning),
         enforce_lesson_completion: Boolean(initialData.enforce_lesson_completion),
-        paid_course: Boolean(initialData.paid_course || (Number(initialData.course_price || 0) > 0)),
+        paid_course: Boolean(initialData.paid_course || (Number(initialData.course_price || 0) > 0) || (Number(initialData.actual_price || 0) > 0) || (Number(initialData.discount_price || 0) > 0)),
         paid_certificate: Boolean(initialData.paid_certificate),
         enable_certification: Boolean(initialData.enable_certification !== undefined ? initialData.enable_certification : 1),
         course_price: initialData.course_price !== undefined ? initialData.course_price : 0,
+        actual_price: initialData.actual_price !== undefined ? initialData.actual_price : 0,
+        discount_price: initialData.discount_price !== undefined ? initialData.discount_price : 0,
         currency: initialData.currency || 'INR',
         amount_usd: initialData.amount_usd !== undefined ? initialData.amount_usd : 0,
       });
@@ -195,11 +201,12 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked;
       setFormData(prev => ({ ...prev, [name]: checked }));
-    } else if (name === 'course_price' || name === 'amount_usd') {
+    } else if (name === 'course_price' || name === 'amount_usd' || name === 'actual_price' || name === 'discount_price') {
+      const numVal = Number(value);
       setFormData(prev => ({
         ...prev,
         [name]: value,
-        ...(name === 'course_price' && Number(value) > 0 ? { paid_course: true } : {})
+        ...(numVal > 0 ? { paid_course: true } : {})
       }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
@@ -248,9 +255,17 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
       const courseId = formData.name || initialData?.name || initialData?.course || '';
       const rawPrice = Number(formData.course_price);
       const parsedPrice = isNaN(rawPrice) ? 0 : rawPrice;
+      const rawActual = Number(formData.actual_price);
+      const parsedActualPrice = isNaN(rawActual) ? 0 : rawActual;
+      const rawDiscount = Number(formData.discount_price);
+      const parsedDiscountPrice = isNaN(rawDiscount) ? 0 : rawDiscount;
       const rawUsd = Number(formData.amount_usd);
       const parsedUsd = isNaN(rawUsd) ? 0 : rawUsd;
-      const isPaid = Boolean(formData.paid_course || parsedPrice > 0);
+      const isPaid = Boolean(formData.paid_course || parsedPrice > 0 || parsedActualPrice > 0 || parsedDiscountPrice > 0);
+
+      const effectiveCoursePrice = parsedDiscountPrice > 0
+        ? parsedDiscountPrice
+        : (parsedActualPrice > 0 ? parsedActualPrice : parsedPrice);
 
       const isPublished = forcePublished !== undefined ? forcePublished : Boolean(formData.published);
       const todayStr = new Date().toISOString().split('T')[0];
@@ -280,7 +295,9 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
         paid_course: isPaid ? 1 : 0,
         paid_certificate: formData.paid_certificate ? 1 : 0,
         enable_certification: formData.enable_certification ? 1 : 0,
-        course_price: isPaid ? parsedPrice : 0,
+        course_price: isPaid ? effectiveCoursePrice : 0,
+        actual_price: isPaid ? parsedActualPrice : 0,
+        discount_price: isPaid ? parsedDiscountPrice : 0,
         currency: formData.currency || 'INR',
         amount_usd: isPaid ? parsedUsd : 0,
       };
@@ -710,11 +727,24 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
                     {formData.short_introduction || 'Learn essential concepts with hands-on practice.'}
                   </p>
                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-xs font-bold">
-                    <span className="text-indigo-600">
-                      {formData.paid_course && formData.course_price > 0
-                        ? `${formData.currency} ${formData.course_price}`
-                        : 'Free Course'}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {formData.paid_course && (Number(formData.actual_price) > 0 || Number(formData.discount_price) > 0 || Number(formData.course_price) > 0) ? (
+                        <>
+                          {Number(formData.actual_price) > 0 && (
+                            <span className="line-through text-slate-400 text-[11px] font-semibold">
+                              {formData.currency} {Number(formData.actual_price)}
+                            </span>
+                          )}
+                          <span className="text-indigo-600 font-extrabold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                            {formData.currency} {Number(formData.discount_price) > 0
+                              ? Number(formData.discount_price)
+                              : (Number(formData.actual_price) > 0 ? Number(formData.actual_price) : Number(formData.course_price))}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-indigo-600">Free Course</span>
+                      )}
+                    </div>
                     <span className="text-[10px] text-slate-400 font-normal">
                       {formData.published ? 'Published' : 'Draft'}
                     </span>
@@ -758,55 +788,98 @@ export default function CourseForm({ initialData, isEditing = false }: CourseFor
           </div>
 
           {formData.paid_course ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 animate-fade-in">
-              <div>
-                <label htmlFor="course_price" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Price ({formData.currency})
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  id="course_price"
-                  name="course_price"
-                  value={formData.course_price}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-bold text-slate-900"
-                />
+            <div className="space-y-5 animate-fade-in">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div>
+                  <label htmlFor="actual_price" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    Actual Price ({formData.currency})
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    id="actual_price"
+                    name="actual_price"
+                    placeholder="e.g. 999"
+                    value={formData.actual_price}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-bold text-slate-900"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">Original price (will appear struck through)</p>
+                </div>
+
+                <div>
+                  <label htmlFor="discount_price" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    Discount Price ({formData.currency})
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    id="discount_price"
+                    name="discount_price"
+                    placeholder="e.g. 499"
+                    value={formData.discount_price}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-bold text-slate-900"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">Highlighted offer price shown to learners</p>
+                </div>
+
+                <div>
+                  <label htmlFor="course_price" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    Base Price ({formData.currency})
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    id="course_price"
+                    name="course_price"
+                    placeholder="e.g. 499"
+                    value={formData.course_price}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-bold text-slate-900"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">Default course checkout price</p>
+                </div>
               </div>
 
-              <div>
-                <label htmlFor="currency" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Currency
-                </label>
-                <select
-                  id="currency"
-                  name="currency"
-                  value={formData.currency}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-medium text-slate-900"
-                >
-                  <option value="INR">INR (₹)</option>
-                  <option value="USD">USD ($)</option>
-                  <option value="EUR">EUR (€)</option>
-                  <option value="GBP">GBP (£)</option>
-                </select>
-              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2 border-t border-slate-100">
+                <div>
+                  <label htmlFor="currency" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    Currency
+                  </label>
+                  <select
+                    id="currency"
+                    name="currency"
+                    value={formData.currency}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-medium text-slate-900"
+                  >
+                    <option value="INR">INR (₹)</option>
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="GBP">GBP (£)</option>
+                  </select>
+                </div>
 
-              <div>
-                <label htmlFor="amount_usd" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Price in USD ($)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  id="amount_usd"
-                  name="amount_usd"
-                  value={formData.amount_usd}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-bold text-slate-900"
-                />
+                <div>
+                  <label htmlFor="amount_usd" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    Price in USD ($)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    id="amount_usd"
+                    name="amount_usd"
+                    value={formData.amount_usd}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-bold text-slate-900"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">For international learners paying in USD</p>
+                </div>
               </div>
             </div>
           ) : (

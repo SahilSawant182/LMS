@@ -788,14 +788,18 @@ export default function CourseDetailPage() {
 
   const isPaid = enrollmentData?.is_paid !== undefined
     ? Boolean(enrollmentData.is_paid)
-    : Boolean(details?.paid_course && Number(details?.course_price) > 0);
+    : Boolean(details?.paid_course && (Number(details?.course_price) > 0 || Number(details?.actual_price) > 0 || Number(details?.discount_price) > 0));
   const currentPrice = enrollmentData?.course_price !== undefined
     ? Number(enrollmentData.course_price)
-    : Number(details?.course_price || details?.amount_usd || 0);
+    : Number(details?.discount_price || details?.course_price || details?.amount_usd || details?.actual_price || 0);
+  const rawActualPrice = Number(details?.actual_price || 0);
+  const rawDiscountPrice = Number(details?.discount_price || 0);
+  const displayActualPrice = rawActualPrice > 0 ? rawActualPrice : 0;
+  const displayFinalPrice = rawDiscountPrice > 0 ? rawDiscountPrice : currentPrice;
   const currencySymbol = (enrollmentData?.currency === "INR" || details?.currency === "INR")
     ? "₹"
     : (enrollmentData?.currency || details?.currency || "₹");
-  const isFree = !isPaid || currentPrice === 0;
+  const isFree = !isPaid || displayFinalPrice === 0;
 
   // Normalized progress calculations from backend sources
   const normalizedProgress = progress?.message?.data || progress?.data || progress?.message || progress || {};
@@ -2197,13 +2201,13 @@ export default function CourseDetailPage() {
                     </span>
                   </div>
                 ) : (
-                  <div className="flex items-end gap-2 mb-2">
+                  <div className="flex items-end gap-2.5 mb-2 flex-wrap">
                     <span className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                      {isFree ? 'Free' : `${currencySymbol} ${currentPrice.toLocaleString("en-IN")}`}
+                      {isFree ? 'Free' : `${currencySymbol} ${displayFinalPrice.toLocaleString("en-IN")}`}
                     </span>
-                    {!isFree && (
+                    {!isFree && displayActualPrice > 0 && displayActualPrice > displayFinalPrice && (
                       <span className="text-slate-400 line-through text-sm font-medium mb-1">
-                        {currencySymbol} {Math.round(currentPrice * 1.5).toLocaleString("en-IN")}
+                        {currencySymbol} {displayActualPrice.toLocaleString("en-IN")}
                       </span>
                     )}
                   </div>
@@ -2379,7 +2383,7 @@ export default function CourseDetailPage() {
                     {isUserEnrolled
                       ? 'Continue Learning'
                       : isPaid && !isFree
-                        ? `Buy Now for ${currencySymbol} ${currentPrice.toLocaleString("en-IN")}`
+                        ? `Buy Now for ${currencySymbol} ${displayFinalPrice.toLocaleString("en-IN")}`
                         : (enrollLoading ? 'Enrolling...' : 'Enroll for Free')}
                     <ChevronRight className="w-4 h-4" />
                   </button>

@@ -889,6 +889,9 @@ export default function BatchDetailsPage() {
                           course.paid_certificate
                         )}
                         enable_certification={course.enable_certification}
+                        actual_price={course.actual_price}
+                        discount_price={course.discount_price}
+                        currency={course.currency}
                         price={course.paid_course ? `${course.currency || '$'} ${course.course_price || 0}` : 'Free'}
                       />
                     </Link>
@@ -937,6 +940,9 @@ export default function BatchDetailsPage() {
                         course.paid_certificate
                       )}
                       enable_certification={course.enable_certification}
+                      actual_price={course.actual_price}
+                      discount_price={course.discount_price}
+                      currency={course.currency}
                       price={course.paid_course ? `${course.currency || '$'} ${course.course_price || 0}` : 'Free'}
                     />
                   </Link>

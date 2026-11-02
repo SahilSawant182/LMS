@@ -52,6 +52,8 @@ export interface Course {
   paid_course: number;
   paid_certificate: number;
   course_price: number;
+  actual_price?: number;
+  discount_price?: number;
   currency: string | null;
   amount_usd: number;
   enable_certification: number;
@@ -848,6 +850,8 @@ export interface CreateCoursePayload {
   paid_certificate?: number;
   enable_certification?: number;
   course_price?: number;
+  actual_price?: number;
+  discount_price?: number;
   currency?: string;
   amount_usd?: number;
 }

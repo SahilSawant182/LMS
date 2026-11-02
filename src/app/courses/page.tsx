@@ -404,6 +404,9 @@ export default function CoursesPage() {
                           course.paid_certificate
                         )}
                         enable_certification={course.enable_certification}
+                        actual_price={course.actual_price}
+                        discount_price={course.discount_price}
+                        currency={course.currency || "INR"}
                         price={
                           !isInstructor && isCertAchieved
                             ? "Certificate Achieved"
