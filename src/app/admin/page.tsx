@@ -35,14 +35,17 @@ import {
   Mail,
   Hash,
   User,
+  Clock,
 } from "lucide-react";
 import {
   AdminUserData,
   AdminCourseData,
   StudentEnrolledCourseData,
+  CourseEnrollmentStudentData,
   getStudentInstructorUsers,
   getAdminCourseList,
   getStudentEnrolledCourses,
+  getCourseEnrollmentStudents,
   verifyAdminInstructorAccess,
 } from "@/services/admin.services";
 import { isAdminInstructor } from "@/services/auth.services";
@@ -102,6 +105,9 @@ function AdminDashboardContent() {
     "All" | "Paid" | "Free"
   >("All");
   const [courseOwnerFilter, setCourseOwnerFilter] = useState("All");
+  const [courseSortBy, setCourseSortBy] = useState<
+    "newest" | "most_enrolled" | "highest_completion" | "title"
+  >("newest");
   const [coursePage, setCoursePage] = useState(1);
   const courseLimit = 20;
 
@@ -112,22 +118,33 @@ function AdminDashboardContent() {
   const [enrolledCourses, setEnrolledCourses] = useState<StudentEnrolledCourseData[]>([]);
   const [drawerSearch, setDrawerSearch] = useState("");
 
-  // Close drawer on Escape key press
+  // Course Enrolled Students Drawer/Modal state
+  const [selectedCourseForStudents, setSelectedCourseForStudents] = useState<AdminCourseData | null>(null);
+  const [isCourseDrawerOpen, setIsCourseDrawerOpen] = useState(false);
+  const [loadingCourseStudents, setLoadingCourseStudents] = useState(false);
+  const [courseStudents, setCourseStudents] = useState<CourseEnrollmentStudentData[]>([]);
+  const [courseStudentSearch, setCourseStudentSearch] = useState("");
+  const [courseStudentProgressFilter, setCourseStudentProgressFilter] = useState<
+    "all" | "completed" | "in_progress" | "not_started"
+  >("all");
+
+  // Close drawers on Escape key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isDrawerOpen) {
-        setIsDrawerOpen(false);
+      if (e.key === "Escape") {
+        if (isDrawerOpen) setIsDrawerOpen(false);
+        if (isCourseDrawerOpen) setIsCourseDrawerOpen(false);
       }
     };
-    if (isDrawerOpen) {
+    if (isDrawerOpen || isCourseDrawerOpen) {
       window.addEventListener("keydown", handleKeyDown);
     }
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isDrawerOpen]);
+  }, [isDrawerOpen, isCourseDrawerOpen]);
 
-  // Filtered enrolled courses for drawer
+  // Filtered enrolled courses for student drawer
   const filteredEnrolledCourses = useMemo(() => {
     if (!drawerSearch.trim()) return enrolledCourses;
     const q = drawerSearch.toLowerCase();
@@ -146,6 +163,41 @@ function AdminDashboardContent() {
       );
     });
   }, [enrolledCourses, drawerSearch]);
+
+  // Filtered enrolled students for course drawer
+  const filteredCourseStudents = useMemo(() => {
+    let list = courseStudents;
+    if (courseStudentProgressFilter === "completed") {
+      list = list.filter((s) => Number(s.progress || 0) >= 100);
+    } else if (courseStudentProgressFilter === "in_progress") {
+      list = list.filter((s) => Number(s.progress || 0) > 0 && Number(s.progress || 0) < 100);
+    } else if (courseStudentProgressFilter === "not_started") {
+      list = list.filter((s) => !s.progress || Number(s.progress || 0) === 0);
+    }
+
+    if (!courseStudentSearch.trim()) return list;
+    const q = courseStudentSearch.toLowerCase();
+    return list.filter((s) => {
+      const name = (s.full_name || "").toLowerCase();
+      const email = (s.email || s.member || "").toLowerCase();
+      const enr = (s.enrollment || "").toLowerCase();
+      return name.includes(q) || email.includes(q) || enr.includes(q);
+    });
+  }, [courseStudents, courseStudentSearch, courseStudentProgressFilter]);
+
+  // Aggregated metrics for course students
+  const courseStudentsMetrics = useMemo(() => {
+    const total = courseStudents.length;
+    if (total === 0) return { total: 0, completed: 0, inProgress: 0, notStarted: 0, avgProgress: 0 };
+    const completed = courseStudents.filter((s) => Number(s.progress || 0) >= 100).length;
+    const inProgress = courseStudents.filter(
+      (s) => Number(s.progress || 0) > 0 && Number(s.progress || 0) < 100
+    ).length;
+    const notStarted = courseStudents.filter((s) => !s.progress || Number(s.progress || 0) === 0).length;
+    const totalProgress = courseStudents.reduce((sum, s) => sum + (Number(s.progress) || 0), 0);
+    const avgProgress = Math.round(totalProgress / total);
+    return { total, completed, inProgress, notStarted, avgProgress };
+  }, [courseStudents]);
 
   // 1. Initial Permission Verification
   useEffect(() => {
@@ -232,6 +284,76 @@ function AdminDashboardContent() {
     }
   };
 
+  // 4. Open Course Enrolled Students Modal
+  const handleViewCourseStudents = async (course: AdminCourseData) => {
+    setSelectedCourseForStudents(course);
+    setCourseStudentSearch("");
+    setCourseStudentProgressFilter("all");
+    setIsCourseDrawerOpen(true);
+    setLoadingCourseStudents(true);
+    setCourseStudents([]);
+    try {
+      const res = await getCourseEnrollmentStudents(course.name || course.title);
+      setCourseStudents(res.data || []);
+    } catch (err) {
+      console.error("Failed to load course enrolled students:", err);
+    } finally {
+      setLoadingCourseStudents(false);
+    }
+  };
+
+  // Quick jump: inspect student from course drawer
+  const handleInspectStudentFromCourse = (memberEmail: string) => {
+    const existingUser = users.find(
+      (u) => u.email === memberEmail || u.user === memberEmail
+    ) || {
+      user: memberEmail,
+      email: memberEmail,
+      full_name: memberEmail,
+      enabled: 1,
+    };
+    setIsCourseDrawerOpen(false);
+    handleViewStudentEnrollments(existingUser);
+  };
+
+  // Download course students CSV
+  const downloadCourseStudentsCSV = () => {
+    if (!selectedCourseForStudents) return;
+    const headers = [
+      "Enrollment ID",
+      "Full Name",
+      "Email",
+      "Course Slug",
+      "Progress (%)",
+      "Account Status",
+      "Enrolled Date",
+    ];
+    const rows = filteredCourseStudents.map((s) => [
+      `"${s.enrollment || ""}"`,
+      `"${(s.full_name || "").replace(/"/g, '""')}"`,
+      `"${s.email || s.member || ""}"`,
+      `"${s.course || selectedCourseForStudents.name || ""}"`,
+      `${Number(s.progress || 0).toFixed(1)}%`,
+      Number(s.enabled) === 1 ? "Active" : "Disabled",
+      `"${s.creation || ""}"`,
+    ]);
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute(
+      "download",
+      `course_students_${selectedCourseForStudents.name || "course"}_${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Aggregated Overview Metrics
   const metrics = useMemo(() => {
     const totalCourses = coursesTotal || courses.length;
@@ -262,6 +384,24 @@ function AdminDashboardContent() {
       .map(([owner, count]) => ({ owner, count }))
       .sort((a, b) => b.count - a.count);
 
+    // Enrollment and completion analytics
+    const totalEnrollments = courses.reduce((sum, c) => sum + (Number(c.enrollment_count) || 0), 0);
+    const coursesWithEnrollment = courses.filter((c) => (Number(c.enrollment_count) || 0) > 0);
+    const totalCompletionSum = coursesWithEnrollment.reduce(
+      (sum, c) => sum + (Number(c.completion_rate) || 0),
+      0
+    );
+    const avgPlatformCompletion =
+      coursesWithEnrollment.length > 0
+        ? Math.round((totalCompletionSum / coursesWithEnrollment.length) * 10) / 10
+        : 0;
+
+    // Top Courses by Enrollments
+    const topEnrolledCourses = [...courses]
+      .filter((c) => (Number(c.enrollment_count) || 0) > 0)
+      .sort((a, b) => (Number(b.enrollment_count) || 0) - (Number(a.enrollment_count) || 0))
+      .slice(0, 8);
+
     return {
       totalCourses,
       publishedCourses,
@@ -273,6 +413,9 @@ function AdminDashboardContent() {
       instructorCount: instructors.length,
       studentCount: studentsOnly.length,
       instructorLeaderboard,
+      totalEnrollments,
+      avgPlatformCompletion,
+      topEnrolledCourses,
     };
   }, [courses, coursesTotal, users]);
 
@@ -307,7 +450,7 @@ function AdminDashboardContent() {
 
   // Filtered Courses
   const filteredCourses = useMemo(() => {
-    return courses.filter((c) => {
+    let list = courses.filter((c) => {
       // Search
       if (courseSearch.trim()) {
         const q = courseSearch.toLowerCase().trim();
@@ -332,7 +475,22 @@ function AdminDashboardContent() {
 
       return true;
     });
-  }, [courses, courseSearch, courseStatusFilter, coursePaymentFilter, courseOwnerFilter]);
+
+    // Sort order
+    return [...list].sort((a, b) => {
+      if (courseSortBy === "most_enrolled") {
+        return (Number(b.enrollment_count) || 0) - (Number(a.enrollment_count) || 0);
+      }
+      if (courseSortBy === "highest_completion") {
+        return (Number(b.completion_rate) || 0) - (Number(a.completion_rate) || 0);
+      }
+      if (courseSortBy === "title") {
+        return (a.title || "").localeCompare(b.title || "");
+      }
+      // default: newest
+      return new Date(b.creation || 0).getTime() - new Date(a.creation || 0).getTime();
+    });
+  }, [courses, courseSearch, courseStatusFilter, coursePaymentFilter, courseOwnerFilter, courseSortBy]);
 
   // Paginated Courses
   const paginatedCourses = useMemo(() => {
@@ -344,13 +502,25 @@ function AdminDashboardContent() {
 
   // CSV Exporters
   const downloadCoursesCSV = () => {
-    const headers = ["Title", "Slug", "Owner / Instructor", "Published", "Paid Certificate", "Created", "Modified"];
+    const headers = [
+      "Title",
+      "Slug",
+      "Owner / Instructor",
+      "Published",
+      "Paid Certificate",
+      "Enrollments",
+      "Completion Rate (%)",
+      "Created",
+      "Modified",
+    ];
     const rows = filteredCourses.map((c) => [
       `"${(c.title || "").replace(/"/g, '""')}"`,
       `"${c.name || ""}"`,
       `"${c.owner || ""}"`,
       Number(c.published) === 1 ? "Published" : "Draft",
       Number(c.paid_certificate) === 1 ? "Paid" : "Free",
+      c.enrollment_count ?? 0,
+      `${Number(c.completion_rate || 0).toFixed(1)}%`,
       `"${c.creation || ""}"`,
       `"${c.modified || ""}"`,
     ]);
@@ -550,7 +720,7 @@ function AdminDashboardContent() {
               }`}
             >
               <Users className="w-4 h-4" />
-              <span>Users & Directory</span>
+              <span>User Directory</span>
               <span
                 className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] ${
                   activeTab === "users"
@@ -600,7 +770,7 @@ function AdminDashboardContent() {
         {activeTab === "overview" && (
           <div className="space-y-6">
             {/* KPI Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               {/* Card 1: Total Courses */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all">
                 <div className="flex items-center justify-between">
@@ -628,13 +798,38 @@ function AdminDashboardContent() {
                 </div>
               </div>
 
-              {/* Card 2: Platform Users */}
+              {/* Card 2: Total Course Enrollments (NEW) */}
+              <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Course Enrollments
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                    <GraduationCap className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className="text-3xl font-extrabold text-purple-700">
+                    {metrics.totalEnrollments}
+                  </span>
+                  <span className="text-xs text-slate-500">total enrollments</span>
+                </div>
+                <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                  <span className="text-slate-600 font-medium">Avg Completion:</span>
+                  <span className="text-emerald-600 font-bold flex items-center gap-1">
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    {metrics.avgPlatformCompletion}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 3: Platform Users */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     Total Users
                   </span>
-                  <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
                     <Users className="w-4 h-4" />
                   </div>
                 </div>
@@ -654,7 +849,7 @@ function AdminDashboardContent() {
                 </div>
               </div>
 
-              {/* Card 3: Active Accounts */}
+              {/* Card 4: Active Accounts */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -680,7 +875,7 @@ function AdminDashboardContent() {
                 </div>
               </div>
 
-              {/* Card 4: Monetization */}
+              {/* Card 5: Monetization */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -756,7 +951,24 @@ function AdminDashboardContent() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Enrollment Count Pill */}
+                        <button
+                          onClick={() => handleViewCourseStudents(course)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition cursor-pointer"
+                          title="Enrolled Learners"
+                        >
+                          <Users className="w-3 h-3 text-purple-600" />
+                          <span>{course.enrollment_count ?? 0}</span>
+                        </button>
+
+                        {/* Completion Rate Pill */}
+                        {Number(course.completion_rate || 0) > 0 && (
+                          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {Number(course.completion_rate).toFixed(0)}%
+                          </span>
+                        )}
+
                         {Number(course.published) === 1 ? (
                           <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             Published
@@ -892,7 +1104,7 @@ function AdminDashboardContent() {
                     setCourseOwnerFilter(e.target.value);
                     setCoursePage(1);
                   }}
-                  className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 max-w-[150px] truncate"
+                  className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-purple-500/20 max-w-[150px] truncate"
                 >
                   <option value="All">All Instructors</option>
                   {uniqueInstructors.map((inst) => (
@@ -900,6 +1112,21 @@ function AdminDashboardContent() {
                       {inst}
                     </option>
                   ))}
+                </select>
+
+                {/* Sort Filter (NEW) */}
+                <select
+                  value={courseSortBy}
+                  onChange={(e) => {
+                    setCourseSortBy(e.target.value as any);
+                    setCoursePage(1);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-purple-500/20"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="most_enrolled">Most Enrolled</option>
+                  <option value="highest_completion">Highest Completion</option>
+                  <option value="title">Title (A-Z)</option>
                 </select>
 
                 {/* CSV Export */}
@@ -924,6 +1151,8 @@ function AdminDashboardContent() {
                       <th className="py-3 px-4">Instructor / Owner</th>
                       <th className="py-3 px-4">Status</th>
                       <th className="py-3 px-4">Certification</th>
+                      <th className="py-3 px-4 text-center">Enrollments</th>
+                      <th className="py-3 px-4">Completion</th>
                       <th className="py-3 px-4">Created Date</th>
                       <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
@@ -931,7 +1160,7 @@ function AdminDashboardContent() {
                   <tbody className="divide-y divide-slate-100">
                     {paginatedCourses.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-slate-400">
+                        <td colSpan={8} className="py-12 text-center text-slate-400">
                           <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-40" />
                           <p className="text-sm font-semibold">No courses match the criteria</p>
                           <p className="text-xs text-slate-400 mt-1">Try resetting your filters or search keywords</p>
@@ -997,21 +1226,66 @@ function AdminDashboardContent() {
                               </span>
                             )}
                           </td>
+                          {/* Enrollments Column (NEW) */}
+                          <td className="py-3 px-4 text-center">
+                            <button
+                              onClick={() => handleViewCourseStudents(c)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/80 font-bold text-xs transition cursor-pointer shadow-2xs group"
+                              title="Click to view enrolled students"
+                            >
+                              <Users className="w-3.5 h-3.5 text-purple-600 group-hover:scale-110 transition-transform" />
+                              <span>{c.enrollment_count ?? 0}</span>
+                            </button>
+                          </td>
+                          {/* Completion Rate Column (NEW) */}
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col gap-1 min-w-[95px]">
+                              <span
+                                className={`text-[11px] font-bold ${
+                                  Number(c.completion_rate || 0) > 0 ? "text-emerald-700" : "text-slate-500"
+                                }`}
+                              >
+                                {Number(c.completion_rate || 0).toFixed(1)}%
+                              </span>
+                              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                <div
+                                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                                    Number(c.completion_rate || 0) >= 50
+                                      ? "bg-emerald-500"
+                                      : Number(c.completion_rate || 0) > 0
+                                      ? "bg-indigo-500"
+                                      : "bg-slate-300"
+                                  }`}
+                                  style={{ width: `${Math.min(Math.max(Number(c.completion_rate || 0), 0), 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
                           <td className="py-3 px-4 text-slate-500">
                             {c.creation ? new Date(c.creation).toLocaleDateString() : "—"}
                           </td>
                           <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-1.5 sm:gap-2">
+                              <button
+                                onClick={() => handleViewCourseStudents(c)}
+                                className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold text-xs inline-flex items-center gap-1.5 cursor-pointer shadow-2xs transition"
+                                title="View Enrolled Students & Completion"
+                              >
+                                <Users className="w-3.5 h-3.5 text-purple-600" />
+                                <span>Students</span>
+                              </button>
                               <Link
                                 href={`/course/${c.name}`}
-                                className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold text-[11px] inline-flex items-center gap-1"
+                                className="px-2.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold text-xs inline-flex items-center gap-1 transition"
+                                title="Preview Course Page"
                               >
                                 <span>Preview</span>
                                 <ExternalLink className="w-3 h-3" />
                               </Link>
                               <Link
                                 href={`/course/${c.name}/edit`}
-                                className="px-2.5 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-semibold text-[11px]"
+                                className="px-2.5 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-semibold text-xs transition"
+                                title="Edit Course"
                               >
                                 Edit
                               </Link>
@@ -1454,6 +1728,94 @@ function AdminDashboardContent() {
                 </table>
               </div>
             </div>
+
+            {/* Course Engagement & Enrollment Leaderboard Table (NEW) */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Course Enrollment & Completion Audit</h3>
+                  <p className="text-xs text-slate-500">Most popular courses ranked by learner enrollments and progress rate</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-500">
+                    Total Enrolled: <strong className="text-purple-700">{metrics.totalEnrollments}</strong>
+                  </span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-600">
+                  <thead className="bg-slate-50/70 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <tr>
+                      <th className="py-2.5 px-4">Course</th>
+                      <th className="py-2.5 px-4">Instructor</th>
+                      <th className="py-2.5 px-4 text-center">Enrollments</th>
+                      <th className="py-2.5 px-4">Completion Rate</th>
+                      <th className="py-2.5 px-4">Status</th>
+                      <th className="py-2.5 px-4 text-right">Roster</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {metrics.topEnrolledCourses.map((c) => (
+                      <tr key={c.name} className="hover:bg-slate-50/70 transition">
+                        <td className="py-3 px-4 font-bold text-slate-900">
+                          <Link href={`/course/${c.name}`} className="hover:text-purple-600 truncate block max-w-xs">
+                            {c.title}
+                          </Link>
+                          <span className="font-mono text-[10px] text-slate-400 block">{c.name}</span>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-slate-600">{c.owner}</td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                            <Users className="w-3 h-3 text-purple-600" />
+                            {c.enrollment_count ?? 0}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex flex-col gap-1 min-w-[100px]">
+                            <span className={`text-[11px] font-bold ${Number(c.completion_rate || 0) > 0 ? "text-emerald-700" : "text-slate-500"}`}>
+                              {Number(c.completion_rate || 0).toFixed(1)}%
+                            </span>
+                            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className={`h-1.5 rounded-full ${
+                                  Number(c.completion_rate || 0) >= 50
+                                    ? "bg-emerald-500"
+                                    : Number(c.completion_rate || 0) > 0
+                                    ? "bg-indigo-500"
+                                    : "bg-slate-300"
+                                }`}
+                                style={{ width: `${Math.min(Math.max(Number(c.completion_rate || 0), 0), 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          {Number(c.published) === 1 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Published
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              Draft
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => handleViewCourseStudents(c)}
+                            className="px-2.5 py-1 rounded-lg text-purple-700 bg-purple-50 hover:bg-purple-100 font-semibold text-[11px] cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                          >
+                            <Users className="w-3 h-3" />
+                            <span>View Students</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
       </main>
@@ -1741,6 +2103,382 @@ function AdminDashboardContent() {
               </div>
               <button
                 onClick={() => setIsDrawerOpen(false)}
+                className="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition cursor-pointer shadow-2xs"
+              >
+                Close Drawer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* COURSE ENROLLED STUDENTS MODAL / SLIDE-OVER DRAWER */}
+      {/* ======================================================== */}
+      {isCourseDrawerOpen && (
+        <div
+          onClick={() => setIsCourseDrawerOpen(false)}
+          className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-xs flex justify-end transition-opacity duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-50 w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl h-full shadow-2xl flex flex-col border-l border-slate-200 transform transition-transform animate-in slide-in-from-right duration-300"
+          >
+            {/* Top Navigation Bar */}
+            <div className="bg-white border-b border-slate-200/90 px-6 py-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 shadow-2xs">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-slate-900 truncate">
+                      Course Enrolled Students
+                    </h3>
+                    <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 uppercase tracking-wide">
+                      Admin Roster
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 truncate">
+                    Learner enrollment details, lesson completion, and account status
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsCourseDrawerOpen(false)}
+                className="w-9 h-9 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer shrink-0"
+                title="Close Drawer (Esc)"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Course Identity Hero Card */}
+            <div className="bg-gradient-to-r from-slate-950 via-indigo-950 to-purple-950 text-white p-5 sm:p-6 shadow-inner shrink-0">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3.5 min-w-0">
+                  {/* Course Thumbnail */}
+                  <div className="w-16 h-14 sm:w-20 sm:h-16 rounded-xl overflow-hidden bg-white/10 backdrop-blur-xs border border-white/20 shrink-0 shadow-md">
+                    {selectedCourseForStudents?.image ? (
+                      <img
+                        src={selectedCourseForStudents.image}
+                        alt={selectedCourseForStudents.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xl font-black text-white bg-gradient-to-br from-indigo-500 to-purple-600">
+                        {(selectedCourseForStudents?.title || "C").charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-base sm:text-lg font-bold text-white truncate max-w-md">
+                        {selectedCourseForStudents?.title || selectedCourseForStudents?.name}
+                      </h4>
+                      {Number(selectedCourseForStudents?.published) === 1 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-950/85 text-emerald-300 border border-emerald-500/30">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          Published
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-950/85 text-amber-300 border border-amber-500/30">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          Draft
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-1.5 flex items-center gap-3 text-xs text-purple-200/80 flex-wrap">
+                      {selectedCourseForStudents?.owner && (
+                        <div className="flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-purple-300 shrink-0" />
+                          <span>
+                            Instructor:{" "}
+                            <strong className="text-white font-medium">
+                              {selectedCourseForStudents.owner}
+                            </strong>
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1 font-mono text-[11px] text-purple-300">
+                        <Hash className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                        <span>{selectedCourseForStudents?.name}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right KPI Badges */}
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <div className="text-right bg-white/10 backdrop-blur-xs border border-white/15 px-3 py-2 rounded-xl">
+                    <div className="text-lg sm:text-xl font-extrabold text-white">
+                      {courseStudentsMetrics.total}
+                    </div>
+                    <div className="text-[10px] font-medium text-purple-200 uppercase tracking-wider">
+                      Learners
+                    </div>
+                  </div>
+                  <div className="text-right bg-white/10 backdrop-blur-xs border border-white/15 px-3 py-2 rounded-xl hidden sm:block">
+                    <div className="text-lg sm:text-xl font-extrabold text-emerald-400">
+                      {courseStudentsMetrics.avgProgress}%
+                    </div>
+                    <div className="text-[10px] font-medium text-purple-200 uppercase tracking-wider">
+                      Avg Progress
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter, Search & Export Bar */}
+            <div className="px-6 py-3 bg-white border-b border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search students by name, email, or enrollment ID..."
+                  value={courseStudentSearch}
+                  onChange={(e) => setCourseStudentSearch(e.target.value)}
+                  className="w-full pl-8.5 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-purple-500 focus:bg-white transition"
+                />
+                {courseStudentSearch && (
+                  <button
+                    onClick={() => setCourseStudentSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Progress Filter Pills & Export */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-[11px] font-semibold text-slate-600 shrink-0">
+                  <button
+                    onClick={() => setCourseStudentProgressFilter("all")}
+                    className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                      courseStudentProgressFilter === "all"
+                        ? "bg-white text-purple-700 shadow-2xs font-bold"
+                        : "hover:text-slate-900"
+                    }`}
+                  >
+                    All ({courseStudents.length})
+                  </button>
+                  <button
+                    onClick={() => setCourseStudentProgressFilter("completed")}
+                    className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                      courseStudentProgressFilter === "completed"
+                        ? "bg-white text-emerald-700 shadow-2xs font-bold"
+                        : "hover:text-slate-900"
+                    }`}
+                  >
+                    Completed ({courseStudentsMetrics.completed})
+                  </button>
+                  <button
+                    onClick={() => setCourseStudentProgressFilter("in_progress")}
+                    className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                      courseStudentProgressFilter === "in_progress"
+                        ? "bg-white text-indigo-700 shadow-2xs font-bold"
+                        : "hover:text-slate-900"
+                    }`}
+                  >
+                    In Progress ({courseStudentsMetrics.inProgress})
+                  </button>
+                </div>
+
+                {courseStudents.length > 0 && (
+                  <button
+                    onClick={downloadCourseStudentsCSV}
+                    className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                    title="Export Enrolled Students CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Export</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Drawer Body - Scrollable Enrolled Students List */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-3.5">
+              {loadingCourseStudents ? (
+                <div className="space-y-3.5">
+                  <div className="py-6 text-center text-slate-400">
+                    <RefreshCw className="w-6 h-6 mx-auto mb-2 text-purple-600 animate-spin" />
+                    <p className="text-xs font-semibold text-slate-600">Loading course enrolled students...</p>
+                  </div>
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="p-4 bg-white rounded-2xl border border-slate-200/80 animate-pulse flex flex-col sm:flex-row gap-4"
+                    >
+                      <div className="w-12 h-12 bg-slate-200 rounded-full shrink-0" />
+                      <div className="flex-1 space-y-2.5 py-1">
+                        <div className="h-4 bg-slate-200 rounded-md w-1/3" />
+                        <div className="h-3 bg-slate-200 rounded-md w-1/2" />
+                        <div className="h-2 bg-slate-200 rounded-full w-full" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : courseStudents.length === 0 ? (
+                <div className="py-16 text-center bg-white rounded-2xl border border-dashed border-slate-300 shadow-2xs p-6">
+                  <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mx-auto mb-3">
+                    <Users className="w-7 h-7 text-purple-500" />
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-800">No Enrolled Students</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                    No learners have enrolled in this course yet. When students register or are enrolled, their progress and details will be audited here.
+                  </p>
+                </div>
+              ) : filteredCourseStudents.length === 0 ? (
+                <div className="py-14 text-center bg-white rounded-2xl border border-dashed border-slate-300 shadow-2xs p-6">
+                  <Search className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                  <h4 className="text-sm font-bold text-slate-800">No Matching Students</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                    No enrolled students match your active filter criteria.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setCourseStudentSearch("");
+                      setCourseStudentProgressFilter("all");
+                    }}
+                    className="mt-3 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 text-xs font-semibold transition cursor-pointer"
+                  >
+                    Clear All Filters
+                  </button>
+                </div>
+              ) : (
+                filteredCourseStudents.map((student) => {
+                  const progressVal = Number(student.progress || 0);
+                  const isCompleted = progressVal >= 100;
+                  const isStarted = progressVal > 0;
+
+                  return (
+                    <div
+                      key={student.enrollment}
+                      className="group p-4.5 rounded-2xl border border-slate-200/90 bg-white hover:border-purple-300 hover:shadow-md transition-all flex flex-col gap-3"
+                    >
+                      {/* Top Row: Avatar, Identity, Status, and Action */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* Student Initials Avatar */}
+                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-100 to-indigo-100 text-purple-800 font-extrabold text-sm flex items-center justify-center shrink-0 border border-purple-200/60 shadow-2xs">
+                            {(student.full_name || student.email || student.member || "S").charAt(0).toUpperCase()}
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-bold text-sm text-slate-900 group-hover:text-purple-600 transition truncate">
+                                {student.full_name || student.email || student.member}
+                              </h4>
+                              {Number(student.enabled) === 1 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  Active
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                                  Disabled
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 truncate">
+                              <span className="truncate">{student.email || student.member}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Inspect Student's other enrollments button */}
+                        <button
+                          onClick={() => handleInspectStudentFromCourse(student.email || student.member)}
+                          className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold text-xs inline-flex items-center gap-1.5 transition cursor-pointer shrink-0 shadow-2xs"
+                          title="Inspect Student's Full Enrollments"
+                        >
+                          <GraduationCap className="w-3.5 h-3.5 text-purple-600" />
+                          <span className="hidden sm:inline">Inspect Student</span>
+                        </button>
+                      </div>
+
+                      {/* Middle: Progress Bar & Progress Badge */}
+                      <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-100">
+                        <div className="flex items-center justify-between text-xs mb-1.5">
+                          <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                            {isCompleted ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : isStarted ? (
+                              <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                            ) : (
+                              <span className="w-2 h-2 rounded-full bg-slate-300" />
+                            )}
+                            Course Completion
+                          </span>
+                          <span
+                            className={`font-bold text-xs ${
+                              isCompleted
+                                ? "text-emerald-700"
+                                : isStarted
+                                ? "text-indigo-700"
+                                : "text-slate-500"
+                            }`}
+                          >
+                            {progressVal.toFixed(1)}% {isCompleted ? "• Completed" : isStarted ? "• In Progress" : "• Not Started"}
+                          </span>
+                        </div>
+
+                        <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-2 rounded-full transition-all duration-500 ${
+                              isCompleted
+                                ? "bg-gradient-to-r from-emerald-500 to-teal-500"
+                                : isStarted
+                                ? "bg-gradient-to-r from-purple-600 to-indigo-600"
+                                : "bg-slate-300"
+                            }`}
+                            style={{ width: `${Math.min(Math.max(progressVal, 0), 100)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Bottom Meta Row */}
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                        <div className="flex items-center gap-1.5 font-mono">
+                          <span className="text-slate-400">ID:</span>
+                          <span className="font-semibold text-slate-600">{student.enrollment}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          <span>
+                            {student.creation
+                              ? new Date(student.creation).toLocaleDateString(undefined, {
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                })
+                              : "Enrolled"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="p-4 px-6 border-t border-slate-200 bg-white flex items-center justify-between shrink-0">
+              <div className="text-xs text-slate-500">
+                Showing <span className="font-bold text-slate-900">{filteredCourseStudents.length}</span> of{" "}
+                <span className="font-semibold text-slate-700">{courseStudents.length}</span> enrolled learners
+              </div>
+              <button
+                onClick={() => setIsCourseDrawerOpen(false)}
                 className="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition cursor-pointer shadow-2xs"
               >
                 Close Drawer
