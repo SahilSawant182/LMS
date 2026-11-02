@@ -1,4 +1,4 @@
-import { apiService, API_TOKEN, API_METHOD_PREFIX, uploadFile, BASE_URL } from "./api.services";
+import { apiService, API_TOKEN, API_METHOD_PREFIX, uploadFile, BASE_URL, getCurrentUserEmail } from "./api.services";
 import { isAuthorizedInstructor, isCourseInstructorOrOwner, isBatchInstructorOrOwner, isProgramInstructorOrOwner } from "./auth.services";
 
 // Define interfaces if needed, or use any/generic for now
@@ -61,13 +61,6 @@ export interface Course {
   instructors: Instructor[];
 }
 
-const getCurrentUserEmail = () => {
-  if (typeof window !== "undefined") {
-    return localStorage.getItem("userEmail") || localStorage.getItem("user") || "";
-  }
-  return "";
-};
-
 const getInstructorFilterParams = (payload?: any) => {
   const isInstructor = isAuthorizedInstructor();
   const currentUser = getCurrentUserEmail();
@@ -123,7 +116,80 @@ const getInstructorFilterParams = (payload?: any) => {
   return params;
 };
 
+export const getInstructorCourses = async (payload?: any): Promise<Course[]> => {
+  const currentUser = getCurrentUserEmail();
+
+  let rawParams: Record<string, any> = {};
+  if (typeof payload === "string") {
+    rawParams = { type: payload };
+  } else if (payload && typeof payload === "object") {
+    rawParams = { ...payload };
+  }
+
+  const params: Record<string, any> = { ...rawParams };
+
+  // Format type query param if specified
+  if (params.type !== undefined && params.type !== null && params.type !== "") {
+    const t = String(params.type).trim();
+    const tLower = t.toLowerCase();
+    if (tLower === "all") params.type = "All";
+    else if (tLower === "free") params.type = "Free";
+    else if (tLower === "paid") params.type = "Paid";
+    else if (tLower === "unpaid") params.type = "Unpaid";
+    else if (tLower === "published") params.type = "Published";
+    else if (tLower === "unpublished") params.type = "Unpublished";
+    else params.type = t;
+  }
+
+  // Ensure user is passed so the API returns only the instructor's courses
+  if (!params.user && currentUser) {
+    params.user = currentUser;
+  }
+
+  const endpoint = `method/${API_METHOD_PREFIX}.get_instructor_courses`;
+  let response: any = null;
+  try {
+    response = await apiService.get(endpoint, {
+      params,
+      headers: {
+        'Authorization': `token ${API_TOKEN}`
+      }
+    });
+  } catch (err) {
+    try {
+      response = await apiService.get("method/lms.lms.stride_lms.get_instructor_courses", {
+        params,
+        headers: {
+          'Authorization': `token ${API_TOKEN}`
+        }
+      });
+    } catch (fallbackErr) {
+      console.error("Error fetching instructor courses:", fallbackErr);
+      throw fallbackErr;
+    }
+  }
+
+  let rawList: any[] = [];
+  if (Array.isArray(response)) {
+    rawList = response;
+  } else if (response?.message && Array.isArray(response.message)) {
+    rawList = response.message;
+  } else if (response?.data && Array.isArray(response.data)) {
+    rawList = response.data;
+  }
+
+  return rawList;
+};
+
 export const getCourses = async (payload?: any): Promise<Course[]> => {
+  const isInstructor = isAuthorizedInstructor();
+
+  // For instructor role, do not call get_courses. Call get_instructor_courses directly so instructor only sees their created courses
+  if (isInstructor) {
+    return await getInstructorCourses(payload);
+  }
+
+  // For learner role, call get_courses so they can see all courses
   const params = getInstructorFilterParams(payload);
   const response = await apiService.get(`method/${API_METHOD_PREFIX}.get_courses`, {
     params,

@@ -19,6 +19,7 @@ import { navigateBack } from "@/utils/navigation";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import { useViewMode } from "@/context/ViewModeContext";
 import {
   Clock,
   CheckCircle2,
@@ -113,6 +114,7 @@ export default function QuizDetailsPage() {
   const router = useRouter();
   const rawName = (params?.name as string) || "";
   const name = decodeURIComponent(rawName);
+  const { viewMode } = useViewMode();
 
   const searchParams = useSearchParams();
   const returnCourseId = searchParams?.get("courseId");
@@ -122,7 +124,8 @@ export default function QuizDetailsPage() {
   const [quiz, setQuiz] = useState<QuizDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isInstructor, setIsInstructor] = useState(false);
+  const [hasInstructorRole, setHasInstructorRole] = useState(false);
+  const isInstructor = hasInstructorRole && viewMode === 'instructor';
   const [currentUserEmail, setCurrentUserEmail] = useState("");
 
   // Submissions & Results state (for both Student and Instructor roles)
@@ -203,10 +206,13 @@ export default function QuizDetailsPage() {
 
   useEffect(() => {
     const isInst = isAuthorizedInstructor();
-    setIsInstructor(isInst);
+    setHasInstructorRole(isInst);
     const email = typeof window !== "undefined" ? (localStorage.getItem("userEmail") || localStorage.getItem("user") || "") : "";
     setCurrentUserEmail(email);
-  }, []);
+    if (viewMode === 'learner' && activeTab === 'submissions') {
+      setActiveTab('overview');
+    }
+  }, [viewMode, activeTab]);
 
   const fetchSubmissions = async () => {
     if (!name) return;

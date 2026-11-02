@@ -28,6 +28,7 @@ import { showToast } from '@/components/ui/Toast';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import BatchDiscussions from '@/components/batch/BatchDiscussions';
 import LiveClassTab from '@/components/live-class/LiveClassTab';
+import { useViewMode } from '@/context/ViewModeContext';
 
 export type BatchTab = 'overview' | 'courses' | 'classes' | 'discussions' | 'students' | 'feedback';
 
@@ -35,6 +36,7 @@ export default function BatchDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const batchId = params?.batchId as string;
+  const { viewMode } = useViewMode();
 
   const [batchData, setBatchData] = useState<any>(null);
   const [enrollmentData, setEnrollmentData] = useState<any>(null);
@@ -42,7 +44,8 @@ export default function BatchDetailsPage() {
   const [batchFeedback, setBatchFeedback] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isInstructor, setIsInstructor] = useState(false);
+  const [hasInstructorRole, setHasInstructorRole] = useState(false);
+  const isInstructor = hasInstructorRole && viewMode === 'instructor';
   const [isStudent, setIsStudent] = useState(false);
   const [userEmail, setUserEmail] = useState<string>('');
   const [userName, setUserName] = useState<string>('');
@@ -102,8 +105,8 @@ export default function BatchDetailsPage() {
         const rolesStr = localStorage.getItem("roles");
         if (rolesStr) {
           const roles = JSON.parse(rolesStr);
-          setIsInstructor(roles.includes("Instructor"));
-          setIsStudent(roles.includes("Student"));
+          setHasInstructorRole(roles.includes("Instructor"));
+          setIsStudent(roles.includes("Student") || viewMode === 'learner');
         }
         const email = localStorage.getItem("userEmail");
         if (email) {
@@ -116,7 +119,13 @@ export default function BatchDetailsPage() {
       } catch (e) {}
     };
     checkRoles();
-  }, []);
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (viewMode === 'learner' && activeTab === 'students') {
+      setActiveTab('overview');
+    }
+  }, [viewMode, activeTab]);
 
   useEffect(() => {
     if (!batchId) return;

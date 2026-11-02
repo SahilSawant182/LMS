@@ -12,6 +12,7 @@ import {
 import { getCourseWithEnrollment } from '@/services/payment.services';
 import { getImageUrl, getCurrentUserEmail } from '@/services/api.services';
 import { isAuthorizedInstructor, isCourseInstructorOrOwner } from '@/services/auth.services';
+import { useViewMode } from '@/context/ViewModeContext';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { navigateBack } from '@/utils/navigation';
@@ -21,7 +22,7 @@ import {
   Globe, Tags, ChevronRight, Star, CheckCircle2,
   BookMarked, ArrowLeft, Edit, Plus, Loader2, FileText, CheckCircle,
   MessageSquare, Sparkles, Send, Check, Trash2, Lock, HelpCircle,
-  RotateCcw, Trophy, AlertCircle, Download, X
+  RotateCcw, Trophy, AlertCircle, Download, X, GraduationCap
 } from 'lucide-react';
 import InlineBlockEditor from '@/components/admin/InlineBlockEditor';
 import Pagination from '@/components/ui/Pagination';
@@ -89,7 +90,10 @@ export default function CourseDetailPage() {
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isInstructor, setIsInstructor] = useState(false);
+  const { viewMode, canSwitch } = useViewMode();
+  const [hasInstructorRole, setHasInstructorRole] = useState(false);
+  const isInstructor = Boolean((hasInstructorRole || canSwitch) && viewMode === 'instructor');
+  const setIsInstructor = (val: boolean) => setHasInstructorRole(val);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
   const [currentUserName, setCurrentUserName] = useState<string>('');
   const [allLessonsList, setAllLessonsList] = useState<any[]>([]);
@@ -2177,7 +2181,16 @@ export default function CourseDetailPage() {
 
               {/* Price & CTA */}
               <div className="mb-6">
-                {isUserEnrolled ? (
+                {isInstructor ? (
+                  <div className="flex flex-col gap-1 mb-3">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80 w-fit">
+                      <GraduationCap className="w-3.5 h-3.5 text-indigo-600" /> Instructor View
+                    </span>
+                    <span className="text-2xl font-black text-slate-900 mt-1">
+                      {isFree ? 'Free Course' : `${currencySymbol} ${currentPrice.toLocaleString("en-IN")}`}
+                    </span>
+                  </div>
+                ) : isUserEnrolled ? (
                   <div className="flex items-center gap-2 mb-3">
                     <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Purchased & Enrolled
@@ -2196,7 +2209,7 @@ export default function CourseDetailPage() {
                   </div>
                 )}
 
-                {isUserEnrolled && (
+                {!isInstructor && isUserEnrolled && (
                   <div className="mt-4 mb-5 bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
@@ -2231,7 +2244,51 @@ export default function CourseDetailPage() {
                   </div>
                 )}
 
-                {isCourseComplete ? (
+                {isInstructor ? (
+                  <div className="space-y-2.5 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const firstChapter = outline?.find(c => Array.isArray(c.lessons) && c.lessons.length > 0) || outline?.[0];
+                        const firstLesson = firstChapter?.lessons?.[0];
+                        if (firstChapter && firstLesson) {
+                          const chapterParam = firstChapter.name || firstChapter.chapter || firstChapter.title;
+                          const lessonParam = firstLesson.name || firstLesson.lesson_name || firstLesson.title;
+                          router.push(`/course/${courseId}/${encodeURIComponent(chapterParam)}/${encodeURIComponent(lessonParam)}`);
+                        } else {
+                          const elem = document.getElementById("curriculum");
+                          if (elem) elem.scrollIntoView({ behavior: "smooth" });
+                        }
+                      }}
+                      className="w-full font-bold py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-md shadow-indigo-200 transition-all flex justify-center items-center gap-2 text-sm cursor-pointer active:scale-95"
+                    >
+                      <PlayCircle className="w-4 h-4" />
+                      <span>Start / Review Lessons</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                    {canManageCourse && (
+                      <>
+                        {!details.published && (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePublish(true)}
+                            disabled={publishingLoading}
+                            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-emerald-600/25 transition-all flex justify-center items-center gap-2 text-sm cursor-pointer disabled:opacity-50 active:scale-95"
+                          >
+                            {publishingLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
+                            <span>Publish Course Now</span>
+                          </button>
+                        )}
+                        <Link
+                          href={`/course/${courseId}/edit`}
+                          className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition-all flex justify-center items-center gap-2 text-sm border border-slate-200"
+                        >
+                          <Edit className="w-4 h-4" /> Manage / Edit Course
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                ) : isCourseComplete ? (
                   <div className="space-y-2.5 mt-3">
                     <div className="w-full py-3 px-4 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-xs font-bold flex items-center justify-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -2327,30 +2384,11 @@ export default function CourseDetailPage() {
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 )}
-                {canManageCourse && (
-                  <div className="mt-3 space-y-2">
-                    {!details.published && (
-                      <button
-                        type="button"
-                        onClick={() => handleTogglePublish(true)}
-                        disabled={publishingLoading}
-                        className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-emerald-600/25 transition-all flex justify-center items-center gap-2 text-sm cursor-pointer disabled:opacity-50 active:scale-95"
-                      >
-                        {publishingLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
-                        <span>Publish Course Now</span>
-                      </button>
-                    )}
-                    <Link
-                      href={`/course/${courseId}/edit`}
-                      className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition-all flex justify-center items-center gap-2 text-sm border border-slate-200"
-                    >
-                      <Edit className="w-4 h-4" /> Manage / Edit Course
-                    </Link>
-                  </div>
+                {!isInstructor && (
+                  <p className="text-center text-[11px] text-slate-500 mt-3 flex items-center justify-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> 30-Day Money-Back Guarantee
+                  </p>
                 )}
-                <p className="text-center text-[11px] text-slate-500 mt-3 flex items-center justify-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> 30-Day Money-Back Guarantee
-                </p>
               </div>
 
               <hr className="border-slate-100 mb-6" />

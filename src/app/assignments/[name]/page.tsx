@@ -10,11 +10,13 @@ import { navigateBack } from '@/utils/navigation';
 import { formatDate } from '@/utils/formatters';
 import { ArrowLeft, BookOpen, Send, Upload, CheckCircle, Trash2, Edit, Users, ExternalLink, Clock, Eye, X, Award, FileCheck2 } from 'lucide-react';
 import GradingModal from '@/components/modals/GradingModal';
+import { useViewMode } from '@/context/ViewModeContext';
 
 export default function AssignmentDetailPage() {
   const router = useRouter();
   const params = useParams();
   const name = Array.isArray(params?.name) ? params.name[0] : params?.name;
+  const { viewMode } = useViewMode();
 
   const [assignment, setAssignment] = useState<any>(null);
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -27,7 +29,8 @@ export default function AssignmentDetailPage() {
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [isInstructor, setIsInstructor] = useState(false);
+  const [hasInstructorRole, setHasInstructorRole] = useState(false);
+  const isInstructor = hasInstructorRole && viewMode === 'instructor';
 
   // Result Modal State (calls get_assignment_result)
   const [selectedResult, setSelectedResult] = useState<any | null>(null);
@@ -60,7 +63,7 @@ export default function AssignmentDetailPage() {
       if (rolesStr) {
         try {
           const roles = JSON.parse(rolesStr);
-          setIsInstructor(roles.includes("Instructor") || roles.includes("System Manager") || roles.includes("Administrator"));
+          setHasInstructorRole(roles.includes("Instructor") || roles.includes("System Manager") || roles.includes("Administrator"));
         } catch (e) {}
       }
       
@@ -74,7 +77,7 @@ export default function AssignmentDetailPage() {
     if (name) {
       fetchAssignment(name);
     }
-  }, [name, router]);
+  }, [name, router, viewMode]);
 
   const fetchAssignment = async (assignmentName: string) => {
     setLoading(true);

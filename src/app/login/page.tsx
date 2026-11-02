@@ -57,6 +57,9 @@ export default function LoginPage() {
       const fullName = res?.full_name || res?.message?.full_name || res?.data?.full_name;
       const user = res?.user || res?.message?.user || res?.data?.user || email;
       const roles = res?.roles || res?.message?.roles || res?.data?.roles || [];
+      const isInstructor = res?.is_instructor ?? res?.message?.is_instructor ?? res?.data?.is_instructor;
+      const isStudent = res?.is_student ?? res?.message?.is_student ?? res?.data?.is_student;
+      const canSwitchView = res?.can_switch_view ?? res?.message?.can_switch_view ?? res?.data?.can_switch_view;
 
       if (keyDetails?.api_key) {
         localStorage.setItem("apiKey", keyDetails.api_key);
@@ -65,8 +68,11 @@ export default function LoginPage() {
       if (fullName) localStorage.setItem("fullName", fullName);
       if (user) localStorage.setItem("userEmail", user);
       if (roles) localStorage.setItem("roles", JSON.stringify(roles));
+      if (isInstructor !== undefined) localStorage.setItem("isInstructor", String(Boolean(isInstructor)));
+      if (isStudent !== undefined) localStorage.setItem("is_student", String(Boolean(isStudent)));
+      if (canSwitchView !== undefined) localStorage.setItem("can_switch_view", String(Boolean(canSwitchView)));
       
-      // Notify Navbar of auth state change
+      // Notify Navbar & context of auth state change
       window.dispatchEvent(new Event("auth-changed"));
       
       router.push("/dashboard");

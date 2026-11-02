@@ -6,10 +6,11 @@ import CourseCard from "@/components/CourseCard";
 import Pagination from "@/components/ui/Pagination";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getCourses, updateCourse } from "@/services/lms.services";
+import { getCourses, getInstructorCourses, updateCourse } from "@/services/lms.services";
 import { isAuthorizedInstructor } from "@/services/auth.services";
 import { getImageUrl } from "@/services/api.services";
 import { showToast } from "@/components/ui/Toast";
+import { useViewMode } from "@/context/ViewModeContext";
 import {
   Search,
   BookOpen,
@@ -26,10 +27,13 @@ import {
 
 export default function CoursesPage() {
   const router = useRouter();
+  const { viewMode, canSwitch } = useViewMode();
+  const isEffectiveInstructor = canSwitch && viewMode === "instructor";
+
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isInstructor, setIsInstructor] = useState(false);
+  const isInstructor = isEffectiveInstructor;
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedFilter, setSelectedFilter] = useState<string>("All");
@@ -46,7 +50,9 @@ export default function CoursesPage() {
     setError(null);
     try {
       const activeType = filterType || selectedFilter;
-      const catalogRes = await getCourses({ type: activeType });
+      const catalogRes = isEffectiveInstructor
+        ? await getInstructorCourses({ type: activeType })
+        : await getCourses({ type: activeType });
       const rawList: any[] = Array.isArray(catalogRes)
         ? catalogRes
         : (catalogRes as any)?.data || (catalogRes as any)?.message || [];
@@ -60,17 +66,12 @@ export default function CoursesPage() {
   };
 
   useEffect(() => {
-    fetchCourses(selectedFilter);
-  }, [selectedFilter]);
+    setSelectedFilter("All");
+  }, [viewMode]);
 
   useEffect(() => {
-    const checkRoles = () => {
-      try {
-        setIsInstructor(isAuthorizedInstructor());
-      } catch (e) {}
-    };
-    checkRoles();
-  }, []);
+    fetchCourses(selectedFilter);
+  }, [selectedFilter, viewMode, isEffectiveInstructor]);
 
   // Extract unique categories
   const categories = useMemo(() => {

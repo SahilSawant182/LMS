@@ -29,9 +29,11 @@ import {
   LogOut,
   HelpCircle,
   PenTool,
+  ShieldCheck,
 } from 'lucide-react';
 import CreateChapterModal from '@/components/admin/CreateChapterModal';
-import { logout, isAuthorizedInstructor } from '@/services/auth.services';
+import { logout, isAuthorizedInstructor, isAdminInstructor } from '@/services/auth.services';
+import { useViewMode } from '@/context/ViewModeContext';
 
 interface SidebarProps {
   isOpenMobile?: boolean;
@@ -87,8 +89,11 @@ export default function Sidebar({
   onToggleExpand: externalOnToggleExpand,
 }: SidebarProps) {
   const pathname = usePathname();
+  const { viewMode, switchView, canSwitch } = useViewMode();
   const [internalExpanded, setInternalExpanded] = useState<boolean>(true);
   const [isInstructor, setIsInstructor] = useState<boolean>(false);
+  const [isAdminUser, setIsAdminUser] = useState<boolean>(false);
+  const effectiveIsInstructor = Boolean((canSwitch || isInstructor) && viewMode === 'instructor');
   const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
   const [isCreateChapterOpen, setIsCreateChapterOpen] = useState<boolean>(false);
   const flyoutTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -103,6 +108,7 @@ export default function Sidebar({
     badges: false,
     evaluations: false,
     commerce: false,
+    admin_portal: true,
   });
 
   const checkInstructor = (): boolean => {
@@ -120,9 +126,11 @@ export default function Sidebar({
         setInternalExpanded(saved === 'true');
       }
       setIsInstructor(checkInstructor());
+      setIsAdminUser(isAdminInstructor());
 
       const handleAuthChange = () => {
         setIsInstructor(checkInstructor());
+        setIsAdminUser(isAdminInstructor());
       };
 
       window.addEventListener('auth-changed', handleAuthChange);
@@ -163,13 +171,15 @@ export default function Sidebar({
     localStorage.removeItem("fullName");
     localStorage.removeItem("roles");
     localStorage.removeItem("isInstructor");
+    localStorage.removeItem("can_switch_view");
+    localStorage.removeItem("lms_active_view_mode");
     localStorage.clear();
     sessionStorage.clear();
 
     document.body.classList.remove("has-sidebar");
     document.documentElement.style.removeProperty("--sidebar-width");
     window.dispatchEvent(new Event("auth-changed"));
-    window.location.href = "/login";
+    window.location.href = "/lms/login";
   };
 
   const toggleAccordion = (id: string) => {
@@ -209,284 +219,411 @@ export default function Sidebar({
       setOpenAccordions((prev) => ({ ...prev, evaluations: true }));
     } else if (pathname.startsWith('/categories') || pathname.startsWith('/coupons') || pathname.startsWith('/sales-earnings')) {
       setOpenAccordions((prev) => ({ ...prev, commerce: true }));
+    } else if (pathname.startsWith('/admin')) {
+      setOpenAccordions((prev) => ({ ...prev, admin_portal: true }));
     }
   }, [pathname]);
 
-  // Clean Navigation Structure: No repetitions, streamlined accordions
-  const navSections: NavSection[] = [
-    {
-      title: 'Main Navigation',
-      items: [
+  // Dynamic Navigation Structure: Exact Student View vs Instructor Studio
+  const navSections: NavSection[] = React.useMemo(() => {
+    if (!effectiveIsInstructor) {
+      // 100% Student / Learner View (Exact same as student)
+      return [
         {
-          type: 'link',
-          name: 'Dashboard',
-          href: '/dashboard',
-          icon: LayoutDashboard,
-        },
-        {
-          type: 'accordion',
-          id: 'courses',
-          name: 'Courses',
-          icon: BookOpen,
-          badge: isInstructor ? 'Manage' : undefined,
-          badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
-          children: [
+          title: 'Learning',
+          items: [
             {
-              name: 'All Courses',
+              type: 'link',
+              name: 'Dashboard',
+              href: '/dashboard',
+              icon: LayoutDashboard,
+            },
+            {
+              type: 'link',
+              name: 'Courses',
               href: '/courses',
               icon: BookOpen,
             },
             {
-              name: 'Create Course',
-              href: '/course/create',
-              icon: PlusCircle,
-              badge: 'New',
-              badgeColor: 'bg-emerald-100 text-emerald-700 font-semibold',
-              instructorOnly: true,
-            },
-            {
-              name: 'Create Chapter',
-              onClick: () => setIsCreateChapterOpen(true),
-              icon: Plus,
-              badge: 'Action',
-              badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
-              instructorOnly: true,
-            },
-            {
-              name: 'Course Progress',
-              href: '/progress',
-              icon: TrendingUp,
-              instructorOnly: true,
-            },
-          ],
-        },
-        {
-          type: 'accordion',
-          id: 'academics',
-          name: 'Programs & Batches',
-          icon: GraduationCap,
-          children: [
-            {
-              name: 'Academic Programs',
-              href: '/programs',
-              icon: GraduationCap,
-            },
-            {
-              name: 'Batches & Cohorts',
+              type: 'link',
+              name: 'Batches',
               href: '/batches',
               icon: Users,
             },
+            {
+              type: 'link',
+              name: 'Programs',
+              href: '/programs',
+              icon: GraduationCap,
+            },
           ],
         },
-      ],
-    },
-    {
-      title: 'Assessments',
-      instructorOnly: true,
-      items: [
         {
-          type: 'accordion',
-          id: 'quizzes',
-          name: 'Quizzes',
-          icon: HelpCircle,
-          children: [
+          title: 'Assessments',
+          items: [
             {
-              name: 'All Quizzes',
+              type: 'link',
+              name: 'Quizzes',
               href: '/quizzes',
               icon: HelpCircle,
             },
             {
-              name: 'Create Quiz',
-              href: '/quizzes/create',
-              icon: PlusCircle,
-              badge: 'New',
-              badgeColor: 'bg-emerald-100 text-emerald-700 font-semibold',
-              instructorOnly: true,
-            },
-            {
-              name: 'Create Question',
-              href: '/quizzes/create-question',
-              icon: Plus,
-              badge: 'Bank',
-              badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
-              instructorOnly: true,
-            },
-          ],
-        },
-        {
-          type: 'accordion',
-          id: 'assignments',
-          name: 'Assignments',
-          icon: PenTool,
-          children: [
-            {
-              name: 'All Assignments',
+              type: 'link',
+              name: 'Assignments',
               href: '/assignments',
               icon: PenTool,
             },
             {
-              name: 'Create Assignment',
-              href: '/assignments/create',
-              icon: PlusCircle,
-              badge: 'New',
-              badgeColor: 'bg-emerald-100 text-emerald-700 font-semibold',
-              instructorOnly: true,
-            },
-          ],
-        },
-        {
-          type: 'accordion',
-          id: 'exercises',
-          name: 'Programming Exercises',
-          icon: Code2,
-          badge: 'Code',
-          badgeColor: 'bg-indigo-600 text-white font-bold',
-          children: [
-            {
-              name: 'All Exercises',
+              type: 'link',
+              name: 'Programming Exercises',
               href: '/programming-exercises',
               icon: Code2,
             },
-            {
-              name: 'Create Exercise',
-              href: '/programming-exercises/create',
-              icon: PlusCircle,
-              badge: 'New',
-              badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
-              instructorOnly: true,
-            },
           ],
         },
-      ],
-    },
-    {
-      title: 'Credentials & Achievements',
-      items: [
         {
-          type: 'link',
-          name: 'Certificates',
-          href: '/certificates',
-          icon: Award,
-        },
-        {
-          type: 'accordion',
-          id: 'badges',
-          name: 'Badges',
-          icon: Medal,
-          badge: 'New',
-          badgeColor: 'bg-gradient-to-r from-amber-500 to-rose-500 text-white',
-          children: [
+          title: 'Achievements & Enrollments',
+          items: [
             {
-              name: 'All Badges',
+              type: 'link',
+              name: 'Certificates',
+              href: '/certificates',
+              icon: Award,
+            },
+            {
+              type: 'link',
+              name: 'Badges',
               href: '/badges',
               icon: Medal,
             },
             {
-              name: 'Create Badge',
-              href: '/badges/create',
-              icon: PlusCircle,
-              badge: 'Action',
-              badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
-              instructorOnly: true,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      title: 'Instructor Management',
-      instructorOnly: true,
-      items: [
-        {
-          type: 'accordion',
-          id: 'evaluations',
-          name: 'Evaluations & Staff',
-          icon: ClipboardCheck,
-          instructorOnly: true,
-          children: [
-            {
-              name: 'Evaluations',
-              href: '/certificate-evaluations',
-              icon: ClipboardCheck,
-              instructorOnly: true,
-            },
-            {
-              name: 'Course Evaluators',
-              href: '/course-evaluators',
-              icon: UserCheck,
-              badge: 'Staff',
-              badgeColor: 'bg-violet-100 text-violet-700 font-semibold',
-              instructorOnly: true,
+              type: 'link',
+              name: 'My Enrollments',
+              href: '/enrollments',
+              icon: BookOpen,
             },
           ],
         },
         {
-          type: 'accordion',
-          id: 'commerce',
-          name: 'Admin & Finance',
-          icon: DollarSign,
-          instructorOnly: true,
-          children: [
+          title: 'Billing & Account',
+          items: [
             {
-              name: 'Categories',
-              href: '/categories',
-              icon: Tags,
-              instructorOnly: true,
-            },
-            {
-              name: 'Coupons & Discounts',
-              href: '/coupons',
-              icon: Ticket,
-              badge: 'Promo',
-              badgeColor: 'bg-emerald-100 text-emerald-700 font-semibold',
-              instructorOnly: true,
-            },
-            {
-              name: 'Sales & Earnings',
-              href: '/sales-earnings',
-              icon: DollarSign,
-              badge: 'Finance',
-              badgeColor: 'bg-emerald-100 text-emerald-700 font-semibold',
-              instructorOnly: true,
-            },
-            {
+              type: 'link',
               name: 'Payments & Subscriptions',
               href: '/profile/payments',
               icon: Receipt,
-              instructorOnly: true,
             },
           ],
         },
-        {
-          type: 'link',
-          name: 'LMS Settings',
-          href: '/settings',
-          icon: Settings,
-          badge: 'Admin',
-          badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
-          instructorOnly: true,
-        },
-      ],
-    },
-    {
-      title: 'Learner Services',
-      studentOnly: true,
-      items: [
-        {
-          type: 'link',
-          name: 'My Enrollments',
-          href: '/enrollments',
-          icon: BookOpen,
-        },
-        {
-          type: 'link',
-          name: 'Payments & Subscriptions',
-          href: '/profile/payments',
-          icon: Receipt,
-        },
-      ],
-    },
-  ];
+      ];
+    }
+
+    // Instructor Studio View
+    return [
+      {
+        title: 'Main Navigation',
+        items: [
+          {
+            type: 'link',
+            name: 'Dashboard',
+            href: '/dashboard',
+            icon: LayoutDashboard,
+          },
+          {
+            type: 'accordion',
+            id: 'courses',
+            name: 'Courses',
+            icon: BookOpen,
+            badge: 'Manage',
+            badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
+            children: [
+              {
+                name: 'All Courses',
+                href: '/courses',
+                icon: BookOpen,
+              },
+              {
+                name: 'Create Course',
+                href: '/course/create',
+                icon: PlusCircle,
+                badge: 'New',
+                badgeColor: 'bg-emerald-100 text-emerald-700 font-semibold',
+                instructorOnly: true,
+              },
+              {
+                name: 'Create Chapter',
+                onClick: () => setIsCreateChapterOpen(true),
+                icon: Plus,
+                badge: 'Action',
+                badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
+                instructorOnly: true,
+              },
+              {
+                name: 'Course Progress',
+                href: '/progress',
+                icon: TrendingUp,
+                instructorOnly: true,
+              },
+            ],
+          },
+          {
+            type: 'accordion',
+            id: 'academics',
+            name: 'Programs & Batches',
+            icon: GraduationCap,
+            children: [
+              {
+                name: 'Academic Programs',
+                href: '/programs',
+                icon: GraduationCap,
+              },
+              {
+                name: 'Batches & Cohorts',
+                href: '/batches',
+                icon: Users,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        title: 'Assessments',
+        items: [
+          {
+            type: 'accordion',
+            id: 'quizzes',
+            name: 'Quizzes',
+            icon: HelpCircle,
+            children: [
+              {
+                name: 'All Quizzes',
+                href: '/quizzes',
+                icon: HelpCircle,
+              },
+              {
+                name: 'Create Quiz',
+                href: '/quizzes/create',
+                icon: PlusCircle,
+                badge: 'New',
+                badgeColor: 'bg-emerald-100 text-emerald-700 font-semibold',
+                instructorOnly: true,
+              },
+              {
+                name: 'Create Question',
+                href: '/quizzes/create-question',
+                icon: Plus,
+                badge: 'Bank',
+                badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
+                instructorOnly: true,
+              },
+            ],
+          },
+          {
+            type: 'accordion',
+            id: 'assignments',
+            name: 'Assignments',
+            icon: PenTool,
+            children: [
+              {
+                name: 'All Assignments',
+                href: '/assignments',
+                icon: PenTool,
+              },
+              {
+                name: 'Create Assignment',
+                href: '/assignments/create',
+                icon: PlusCircle,
+                badge: 'New',
+                badgeColor: 'bg-emerald-100 text-emerald-700 font-semibold',
+                instructorOnly: true,
+              },
+            ],
+          },
+          {
+            type: 'accordion',
+            id: 'exercises',
+            name: 'Programming Exercises',
+            icon: Code2,
+            badge: 'Code',
+            badgeColor: 'bg-indigo-600 text-white font-bold',
+            children: [
+              {
+                name: 'All Exercises',
+                href: '/programming-exercises',
+                icon: Code2,
+              },
+              {
+                name: 'Create Exercise',
+                href: '/programming-exercises/create',
+                icon: PlusCircle,
+                badge: 'New',
+                badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
+                instructorOnly: true,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        title: 'Credentials & Achievements',
+        items: [
+          {
+            type: 'link',
+            name: 'Certificates',
+            href: '/certificates',
+            icon: Award,
+          },
+          {
+            type: 'accordion',
+            id: 'badges',
+            name: 'Badges',
+            icon: Medal,
+            badge: 'New',
+            badgeColor: 'bg-gradient-to-r from-amber-500 to-rose-500 text-white',
+            children: [
+              {
+                name: 'All Badges',
+                href: '/badges',
+                icon: Medal,
+              },
+              {
+                name: 'Create Badge',
+                href: '/badges/create',
+                icon: PlusCircle,
+                badge: 'Action',
+                badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
+                instructorOnly: true,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        title: 'Instructor Management',
+        instructorOnly: true,
+        items: [
+          {
+            type: 'accordion',
+            id: 'evaluations',
+            name: 'Evaluations & Staff',
+            icon: ClipboardCheck,
+            instructorOnly: true,
+            children: [
+              {
+                name: 'Evaluations',
+                href: '/certificate-evaluations',
+                icon: ClipboardCheck,
+                instructorOnly: true,
+              },
+              {
+                name: 'Course Evaluators',
+                href: '/course-evaluators',
+                icon: UserCheck,
+                badge: 'Staff',
+                badgeColor: 'bg-violet-100 text-violet-700 font-semibold',
+                instructorOnly: true,
+              },
+            ],
+          },
+          {
+            type: 'accordion',
+            id: 'commerce',
+            name: 'Admin & Finance',
+            icon: DollarSign,
+            instructorOnly: true,
+            children: [
+              {
+                name: 'Categories',
+                href: '/categories',
+                icon: Tags,
+                instructorOnly: true,
+              },
+              {
+                name: 'Coupons & Discounts',
+                href: '/coupons',
+                icon: Ticket,
+                badge: 'Promo',
+                badgeColor: 'bg-emerald-100 text-emerald-700 font-semibold',
+                instructorOnly: true,
+              },
+              {
+                name: 'Sales & Earnings',
+                href: '/sales-earnings',
+                icon: DollarSign,
+                badge: 'Finance',
+                badgeColor: 'bg-emerald-100 text-emerald-700 font-semibold',
+                instructorOnly: true,
+              },
+              {
+                name: 'Payments & Subscriptions',
+                href: '/profile/payments',
+                icon: Receipt,
+                instructorOnly: true,
+              },
+            ],
+          },
+          {
+            type: 'link',
+            name: 'LMS Settings',
+            href: '/settings',
+            icon: Settings,
+            badge: 'Admin',
+            badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
+            instructorOnly: true,
+          },
+        ],
+      },
+      ...(isAdminUser
+        ? [
+            {
+              title: 'Admin Portal',
+              instructorOnly: true,
+              items: [
+                {
+                  type: 'accordion' as const,
+                  id: 'admin_portal',
+                  name: 'Admin & Reports',
+                  icon: ShieldCheck,
+                  badge: 'Admin',
+                  badgeColor: 'bg-purple-100 text-purple-700 font-bold border border-purple-200',
+                  instructorOnly: true,
+                  children: [
+                    {
+                      name: 'Admin Dashboard',
+                      href: '/admin',
+                      icon: LayoutDashboard,
+                      badge: 'Overview',
+                      badgeColor: 'bg-purple-50 text-purple-700 font-medium',
+                      instructorOnly: true,
+                    },
+                    {
+                      name: 'All LMS Courses',
+                      href: '/admin?tab=courses',
+                      icon: BookOpen,
+                      instructorOnly: true,
+                    },
+                    {
+                      name: 'User Directory',
+                      href: '/admin?tab=users',
+                      icon: Users,
+                      instructorOnly: true,
+                    },
+                    {
+                      name: 'Reports & Analytics',
+                      href: '/admin?tab=reports',
+                      icon: TrendingUp,
+                      badge: 'Reports',
+                      badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
+                      instructorOnly: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          ]
+        : []),
+    ];
+  }, [effectiveIsInstructor, isAdminUser]);
 
   const handleFlyoutMouseEnter = (groupId: string) => {
     if (flyoutTimerRef.current) {
@@ -550,12 +687,12 @@ export default function Sidebar({
         {/* Navigation Items (Scrollable) */}
         <div className="flex-1 overflow-y-auto px-3 py-4 custom-scrollbar">
           {navSections.map((section, sIdx) => {
-            if (section.instructorOnly && !isInstructor) return null;
-            if (section.studentOnly && isInstructor) return null;
+            if (section.instructorOnly && !effectiveIsInstructor) return null;
+            if (section.studentOnly && effectiveIsInstructor) return null;
 
-            // Filter items by instructor rights
+            // Filter items by effective instructor rights
             const visibleItems = section.items.filter((item) => {
-              if (item.instructorOnly && !isInstructor) return false;
+              if (item.instructorOnly && !effectiveIsInstructor) return false;
               return true;
             });
 
@@ -641,7 +778,7 @@ export default function Sidebar({
 
                     // ACCORDION GROUP
                     const visibleChildren = item.children.filter(
-                      (child) => !child.instructorOnly || isInstructor
+                      (child) => !child.instructorOnly || effectiveIsInstructor
                     );
                     const isGroupActive = visibleChildren.some(
                       (child) => child.href && isItemActive(child.href)
@@ -892,7 +1029,7 @@ export default function Sidebar({
           })}
 
           {/* Quick Action Card for Instructors */}
-          {isExpanded && isInstructor && (
+          {isExpanded && effectiveIsInstructor && (
             <div className="mt-4 p-3.5 rounded-2xl bg-gradient-to-br from-indigo-50/80 via-purple-50/40 to-slate-50 border border-indigo-100 shadow-2xs">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[11px] font-bold text-indigo-950 flex items-center gap-1.5">
@@ -932,13 +1069,37 @@ export default function Sidebar({
         <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
           {isExpanded ? (
             <div className="flex items-center gap-2 truncate flex-1 px-1">
-              <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0">
-                {isInstructor ? 'INS' : 'LRN'}
-              </div>
+              <button
+                type="button"
+                onClick={() => canSwitch && switchView()}
+                disabled={!canSwitch}
+                className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 transition-transform ${
+                  canSwitch ? 'cursor-pointer hover:scale-105' : ''
+                } ${
+                  effectiveIsInstructor
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-emerald-100 text-emerald-700'
+                }`}
+                title={canSwitch ? `Currently ${effectiveIsInstructor ? 'Instructor' : 'Learner'} View. Click to switch.` : undefined}
+              >
+                {effectiveIsInstructor ? 'INS' : 'LRN'}
+              </button>
               <div className="truncate flex-1">
-                <p className="text-xs font-semibold text-slate-800 leading-none truncate">
-                  {isInstructor ? 'Instructor Portal' : 'Student Portal'}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-semibold text-slate-800 leading-none truncate">
+                    {effectiveIsInstructor ? 'Instructor View' : 'Learner View'}
+                  </p>
+                  {canSwitch && (
+                    <button
+                      type="button"
+                      onClick={() => switchView()}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer"
+                      title="Switch View"
+                    >
+                      (Switch)
+                    </button>
+                  )}
+                </div>
                 <p className="text-[10px] text-slate-400 mt-0.5">StrideNex LMS</p>
               </div>
               <button
@@ -952,9 +1113,21 @@ export default function Sidebar({
             </div>
           ) : (
             <div className="w-full flex flex-col items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center">
-                {isInstructor ? 'INS' : 'LRN'}
-              </div>
+              <button
+                type="button"
+                onClick={() => canSwitch && switchView()}
+                disabled={!canSwitch}
+                className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center transition-transform ${
+                  canSwitch ? 'cursor-pointer hover:scale-105' : ''
+                } ${
+                  effectiveIsInstructor
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-emerald-100 text-emerald-700'
+                }`}
+                title={canSwitch ? `Currently ${effectiveIsInstructor ? 'Instructor' : 'Learner'} View. Click to switch.` : undefined}
+              >
+                {effectiveIsInstructor ? 'INS' : 'LRN'}
+              </button>
               <button
                 type="button"
                 onClick={handleLogout}

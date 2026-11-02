@@ -53,7 +53,7 @@ import {
   InstructorDashboardData
 } from "@/services/payment.services";
 import { getInstructorSalesReport } from "@/services/billing.services";
-import { getCourseProgressBar, parseProgressBarValue, updateCourse, getCourses } from "@/services/lms.services";
+import { getCourseProgressBar, parseProgressBarValue, updateCourse, getCourses, getInstructorCourses } from "@/services/lms.services";
 import { showToast } from "@/components/ui/Toast";
 import { MonthlyBreakdownItem } from "@/types/billing.types";
 import { getImageUrl } from "@/services/api.services";
@@ -61,15 +61,18 @@ import { formatDate } from "@/utils/formatters";
 import { getMyLiveClasses, getAdminLiveClasses, recordLiveClassJoin } from "@/services/live_class.services";
 import { LMSLiveClass } from "@/types/live_class.types";
 import { isAuthorizedInstructor } from "@/services/auth.services";
+import { useViewMode } from "@/context/ViewModeContext";
 
 type StudentTab = "courses" | "batches" | "programs";
 
 export function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { viewMode, canSwitch } = useViewMode();
   const [studentData, setStudentData] = useState<StudentDashboardData | null>(null);
   const [instructorData, setInstructorData] = useState<InstructorDashboardData | null>(null);
   const [isInstructorRole, setIsInstructorRole] = useState(false);
+  const effectiveInstructorView = Boolean((isInstructorRole || canSwitch) && viewMode === "instructor");
   const [isAdminRole, setIsAdminRole] = useState(false);
   const [studentTab, setStudentTab] = useState<StudentTab>("courses");
   const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyBreakdownItem[]>([]);
@@ -336,7 +339,7 @@ export function DashboardContent() {
           try {
             const [iDataRes, authoredCoursesRes] = await Promise.allSettled([
               getInstructorDashboard(),
-              getCourses(),
+              getInstructorCourses(),
             ]);
 
             let finalInstructorData: any = null;
@@ -750,7 +753,7 @@ export function DashboardContent() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
             <div>
               <div className="flex items-center gap-2 mb-1.5">
-                {isInstructorRole ? (
+                {effectiveInstructorView ? (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                     <Briefcase className="w-3 h-3" />
                     Instructor Sales Studio
@@ -761,7 +764,7 @@ export function DashboardContent() {
                     Student Learning Portal
                   </span>
                 )}
-                {isInstructorRole && (
+                {effectiveInstructorView && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-300 bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
                     <ShieldCheck className="w-3 h-3 text-emerald-400" /> Verified Instructor
                   </span>
@@ -769,12 +772,12 @@ export function DashboardContent() {
               </div>
 
               <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-                {isInstructorRole
+                {effectiveInstructorView
                   ? "Instructor & Sales Dashboard"
                   : `Welcome back${userName ? `, ${userName}` : userEmail ? `, ${userEmail.split("@")[0]}` : ""}!`}
               </h1>
               <p className="text-indigo-200/80 mt-1 text-xs sm:text-sm max-w-2xl font-light">
-                {isInstructorRole
+                {effectiveInstructorView
                   ? "Manage your authored courses, track enrollment metrics, monitor sales revenue, and launch batches."
                   : "Track your enrolled courses, continue learning, and manage your certificates."}
               </p>
@@ -782,7 +785,7 @@ export function DashboardContent() {
 
             {/* Top Action Buttons */}
             <div className="flex flex-wrap items-center gap-3">
-              {isInstructorRole ? (
+              {effectiveInstructorView ? (
                 <>
                   <Link
                     href="/course/create"
@@ -809,7 +812,7 @@ export function DashboardContent() {
               ) : (
                 <>
                   <Link
-                    href="/my-payments"
+                    href="/profile/payments"
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-semibold backdrop-blur-sm border border-white/15 transition-all shadow-sm"
                   >
                     <Receipt className="w-4 h-4 text-indigo-300" />
@@ -841,7 +844,7 @@ export function DashboardContent() {
         {/* ══════════════════════════════════════════════════════
             VIEW A: INSTRUCTOR SALES & CREATOR STUDIO
         ══════════════════════════════════════════════════════ */}
-        {isInstructorRole ? (
+        {effectiveInstructorView ? (
           <div>
             {/* ── COURSE STATUS BREAKDOWN METRICS: ACTIVE, INACTIVE, AND PUBLISHED ── */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">

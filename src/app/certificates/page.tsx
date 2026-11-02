@@ -39,6 +39,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Dropdown from '@/components/ui/Dropdown';
 import { showToast } from '@/components/ui/Toast';
+import { useViewMode } from '@/context/ViewModeContext';
 
 interface Certificate {
   name: string;
@@ -57,9 +58,11 @@ export default function CertificatesPage() {
   const router = useRouter();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const prevBlobUrlRef = useRef<string | null>(null);
+  const { viewMode } = useViewMode();
 
   // Role detection
-  const [isInstructor, setIsInstructor] = useState<boolean>(false);
+  const [hasInstructorRole, setHasInstructorRole] = useState<boolean>(false);
+  const isInstructor = hasInstructorRole && viewMode === 'instructor';
   const [authChecked, setAuthChecked] = useState<boolean>(false);
 
   // Instructor: Templates & Preview state
@@ -306,27 +309,17 @@ export default function CertificatesPage() {
 
   useEffect(() => {
     const isInst = isAuthorizedInstructor();
-    setIsInstructor(isInst);
+    setHasInstructorRole(isInst);
     setAuthChecked(true);
 
-    if (isInst) {
-      /*
-      // =========================================================================
-      // Previously integrated API - commented out for instructor role as requested:
-      // =========================================================================
-      // const rawResponse = await getCertificates();
-      // const certArray = Array.isArray(rawResponse)
-      //   ? rawResponse
-      //   : (rawResponse?.message?.data || rawResponse?.data?.message || rawResponse?.data || rawResponse?.message || []);
-      // const data = Array.isArray(certArray) ? certArray : [];
-      // setCertificates(data);
-      */
+    const effectiveIsInstructor = isInst && viewMode === 'instructor';
+    if (effectiveIsInstructor) {
       fetchTemplates();
     } else {
       // Student role flow: fetch earned certificates
       fetchStudentCertificates();
     }
-  }, []);
+  }, [viewMode]);
 
   const handleSelectTemplate = (name: string) => {
     setSelectedTemplate(name);

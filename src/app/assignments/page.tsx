@@ -28,15 +28,18 @@ import {
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import GradingModal from '@/components/modals/GradingModal';
+import { useViewMode } from '@/context/ViewModeContext';
 
 function AssignmentsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { viewMode } = useViewMode();
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingName, setDeletingName] = useState<string | null>(null);
-  const [isInstructor, setIsInstructor] = useState(false);
+  const [hasInstructorRole, setHasInstructorRole] = useState(false);
+  const isInstructor = hasInstructorRole && viewMode === 'instructor';
 
   // Instructor Submissions state
   const [instructorSubmissions, setInstructorSubmissions] = useState<any[]>([]);
@@ -212,11 +215,16 @@ function AssignmentsContent() {
       if (!isInst && typeof isAuthorizedInstructor === "function") {
         isInst = isAuthorizedInstructor();
       }
-      setIsInstructor(isInst);
+      setHasInstructorRole(isInst);
     }
 
-    fetchAssignments(isInst);
-  }, [router]);
+    const effectiveIsInstructor = isInst && viewMode === 'instructor';
+    if (viewMode === 'learner' && activeTab === 'submissions') {
+      setActiveTab('assignments');
+    }
+
+    fetchAssignments(effectiveIsInstructor);
+  }, [router, viewMode]);
 
   const handleDelete = async (e: React.MouseEvent, name: string) => {
     e.preventDefault();
