@@ -91,9 +91,9 @@ function cleanHtmlContent(raw?: string | null): string {
   if (!raw) return "";
   let content = raw.trim();
 
-  // Strip empty paragraphs and breaks: <p></p>, <p><br></p>, <p>&nbsp;</p>
+  // Strip empty paragraphs and breaks: <p></p>, <p><br></p>, <p> </p>
   content = content
-    .replace(/<p[^>]*>\s*(?:<br\s*\/?>|&nbsp;|\s)*<\/p>/gi, "")
+    .replace(/<p[^>]*>\s*(?:<br\s*\/?>| |\s)*<\/p>/gi, "")
     .replace(/(?:<br\s*\/?>|\s)+$/gi, "")
     .trim();
 
@@ -146,6 +146,33 @@ function getNotificationDetails(notif: LMSNotification) {
       tagClass: "bg-amber-50 text-amber-700 border-amber-200",
       label: "Course Completed",
       actionText: "View Course",
+    };
+  }
+
+  if (docType === "LMS Batch" && subject.includes("starts today")) {
+    return {
+      icon: Clock,
+      colorClass: "bg-amber-50 text-amber-600 border-amber-200",
+      badgeBg: "bg-amber-500",
+      tagClass: "bg-amber-50 text-amber-700 border-amber-200",
+      label: "Reminder",
+      actionText: "View Batch",
+    };
+  }
+
+  const description = (notif.email_content || "").toLowerCase();
+  const isBatchDrop =
+    subject.includes("dropped from your batch") ||
+    description.includes("withdrawn from your batch");
+
+  if (docType === "LMS Batch" && isBatchDrop) {
+    return {
+      icon: MessageSquare,
+      colorClass: "bg-purple-50 text-purple-600 border-purple-200",
+      badgeBg: "bg-purple-500",
+      tagClass: "bg-purple-50 text-purple-700 border-purple-200",
+      label: "Batch",
+      actionText: "View Details",
     };
   }
 
@@ -448,9 +475,8 @@ export default function NotificationBell() {
         onClick={handleToggle}
         aria-label="Notifications"
         aria-expanded={isOpen}
-        className={`relative p-2 text-slate-600 hover:bg-slate-50 rounded-full transition-colors cursor-pointer ${
-          isOpen ? "bg-slate-50 text-slate-900" : ""
-        }`}
+        className={`relative p-2 text-slate-600 hover:bg-slate-50 rounded-full transition-colors cursor-pointer ${isOpen ? "bg-slate-50 text-slate-900" : ""
+          }`}
       >
         <Bell className="w-5 h-5" />
 
@@ -522,21 +548,19 @@ export default function NotificationBell() {
             <div className="flex items-center gap-1 bg-slate-200/60 p-0.5 rounded-lg shrink-0">
               <button
                 onClick={() => handleFilterChange("all")}
-                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                  filterMode === "all"
-                    ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${filterMode === "all"
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+                  }`}
               >
                 All {pagination.total > 0 && <span className="opacity-70 ml-1">({pagination.total})</span>}
               </button>
               <button
                 onClick={() => handleFilterChange("unread")}
-                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  filterMode === "unread"
-                    ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${filterMode === "unread"
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+                  }`}
               >
                 <span>Unread</span>
                 {unreadCount > 0 && (
@@ -589,11 +613,10 @@ export default function NotificationBell() {
                   <div
                     key={notif.name}
                     onClick={() => handleNotificationClick(notif)}
-                    className={`p-4 transition-all duration-150 flex items-start gap-3 relative group cursor-pointer w-full min-w-0 max-w-full overflow-hidden whitespace-normal ${
-                      isUnread
-                        ? "bg-indigo-50/35 hover:bg-indigo-50/65 border-l-[3.5px] border-indigo-600"
-                        : "bg-white hover:bg-slate-50/90 border-l-[3.5px] border-transparent"
-                    }`}
+                    className={`p-4 transition-all duration-150 flex items-start gap-3 relative group cursor-pointer w-full min-w-0 max-w-full overflow-hidden whitespace-normal ${isUnread
+                      ? "bg-indigo-50/35 hover:bg-indigo-50/65 border-l-[3.5px] border-indigo-600"
+                      : "bg-white hover:bg-slate-50/90 border-l-[3.5px] border-transparent"
+                      }`}
                   >
                     {/* Avatar / Icon Stack */}
                     <div className="relative shrink-0 mt-0.5">
@@ -654,11 +677,10 @@ export default function NotificationBell() {
 
                       {/* Subject - Full HTML, unclipped, wrapping naturally */}
                       <div
-                        className={`text-sm leading-snug break-words whitespace-normal ${
-                          isUnread
-                            ? "text-slate-900 font-semibold"
-                            : "text-slate-800 font-normal"
-                        } [&_strong]:font-bold [&_strong]:text-slate-900 [&_em]:italic`}
+                        className={`text-sm leading-snug break-words whitespace-normal ${isUnread
+                          ? "text-slate-900 font-semibold"
+                          : "text-slate-800 font-normal"
+                          } [&_strong]:font-bold [&_strong]:text-slate-900 [&_em]:italic`}
                         style={{
                           overflowWrap: "anywhere",
                           wordBreak: "break-word",
