@@ -691,21 +691,25 @@ export default function BatchDetailsPage() {
                   <User className="w-4 h-4" /> Instructors
                 </h3>
                 <div className="flex flex-col gap-4">
-                  {batchData.instructors.map((inst: any, idx: number) => (
+                  {batchData.instructors.map((inst: any, idx: number) => {
+                    const instructorName = [batchData.owner_name, inst.owner_name, inst.full_name, inst.instructor_name]
+                      .find((value) => typeof value === 'string' && value.trim() && !value.includes('@')) || 'Instructor';
+                    return (
                     <div key={idx} className="flex items-center gap-3">
                       {inst.user_image ? (
-                        <img src={getImageUrl(inst.user_image)} alt={inst.instructor_name} className="w-10 h-10 rounded-full object-cover border border-white/20 shadow-sm" />
+                        <img src={getImageUrl(inst.user_image)} alt={instructorName} className="w-10 h-10 rounded-full object-cover border border-white/20 shadow-sm" />
                       ) : (
                         <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-200 font-bold border border-indigo-500/30">
-                          {(inst.instructor_name || 'I').charAt(0).toUpperCase()}
+                          {instructorName.charAt(0).toUpperCase()}
                         </div>
                       )}
                       <div>
-                        <h4 className="font-semibold text-white text-sm">{inst.instructor_name}</h4>
-                        <p className="text-xs text-indigo-200/70">{inst.instructor}</p>
+                        <h4 className="font-semibold text-white text-sm">{instructorName}</h4>
+                        <p className="text-xs text-indigo-200/70">Instructor</p>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

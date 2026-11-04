@@ -2470,7 +2470,8 @@ export default function CourseDetailPage() {
                     <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5 block">Taught by</span>
                     <div className="space-y-2.5">
                       {details.instructors.map((instructor: any, i: number) => {
-                        const instrName = instructor.full_name || instructor.instructor_name || instructor.instructor || instructor.name || 'Instructor';
+                        const instrName = [details.owner_name, instructor.owner_name, instructor.full_name, instructor.instructor_name]
+                          .find((value) => typeof value === 'string' && value.trim() && !value.includes('@')) || 'Instructor';
                         const initial = (instructor.first_name || instrName).charAt(0).toUpperCase();
                         return (
                           <div key={instructor.name || i} className="flex items-center gap-2.5">

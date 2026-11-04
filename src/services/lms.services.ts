@@ -28,14 +28,17 @@ export interface GetBatchCoursesPayload {
 export interface Instructor {
   name: string;
   username: string;
-  full_name: string;
+  owner_name?: string;
+  full_name?: string;
+  instructor_name?: string;
   user_image: string | null;
-  first_name: string;
+  first_name?: string;
 }
 
 export interface Course {
   name: string;
   title: string;
+  owner_name?: string;
   tags: string | null;
   image: string | null;
   video_link: string | null;
@@ -4640,5 +4643,3 @@ export const getBatchDiscussionReplies = async (
 };
 
 export * from './payment.services';
-
-
