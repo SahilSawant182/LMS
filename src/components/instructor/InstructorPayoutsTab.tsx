@@ -1232,7 +1232,6 @@ export default function InstructorPayoutsTab({
                   <tr key={tx.payment_id || idx} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3.5 px-4">
                       <div className="font-bold text-slate-900">{tx.student_name || "Student"}</div>
-                      <div className="text-[11px] text-slate-400">{tx.student_email}</div>
                     </td>
                     <td className="py-3.5 px-4">
                       <span className="font-semibold text-slate-800 block">{tx.item_name}</span>

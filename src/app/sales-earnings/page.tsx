@@ -445,7 +445,6 @@ function SalesEarningsContent() {
                           {/* Student */}
                           <td className="py-3.5 px-5">
                             <p className="font-bold text-slate-900">{sale.student_name || "Student Learner"}</p>
-                            <p className="text-[11px] text-slate-400">{sale.member}</p>
                           </td>
 
                           {/* Item */}

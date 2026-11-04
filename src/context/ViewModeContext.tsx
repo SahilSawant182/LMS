@@ -48,6 +48,17 @@ export function ViewModeProvider({
         "Instructor Admin",
         "LMS Admin",
         "Admin Instructor",
+        "Mentor",
+        // ADD COLLEGE AND INDUSTRY ROLES:
+        "College",
+        "College Base",
+        "College Admin",
+        "College User",
+        "Industry",
+        "Industry Base",
+        "Industry Admin",
+        "Industry User",
+        "Partner",
       ];
       const rList = Array.isArray(user.roles) ? user.roles : [user.roles];
       return rList.some((r: string) => instructorRoles.includes(r));
@@ -98,6 +109,17 @@ export function ViewModeProvider({
               "Instructor Admin",
               "LMS Admin",
               "Admin Instructor",
+              "Mentor",
+              // ADD COLLEGE AND INDUSTRY ROLES:
+              "College",
+              "College Base",
+              "College Admin",
+              "College User",
+              "Industry",
+              "Industry Base",
+              "Industry Admin",
+              "Industry User",
+              "Partner",
             ];
             const rawRoles = Array.isArray(data.roles) ? data.roles : [];
             const hasInst = rawRoles.some((r: string) => instructorRoles.includes(r)) || Boolean(data.is_instructor);

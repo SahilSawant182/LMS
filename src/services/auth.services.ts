@@ -48,8 +48,18 @@ export const hasInstructorAccountRole = (): boolean => {
       "Instructor Admin",
       "LMS Admin",
       "Admin Instructor",
+      "Mentor",
+      // ADD COLLEGE AND INDUSTRY ROLES:
+      "College",
+      "College Base",
+      "College Admin",
+      "College User",
+      "Industry",
+      "Industry Base",
+      "Industry Admin",
+      "Industry User",
+      "Partner",
     ];
-
     const checkRoles = (raw: string | null): boolean => {
       if (!raw) return false;
       try {
@@ -57,18 +67,18 @@ export const hasInstructorAccountRole = (): boolean => {
         if (Array.isArray(parsed)) {
           return parsed.some((r: string) => instructorRoles.includes(r));
         }
-      } catch {}
+      } catch { }
       return instructorRoles.some((r: string) => raw.includes(r));
     };
-
-    // 1. Check saved instructor roles (if instructor has switched to learner view)
+    // 1. Check saved instructor roles
     const savedRoles = localStorage.getItem("lms_saved_instructor_roles");
     if (checkRoles(savedRoles)) return true;
-
-    // 2. Check current roles
-    const currentRoles = localStorage.getItem("roles");
-    if (checkRoles(currentRoles)) return true;
-
+    // 2. Check active roles array in localStorage
+    const activeRoles = localStorage.getItem("roles");
+    if (checkRoles(activeRoles)) return true;
+    // 3. Fallback: check isInstructor / is_instructor flags
+    const isInst = localStorage.getItem("isInstructor");
+    if (isInst === "true") return true;
     return false;
   } catch {
     return false;
@@ -125,7 +135,7 @@ export const switchActiveViewMode = (targetMode?: "instructor" | "learner") => {
   if (nextMode === "learner") {
     // 1. Preserve original instructor roles so we can switch back
     const currentRoles = localStorage.getItem("roles");
-    if (currentRoles && (currentRoles.includes("Instructor") || currentRoles.includes("Administrator") || currentRoles.includes("System Manager"))) {
+    if (currentRoles && hasInstructorAccountRole()) {
       localStorage.setItem("lms_saved_instructor_roles", currentRoles);
     }
     // 2. Soft-login as Student / Learner
@@ -165,7 +175,26 @@ export const isAuthorizedInstructor = (): boolean => {
     if (!rolesStr) return false;
 
     const roles = rolesStr.startsWith("[") ? JSON.parse(rolesStr) : rolesStr;
-    const authorizedRoles = ["Instructor", "Course Creator", "Moderator", "Administrator", "System Manager"];
+    const authorizedRoles = [
+      "Instructor",
+      "Course Creator",
+      "Moderator",
+      "Administrator",
+      "System Manager",
+      "Instructor Admin",
+      "LMS Admin",
+      "Admin Instructor",
+      "Mentor",
+      "College",
+      "College Base",
+      "College Admin",
+      "College User",
+      "Industry",
+      "Industry Base",
+      "Industry Admin",
+      "Industry User",
+      "Partner",
+    ];
 
     if (Array.isArray(roles)) {
       return roles.some((r: string) => authorizedRoles.includes(r));

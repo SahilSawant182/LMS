@@ -374,6 +374,7 @@ export interface InstructorDashboardData {
     total_courses: number;
     published_courses: number;
     draft_courses: number;
+    active_courses?: number;
     total_batches: number;
   };
   courses: Array<{

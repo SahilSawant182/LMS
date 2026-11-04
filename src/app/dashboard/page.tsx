@@ -399,6 +399,9 @@ export function DashboardContent() {
               finalInstructorData.courses = mergedCourses;
               if (!finalInstructorData.stats) finalInstructorData.stats = {};
               finalInstructorData.stats.total_courses = mergedCourses.length;
+              finalInstructorData.stats.published_courses = mergedCourses.filter((c: any) => Boolean(c.published)).length;
+              finalInstructorData.stats.draft_courses = mergedCourses.filter((c: any) => !c.published).length;
+              finalInstructorData.stats.active_courses = mergedCourses.filter((c: any) => Boolean(c.published) || (Number(c.enrollments_count || 0) > 0)).length;
             }
 
             if (finalInstructorData) {
@@ -491,6 +494,7 @@ export function DashboardContent() {
     total_courses: 0,
     published_courses: 0,
     draft_courses: 0,
+    active_courses: 0,
     total_batches: 0,
   };
   const instructorCourses = instructorData?.courses || [];
@@ -500,17 +504,21 @@ export function DashboardContent() {
   const publishedCoursesCount =
     iStats.published_courses || instructorCourses.filter((c) => Boolean(c.published)).length;
 
-  // Active courses: courses that are published and actively active
+  // Active courses: courses that are published and open/available to learners
   const activeCoursesCount = instructorCourses.filter((c: any) => {
     if (c.is_active !== undefined) return Boolean(c.is_active);
-    if (c.status) return c.status.toLowerCase() === "active";
-    return Boolean(c.published) && (c.enrollments_count > 0 || c.published);
-  }).length;
+    const statusLower = (c.status || "").toLowerCase();
+    if (statusLower === "active") return true;
+    if (statusLower === "inactive" || statusLower === "draft") return false;
+    return Boolean(c.published) || (Number(c.enrollments_count || 0) > 0);
+  }).length || (iStats.active_courses ?? iStats.published_courses ?? 0);
 
   // Inactive courses: draft or unpublished courses
   const inactiveCoursesCount = instructorCourses.filter((c: any) => {
     if (c.is_active === false) return true;
-    if (c.status) return c.status.toLowerCase() === "inactive" || c.status.toLowerCase() === "draft";
+    const statusLower = (c.status || "").toLowerCase();
+    if (statusLower === "inactive" || statusLower === "draft") return true;
+    if (statusLower === "active") return false;
     return !c.published;
   }).length || iStats.draft_courses || 0;
 

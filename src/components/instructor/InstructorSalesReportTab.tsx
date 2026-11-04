@@ -269,7 +269,7 @@ export default function InstructorSalesReportTab({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by student name, email, or order ID..."
+              placeholder="Search by student name or order ID..."
                 className="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:border-indigo-500"
               />
             </div>
@@ -539,8 +539,7 @@ export default function InstructorSalesReportTab({
                         <p className="text-[11px] text-slate-400 font-mono mt-0.5">{t.payment_id}</p>
                       </td>
                       <td className="py-4 px-5">
-                        <p className="font-semibold text-slate-900 text-xs">{t.student_name}</p>
-                        <p className="text-[11px] text-slate-500">{t.student_email}</p>
+                        <p className="font-semibold text-slate-900 text-xs">{t.student_name || "Student"}</p>
                       </td>
                       <td className="py-4 px-5">
                         <p className="font-bold text-slate-800 text-xs line-clamp-1">{t.item_title}</p>

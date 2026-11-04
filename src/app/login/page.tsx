@@ -69,6 +69,16 @@ export default function LoginPage() {
         "Instructor Admin",
         "LMS Admin",
         "Admin Instructor",
+        "Mentor",
+        "College",
+        "College Base",
+        "College Admin",
+        "College User",
+        "Industry",
+        "Industry Base",
+        "Industry Admin",
+        "Industry User",
+        "Partner",
       ];
       const hasInstructorRole = Array.isArray(roles) && roles.some((r: string) => instructorRoles.includes(r));
       const isActualInstructor = Boolean(isInstructor || hasInstructorRole);

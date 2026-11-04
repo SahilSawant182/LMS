@@ -51,6 +51,9 @@ import {
 interface QuizAuthor {
   name?: string;
   owner?: string;
+  owner_name?: string;
+  author_name?: string;
+  full_name?: string;
   creation?: string;
   modified?: string;
   author: string;
@@ -80,6 +83,7 @@ interface QuizQuestion {
 interface QuizDetails {
   name: string;
   owner?: string;
+  owner_name?: string;
   creation?: string;
   modified?: string;
   modified_by?: string;
@@ -462,7 +466,12 @@ export default function QuizDetailsPage() {
 
   const primaryAuthor = useMemo(() => {
     if (!quiz) return "";
-    return quiz.authors?.[0]?.author || quiz.owner || "Instructor";
+    return [
+      quiz.owner_name,
+      quiz.authors?.[0]?.owner_name,
+      quiz.authors?.[0]?.author_name,
+      quiz.authors?.[0]?.full_name,
+    ].find((value) => typeof value === "string" && value.trim() && !value.includes("@")) || "Instructor";
   }, [quiz]);
 
   const totalCalculatedMarks = useMemo(() => {

@@ -22,6 +22,7 @@ import {
   Award,
   Inbox,
   CheckCircle2,
+  ShieldCheck
 } from "lucide-react";
 import {
   LMSNotification,
@@ -132,6 +133,29 @@ export function resolveNotificationLink(rawLink?: string | null): string | null 
   return link;
 }
 
+const isPublishedBatchNotification = (n: LMSNotification) =>
+  n.document_type === "LMS Batch" &&
+  /^New batch available:/i.test(n.subject || "");
+
+const isLiveClassNotification = (n: LMSNotification) =>
+  n.document_type === "LMS Batch" &&
+  /(?:New live class scheduled:|Live Class (?:Rescheduled|Cancelled):)/i.test(
+    n.subject || ""
+  );
+
+
+
+const isInstructorAssignmentNotification = (n: LMSNotification) =>
+  n.type === 'Alert' &&
+  ['LMS Course', 'LMS Batch'].includes(n.document_type) &&
+  /You've been assigned as Instructor for (Course|Batch):/i.test(n.subject || '');
+
+const instructorAssignmentLabel = (n: LMSNotification) =>
+  n.document_type === 'LMS Course' ? 'Course Assignment' : 'Batch Assignment';
+
+const instructorAssignmentAction = (n: LMSNotification) =>
+  n.document_type === 'LMS Course' ? 'Open Course' : 'Open Batch';
+
 // Icon & Color styling based on document_type and subject context
 function getNotificationDetails(notif: LMSNotification) {
   const docType = notif.document_type;
@@ -148,6 +172,16 @@ function getNotificationDetails(notif: LMSNotification) {
       actionText: "View Course",
     };
   }
+  if (isInstructorAssignmentNotification(notif)) {
+    return {
+      icon: ShieldCheck, // or GraduationCap / Users
+      colorClass: 'bg-indigo-50 text-indigo-600 border-indigo-200',
+      badgeBg: 'bg-indigo-500',
+      tagClass: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+      label: instructorAssignmentLabel(notif),
+      actionText: instructorAssignmentAction(notif),
+    };
+  }
 
   if (docType === "LMS Batch" && subject.includes("starts today")) {
     return {
@@ -157,6 +191,27 @@ function getNotificationDetails(notif: LMSNotification) {
       tagClass: "bg-amber-50 text-amber-700 border-amber-200",
       label: "Reminder",
       actionText: "View Batch",
+    };
+  }
+  if (isPublishedBatchNotification(notif)) {
+    return {
+      icon: Sparkles,
+      colorClass: "bg-teal-50 text-teal-600 border-teal-200",
+      badgeBg: "bg-teal-500",
+      tagClass: "bg-teal-50 text-teal-700 border-teal-200",
+      label: "New Batch",
+      actionText: "View Batch",
+    };
+  }
+
+  if (isLiveClassNotification(notif)) {
+    return {
+      icon: Clock,
+      colorClass: "bg-indigo-50 text-indigo-600 border-indigo-200",
+      badgeBg: "bg-indigo-500",
+      tagClass: "bg-indigo-50 text-indigo-700 border-indigo-200",
+      label: "Live Class",
+      actionText: "View Live Class",
     };
   }
 
