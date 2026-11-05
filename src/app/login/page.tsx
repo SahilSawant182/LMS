@@ -5,7 +5,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { X, Check } from "lucide-react";
-import { login, forgotPassword } from "@/services/auth.services";
+import { login, forgotPassword, checkLmsAccess } from "@/services/auth.services";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -60,7 +60,7 @@ export default function LoginPage() {
       const isInstructor = res?.is_instructor ?? res?.message?.is_instructor ?? res?.data?.is_instructor;
       const isStudent = res?.is_student ?? res?.message?.is_student ?? res?.data?.is_student;
 
-      const instructorRoles = [
+      const autoInstructorRoles = [
         "Instructor",
         "Course Creator",
         "Moderator",
@@ -69,23 +69,34 @@ export default function LoginPage() {
         "Instructor Admin",
         "LMS Admin",
         "Admin Instructor",
-        "Mentor",
-        "College",
-        "College Base",
-        "College Admin",
-        "College User",
-        "Industry",
-        "Industry Base",
-        "Industry Admin",
-        "Industry User",
         "Partner",
         "Partner Base",
         "Partner Admin",
         "Partner User",
         "Default Partner",
       ];
-      const hasInstructorRole = Array.isArray(roles) && roles.some((r: string) => instructorRoles.includes(r));
-      const isActualInstructor = Boolean(isInstructor || hasInstructorRole);
+      const hasAutoInstructorRole = Array.isArray(roles) && roles.some((r: string) => autoInstructorRoles.includes(r));
+
+      // For College, Industry, Mentor users, determine instructor access via backend check_lms_access
+      const isRestrictedAccount = Array.isArray(roles) && roles.some((r: string) =>
+        ["Mentor", "College", "College Base", "College Admin", "College User", "Industry", "Industry Base", "Industry Admin", "Industry User"].includes(r)
+      );
+
+      let isActualInstructor = Boolean(isInstructor || hasAutoInstructorRole);
+
+      if (isRestrictedAccount && !hasAutoInstructorRole) {
+        try {
+          const lmsCheck: any = await checkLmsAccess(user);
+          const hasAccess = lmsCheck?.message?.has_access === true;
+          isActualInstructor = hasAccess;
+          localStorage.setItem("has_lms_access", hasAccess ? "true" : "false");
+        } catch {
+          isActualInstructor = false;
+          localStorage.setItem("has_lms_access", "false");
+        }
+      } else if (hasAutoInstructorRole) {
+        localStorage.setItem("has_lms_access", "true");
+      }
 
       if (keyDetails?.api_key) {
         localStorage.setItem("apiKey", keyDetails.api_key);

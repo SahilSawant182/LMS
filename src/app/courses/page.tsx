@@ -81,14 +81,8 @@ export default function CoursesPage() {
         return;
       }
 
-      // 3. Fast check localStorage
-      const cachedAccess = localStorage.getItem("has_lms_access");
-      if (cachedAccess === "true") {
-        setIsBlockedByPlan(false);
-        return;
-      }
-
-      // 4. Fallback verify via backend check_lms_access
+      // 3. For restricted roles (College, Industry, Mentor): always verify live via backend check_lms_access
+      // Do NOT bypass with stale localStorage cache
       setCheckingAccess(true);
       try {
         const email = getCurrentUserEmail() || localStorage.getItem("user") || localStorage.getItem("userEmail") || "";
@@ -265,6 +259,26 @@ export default function CoursesPage() {
   }
 
   if (isBlockedByPlan) {
+    const getUpgradeUrl = () => {
+      if (typeof window === "undefined") return "/billing/pricing";
+      const userRole = (localStorage.getItem("userRole") || "").toLowerCase().trim();
+      const rolesStr = (localStorage.getItem("roles") || localStorage.getItem("lms_saved_instructor_roles") || "").toLowerCase();
+
+      if (userRole === "mentor" || rolesStr.includes("mentor")) {
+        return "/mentor/dashboard/plans";
+      }
+      if (userRole === "college" || rolesStr.includes("college")) {
+        return "/college/dashboard/plans";
+      }
+      if (userRole === "industry" || rolesStr.includes("industry")) {
+        return "/industry/dashboard/plans";
+      }
+      if (userRole === "student" || rolesStr.includes("student")) {
+        return "/student/dashboard/plans";
+      }
+      return "/billing/pricing";
+    };
+
     return (
       <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
         <Navbar />
@@ -279,7 +293,7 @@ export default function CoursesPage() {
             </p>
             <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
               <a
-                href="https://testwebstridenex.quantcloud.in/billing/pricing"
+                href={getUpgradeUrl()}
                 className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
               >
                 View Plans & Upgrade
