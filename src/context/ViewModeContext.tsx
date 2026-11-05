@@ -59,6 +59,10 @@ export function ViewModeProvider({
         "Industry Admin",
         "Industry User",
         "Partner",
+        "Partner Base",
+        "Partner Admin",
+        "Partner User",
+        "Default Partner",
       ];
       const rList = Array.isArray(user.roles) ? user.roles : [user.roles];
       return rList.some((r: string) => instructorRoles.includes(r));
@@ -120,6 +124,10 @@ export function ViewModeProvider({
               "Industry Admin",
               "Industry User",
               "Partner",
+              "Partner Base",
+              "Partner Admin",
+              "Partner User",
+              "Default Partner",
             ];
             const rawRoles = Array.isArray(data.roles) ? data.roles : [];
             const hasInst = rawRoles.some((r: string) => instructorRoles.includes(r)) || Boolean(data.is_instructor);
