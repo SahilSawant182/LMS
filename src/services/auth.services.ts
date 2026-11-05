@@ -59,6 +59,10 @@ export const hasInstructorAccountRole = (): boolean => {
       "Industry Admin",
       "Industry User",
       "Partner",
+      "Partner Base",
+      "Partner Admin",
+      "Partner User",
+      "Default Partner",
     ];
     const checkRoles = (raw: string | null): boolean => {
       if (!raw) return false;
@@ -145,7 +149,7 @@ export const switchActiveViewMode = (targetMode?: "instructor" | "learner") => {
     localStorage.setItem("can_switch_view", "true");
   } else {
     // 1. Restore original instructor roles
-    const savedRoles = localStorage.getItem("lms_saved_instructor_roles") || JSON.stringify(["Instructor", "Student", "LMS Student", "Website User"]);
+    const savedRoles = localStorage.getItem("lms_saved_instructor_roles") || JSON.stringify(["Instructor", "Partner", "Student", "LMS Student", "Website User"]);
     localStorage.setItem("lms_active_view_mode", "instructor");
     localStorage.setItem("isInstructor", "true");
     localStorage.setItem("roles", savedRoles);
@@ -194,6 +198,10 @@ export const isAuthorizedInstructor = (): boolean => {
       "Industry Admin",
       "Industry User",
       "Partner",
+      "Partner Base",
+      "Partner Admin",
+      "Partner User",
+      "Default Partner",
     ];
 
     if (Array.isArray(roles)) {

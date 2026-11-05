@@ -79,6 +79,10 @@ export default function LoginPage() {
         "Industry Admin",
         "Industry User",
         "Partner",
+        "Partner Base",
+        "Partner Admin",
+        "Partner User",
+        "Default Partner",
       ];
       const hasInstructorRole = Array.isArray(roles) && roles.some((r: string) => instructorRoles.includes(r));
       const isActualInstructor = Boolean(isInstructor || hasInstructorRole);
