@@ -1,4 +1,9 @@
-import { apiService } from "./api.services";
+import { apiService, getCurrentUserEmail } from "./api.services";
+
+export const checkLmsAccess = async (userEmail?: string) => {
+  const email = userEmail || getCurrentUserEmail();
+  return apiService.post("method/lms.lms.stride_lms.check_lms_access", { user: email });
+};
 
 export const login = async (payload: any) => {
   return apiService.post("method/lms.lms.lms_login.login", payload);
@@ -36,9 +41,70 @@ export const getUserInfo = async () => {
   return apiService.get("method/lms.lms.api.get_user_info");
 };
 
+export const isSystemAdmin = (): boolean => {
+  if (typeof window === "undefined") return false;
+  try {
+    const rolesStr = localStorage.getItem("roles");
+    const savedRolesStr = localStorage.getItem("lms_saved_instructor_roles");
+    const adminRoles = ["Administrator", "System Manager", "Instructor Admin", "LMS Admin", "Admin Instructor"];
+
+    const checkRoles = (raw: string | null): boolean => {
+      if (!raw) return false;
+      try {
+        const roles = raw.startsWith("[") ? JSON.parse(raw) : raw;
+        if (Array.isArray(roles)) {
+          return roles.some((r: string) => adminRoles.includes(r));
+        }
+        return adminRoles.some((r: string) => String(raw).includes(r));
+      } catch {
+        return adminRoles.some((r: string) => raw.includes(r));
+      }
+    };
+
+    if (checkRoles(rolesStr) || checkRoles(savedRolesStr)) return true;
+
+    const user = (localStorage.getItem("userEmail") || localStorage.getItem("user") || "").toLowerCase().trim();
+    if (user === "administrator") return true;
+
+    return false;
+  } catch {
+    return false;
+  }
+};
+
 export const hasInstructorAccountRole = (): boolean => {
   if (typeof window === "undefined") return false;
   try {
+    // 1. System admin always has full access
+    if (isSystemAdmin()) return true;
+
+    const rawRoles = localStorage.getItem("roles") || localStorage.getItem("lms_saved_instructor_roles") || "";
+    let roles: string[] = [];
+    try {
+      if (rawRoles.startsWith("[")) {
+        roles = JSON.parse(rawRoles);
+      } else if (rawRoles) {
+        roles = [rawRoles];
+      }
+    } catch {
+      roles = rawRoles ? [rawRoles] : [];
+    }
+
+    // 2. Partner has NO plan restrictions
+    if (roles.some((r: string) => r.toLowerCase().includes("partner"))) {
+      return true;
+    }
+
+    // 3. Restricted roles (Industry / College / Mentor) are plan-gated
+    const isRestrictedRole = roles.some((r: string) => {
+      const lower = r.toLowerCase();
+      return lower.includes("college") || lower.includes("industry") || lower.includes("mentor");
+    });
+
+    if (isRestrictedRole) {
+      return localStorage.getItem("has_lms_access") === "true";
+    }
+
     const instructorRoles = [
       "Instructor",
       "Course Creator",
@@ -48,22 +114,8 @@ export const hasInstructorAccountRole = (): boolean => {
       "Instructor Admin",
       "LMS Admin",
       "Admin Instructor",
-      "Mentor",
-      // ADD COLLEGE AND INDUSTRY ROLES:
-      "College",
-      "College Base",
-      "College Admin",
-      "College User",
-      "Industry",
-      "Industry Base",
-      "Industry Admin",
-      "Industry User",
-      "Partner",
-      "Partner Base",
-      "Partner Admin",
-      "Partner User",
-      "Default Partner",
     ];
+
     const checkRoles = (raw: string | null): boolean => {
       if (!raw) return false;
       try {
@@ -74,15 +126,19 @@ export const hasInstructorAccountRole = (): boolean => {
       } catch { }
       return instructorRoles.some((r: string) => raw.includes(r));
     };
-    // 1. Check saved instructor roles
+
+    // Check saved instructor roles
     const savedRoles = localStorage.getItem("lms_saved_instructor_roles");
     if (checkRoles(savedRoles)) return true;
-    // 2. Check active roles array in localStorage
+
+    // Check active roles array in localStorage
     const activeRoles = localStorage.getItem("roles");
     if (checkRoles(activeRoles)) return true;
-    // 3. Fallback: check isInstructor / is_instructor flags
+
+    // Fallback: check isInstructor flag
     const isInst = localStorage.getItem("isInstructor");
-    if (isInst === "true") return true;
+    if (isInst === "true" && localStorage.getItem("has_lms_access") !== "false") return true;
+
     return false;
   } catch {
     return false;
@@ -168,17 +224,43 @@ export const switchActiveViewMode = (targetMode?: "instructor" | "learner") => {
 export const isAuthorizedInstructor = (): boolean => {
   if (typeof window === "undefined") return false;
   try {
+    // 1. System admin always has full access
+    if (isSystemAdmin()) return true;
+
     const activeMode = localStorage.getItem("lms_active_view_mode");
     if (activeMode === "learner") return false;
+
+    const rawRoles = localStorage.getItem("roles") || localStorage.getItem("lms_saved_instructor_roles") || "";
+    let roles: string[] = [];
+    try {
+      if (rawRoles.startsWith("[")) {
+        roles = JSON.parse(rawRoles);
+      } else if (rawRoles) {
+        roles = [rawRoles];
+      }
+    } catch {
+      roles = rawRoles ? [rawRoles] : [];
+    }
+
+    // 2. Partner has NO plan restrictions
+    if (roles.some((r: string) => r.toLowerCase().includes("partner"))) {
+      return true;
+    }
+
+    // 3. Restricted roles (College, Industry, Mentor) require active LMS access
+    const isRestrictedRole = roles.some((r: string) => {
+      const lower = r.toLowerCase();
+      return lower.includes("college") || lower.includes("industry") || lower.includes("mentor");
+    });
+
+    if (isRestrictedRole) {
+      return localStorage.getItem("has_lms_access") === "true";
+    }
 
     const isInst = localStorage.getItem("isInstructor");
     if (isInst === "false") return false;
     if (isInst === "true") return true;
 
-    const rolesStr = localStorage.getItem("roles");
-    if (!rolesStr) return false;
-
-    const roles = rolesStr.startsWith("[") ? JSON.parse(rolesStr) : rolesStr;
     const authorizedRoles = [
       "Instructor",
       "Course Creator",
@@ -188,57 +270,12 @@ export const isAuthorizedInstructor = (): boolean => {
       "Instructor Admin",
       "LMS Admin",
       "Admin Instructor",
-      "Mentor",
-      "College",
-      "College Base",
-      "College Admin",
-      "College User",
-      "Industry",
-      "Industry Base",
-      "Industry Admin",
-      "Industry User",
-      "Partner",
-      "Partner Base",
-      "Partner Admin",
-      "Partner User",
-      "Default Partner",
     ];
 
     if (Array.isArray(roles)) {
       return roles.some((r: string) => authorizedRoles.includes(r));
     }
-    return authorizedRoles.some((r: string) => rolesStr.includes(r));
-  } catch {
-    return false;
-  }
-};
-
-export const isSystemAdmin = (): boolean => {
-  if (typeof window === "undefined") return false;
-  try {
-    const rolesStr = localStorage.getItem("roles");
-    const savedRolesStr = localStorage.getItem("lms_saved_instructor_roles");
-    const adminRoles = ["Administrator", "System Manager", "Instructor Admin", "LMS Admin", "Admin Instructor"];
-
-    const checkRoles = (raw: string | null): boolean => {
-      if (!raw) return false;
-      try {
-        const roles = raw.startsWith("[") ? JSON.parse(raw) : raw;
-        if (Array.isArray(roles)) {
-          return roles.some((r: string) => adminRoles.includes(r));
-        }
-        return adminRoles.some((r: string) => String(raw).includes(r));
-      } catch {
-        return adminRoles.some((r: string) => raw.includes(r));
-      }
-    };
-
-    if (checkRoles(rolesStr) || checkRoles(savedRolesStr)) return true;
-
-    const user = (localStorage.getItem("userEmail") || localStorage.getItem("user") || "").toLowerCase().trim();
-    if (user === "administrator") return true;
-
-    return false;
+    return authorizedRoles.some((r: string) => rawRoles.includes(r));
   } catch {
     return false;
   }

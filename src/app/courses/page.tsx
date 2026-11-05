@@ -7,8 +7,8 @@ import Pagination from "@/components/ui/Pagination";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getCourses, getInstructorCourses, updateCourse } from "@/services/lms.services";
-import { isAuthorizedInstructor } from "@/services/auth.services";
-import { getImageUrl } from "@/services/api.services";
+import { isAuthorizedInstructor, checkLmsAccess } from "@/services/auth.services";
+import { getImageUrl, getCurrentUserEmail } from "@/services/api.services";
 import { showToast } from "@/components/ui/Toast";
 import { useViewMode } from "@/context/ViewModeContext";
 import {
@@ -23,13 +23,16 @@ import {
   CheckCircle,
   Tag,
   ArrowRight,
+  Lock,
 } from "lucide-react";
 
 export default function CoursesPage() {
   const router = useRouter();
-  const { viewMode, canSwitch } = useViewMode();
+  const { viewMode, canSwitch, switchView } = useViewMode();
   const isEffectiveInstructor = canSwitch && viewMode === "instructor";
 
+  const [isBlockedByPlan, setIsBlockedByPlan] = useState(false);
+  const [checkingAccess, setCheckingAccess] = useState(false);
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +47,70 @@ export default function CoursesPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
   const COURSES_PER_PAGE = 8;
+
+  useEffect(() => {
+    const verifyLmsAccess = async () => {
+      if (typeof window === "undefined") return;
+
+      if (viewMode === "instructor") {
+        sessionStorage.removeItem("lms_browse_as_learner");
+      } else if (sessionStorage.getItem("lms_browse_as_learner") === "true") {
+        setIsBlockedByPlan(false);
+        return;
+      }
+
+      // 1. Partner and Admins always have access
+      const rolesStr = localStorage.getItem("roles") || localStorage.getItem("lms_saved_instructor_roles") || "";
+      if (
+        rolesStr.includes("Partner") ||
+        rolesStr.includes("Administrator") ||
+        rolesStr.includes("System Manager")
+      ) {
+        setIsBlockedByPlan(false);
+        return;
+      }
+
+      // 2. Only gate if user belongs to restricted roles
+      const isRestrictedRole =
+        rolesStr.includes("College") ||
+        rolesStr.includes("Industry") ||
+        rolesStr.includes("Mentor");
+
+      if (!isRestrictedRole) {
+        setIsBlockedByPlan(false);
+        return;
+      }
+
+      // 3. Fast check localStorage
+      const cachedAccess = localStorage.getItem("has_lms_access");
+      if (cachedAccess === "true") {
+        setIsBlockedByPlan(false);
+        return;
+      }
+
+      // 4. Fallback verify via backend check_lms_access
+      setCheckingAccess(true);
+      try {
+        const email = getCurrentUserEmail() || localStorage.getItem("user") || localStorage.getItem("userEmail") || "";
+        const res: any = await checkLmsAccess(email);
+        const hasAccess = res?.message?.has_access === true;
+        if (hasAccess) {
+          localStorage.setItem("has_lms_access", "true");
+          localStorage.setItem("isInstructor", "true");
+          setIsBlockedByPlan(false);
+        } else {
+          localStorage.setItem("has_lms_access", "false");
+          setIsBlockedByPlan(true);
+        }
+      } catch {
+        setIsBlockedByPlan(true);
+      } finally {
+        setCheckingAccess(false);
+      }
+    };
+
+    verifyLmsAccess();
+  }, [viewMode]);
 
   const fetchCourses = async (filterType?: string) => {
     setLoading(true);
@@ -188,6 +255,51 @@ export default function CoursesPage() {
     }
   };
 
+
+  if (checkingAccess) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (isBlockedByPlan) {
+    return (
+      <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
+        <Navbar />
+        <main className="flex-grow flex items-center justify-center px-4 py-16">
+          <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8 text-center">
+            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Lock className="w-8 h-8" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900">Pro Plan Required for LMS Studio</h2>
+            <p className="mt-2 text-gray-600">
+              Your current plan does not include Course Authoring. Upgrade your plan to create courses, manage quizzes, and host live batches.
+            </p>
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <a
+                href="https://testwebstridenex.quantcloud.in/billing/pricing"
+                className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
+              >
+                View Plans & Upgrade
+              </a>
+              <button
+                onClick={() => {
+                  sessionStorage.setItem("lms_browse_as_learner", "true");
+                  setIsBlockedByPlan(false);
+                  switchView("learner");
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition"
+              >
+                Browse as Learner
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
