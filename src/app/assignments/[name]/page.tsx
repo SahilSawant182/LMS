@@ -415,7 +415,31 @@ export default function AssignmentDetailPage() {
           ) : assignment ? (
             <>
               <div className="flex flex-wrap items-center justify-between mb-3 gap-4">
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* Assignment ID */}
+                  {assignment.name && (
+                    <span className="px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-slate-800 text-slate-200 border border-slate-700">
+                      {assignment.name}
+                    </span>
+                  )}
+
+                  {/* Assignment Type */}
+                  <span className="px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    {assignment.type || 'Text'}
+                  </span>
+
+                  {/* Graded Status */}
+                  {Number(assignment.grade_assignment) === 1 ? (
+                    <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                      <Award className="w-3.5 h-3.5 text-emerald-400" />
+                      Graded
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                      Ungraded
+                    </span>
+                  )}
+
                   {!isInstructor && (() => {
                     const isSubmitted = Boolean(assignment._is_submitted);
                     return (
@@ -428,8 +452,8 @@ export default function AssignmentDetailPage() {
                     );
                   })()}
                   {assignment.course && (
-                    <span className="text-slate-400 text-sm flex items-center gap-1.5">
-                      <BookOpen className="w-4 h-4" />
+                    <span className="text-slate-300 text-sm flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/80 border border-slate-700/80">
+                      <BookOpen className="w-4 h-4 text-indigo-400" />
                       {assignment.course}
                     </span>
                   )}
@@ -475,7 +499,7 @@ export default function AssignmentDetailPage() {
 
         {!loading && assignment && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-            {/* Left Column: Instructions */}
+            {/* Left Column: Instructions & Solution Key */}
             <div className="space-y-8">
               <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-100">
                 <h2 className="text-xl font-bold text-slate-900 mb-4">Instructions</h2>
@@ -484,6 +508,23 @@ export default function AssignmentDetailPage() {
                   dangerouslySetInnerHTML={{ __html: assignment.description || assignment.question || 'No instructions provided for this assignment.' }}
                 />
               </div>
+
+              {isInstructor && assignment.answer && (
+                <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                      <FileCheck2 className="w-5 h-5 text-indigo-600" />
+                      Model Answer / Solution
+                    </h2>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                      Instructor View
+                    </span>
+                  </div>
+                  <pre className="p-4 bg-slate-900 text-slate-100 font-mono text-xs rounded-xl overflow-x-auto whitespace-pre-wrap leading-relaxed">
+                    {assignment.answer}
+                  </pre>
+                </div>
+              )}
             </div>
 
             {/* Right Column: Submission Form (for Students) */}

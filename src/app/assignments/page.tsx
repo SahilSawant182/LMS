@@ -24,7 +24,10 @@ import {
   RefreshCw,
   User,
   GraduationCap,
-  Award
+  Award,
+  Tag,
+  Filter,
+  CheckCircle2
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import GradingModal from '@/components/modals/GradingModal';
@@ -35,11 +38,18 @@ function AssignmentsContent() {
   const searchParams = useSearchParams();
   const { viewMode } = useViewMode();
   const [assignments, setAssignments] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingName, setDeletingName] = useState<string | null>(null);
   const [hasInstructorRole, setHasInstructorRole] = useState(false);
   const isInstructor = hasInstructorRole && viewMode === 'instructor';
+
+  // Assignment search & filters state
+  const [assignmentSearch, setAssignmentSearch] = useState('');
+  const [assignmentTypeFilter, setAssignmentTypeFilter] = useState<'All' | 'Text' | 'Document' | 'URL'>('All');
+  const [assignmentGradedFilter, setAssignmentGradedFilter] = useState<'All' | 'Graded' | 'Ungraded'>('All');
+  const [assignmentCourseFilter, setAssignmentCourseFilter] = useState<string>('All');
 
   // Instructor Submissions state
   const [instructorSubmissions, setInstructorSubmissions] = useState<any[]>([]);
@@ -115,8 +125,22 @@ function AssignmentsContent() {
       ]);
       
       const rawData = response?.data || response;
-      const assignmentsData = rawData?.message?.data?.assignments || rawData?.message?.assignments || rawData?.assignments || rawData?.data || rawData?.message || [];
+      const assignmentsData = 
+        rawData?.message?.data?.assignments || 
+        rawData?.data?.assignments || 
+        rawData?.message?.assignments || 
+        rawData?.assignments || 
+        rawData?.data || 
+        rawData?.message || 
+        [];
       const finalData = Array.isArray(assignmentsData) ? assignmentsData : (Array.isArray(rawData) ? rawData : []);
+      
+      const apiTotal = rawData?.data?.total || rawData?.message?.data?.total || rawData?.total;
+      if (apiTotal !== undefined && !isNaN(Number(apiTotal))) {
+        setTotalCount(Number(apiTotal));
+      } else {
+        setTotalCount(finalData.length);
+      }
       
       let submissionsList: any[] = [];
       if (submissionsRes) {
@@ -319,6 +343,64 @@ function AssignmentsContent() {
     return instructorSubmissions.filter(s => isGradedStatus(s.status)).length;
   }, [instructorSubmissions]);
 
+  const availableCourses = useMemo(() => {
+    const set = new Set<string>();
+    assignments.forEach((a) => {
+      if (a.course) set.add(a.course);
+    });
+    return Array.from(set).sort();
+  }, [assignments]);
+
+  const gradedAssignmentsCount = useMemo(() => {
+    return assignments.filter((a) => Number(a.grade_assignment) === 1).length;
+  }, [assignments]);
+
+  const ungradedAssignmentsCount = useMemo(() => {
+    return assignments.filter((a) => Number(a.grade_assignment) !== 1).length;
+  }, [assignments]);
+
+  const getSubmissionsCountForAssignment = (assignment: any) => {
+    const aName = String(assignment.name || '').trim().toLowerCase();
+    const aTitle = String(assignment.title || assignment.assignment_title || '').trim().toLowerCase();
+    return instructorSubmissions.filter((s: any) => {
+      const sAss = String(s.assignment || '').trim().toLowerCase();
+      const sTitle = String(s.assignment_title || '').trim().toLowerCase();
+      return (aName && sAss === aName) || (aTitle && sTitle === aTitle);
+    }).length;
+  };
+
+  const filteredAssignments = useMemo(() => {
+    return assignments.filter((a) => {
+      if (assignmentSearch.trim()) {
+        const q = assignmentSearch.toLowerCase();
+        const matchesName = String(a.name || '').toLowerCase().includes(q);
+        const matchesTitle = String(a.title || a.assignment_title || '').toLowerCase().includes(q);
+        const matchesCourse = String(a.course || '').toLowerCase().includes(q);
+        const matchesQuestion = String(a.question || a.description || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesTitle && !matchesCourse && !matchesQuestion) {
+          return false;
+        }
+      }
+
+      if (assignmentTypeFilter !== 'All') {
+        const aType = String(a.type || 'Text').toLowerCase();
+        if (aType !== assignmentTypeFilter.toLowerCase()) return false;
+      }
+
+      if (assignmentGradedFilter === 'Graded') {
+        if (Number(a.grade_assignment) !== 1) return false;
+      } else if (assignmentGradedFilter === 'Ungraded') {
+        if (Number(a.grade_assignment) === 1) return false;
+      }
+
+      if (assignmentCourseFilter !== 'All') {
+        if (a.course !== assignmentCourseFilter) return false;
+      }
+
+      return true;
+    });
+  }, [assignments, assignmentSearch, assignmentTypeFilter, assignmentGradedFilter, assignmentCourseFilter]);
+
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">
       <Navbar />
@@ -406,15 +488,127 @@ function AssignmentsContent() {
         {/* TAB 1: ALL ASSIGNMENTS */}
         {(!isInstructor || activeTab === 'assignments') && (
           <section className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-100">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-indigo-600" />
-                All Assignments
-              </h2>
-              {isInstructor && (
-                <Link href="/assignments/create" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-semibold shadow-sm">
-                  + Create
-                </Link>
+            {/* Header, Search & Filter Bar */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-indigo-600" />
+                    All Assignments
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                    {totalCount !== null ? totalCount : assignments.length}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  {isInstructor 
+                    ? "Manage course assignments, view question prompts, grading policies, and student submissions."
+                    : "Assignments and tasks assigned to your enrolled courses."}
+                </p>
+              </div>
+
+              {/* Action Buttons & Search */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                {/* Search */}
+                <div className="relative min-w-[240px] sm:w-64">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={assignmentSearch}
+                    onChange={(e) => setAssignmentSearch(e.target.value)}
+                    placeholder="Search title, ID, course..."
+                    className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                  {assignmentSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setAssignmentSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {isInstructor && (
+                  <Link 
+                    href="/assignments/create" 
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs sm:text-sm font-semibold shadow-sm shrink-0"
+                  >
+                    + Create Assignment
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            {/* Filter Pills & Course Filter */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-100">
+              <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 p-1 border border-slate-200 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssignmentGradedFilter('All');
+                    setAssignmentTypeFilter('All');
+                  }}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                    assignmentGradedFilter === 'All' && assignmentTypeFilter === 'All'
+                      ? 'bg-white text-indigo-600 shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  All ({assignments.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAssignmentGradedFilter('Graded')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                    assignmentGradedFilter === 'Graded'
+                      ? 'bg-emerald-100 text-emerald-800 shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Graded ({gradedAssignmentsCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAssignmentGradedFilter('Ungraded')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                    assignmentGradedFilter === 'Ungraded'
+                      ? 'bg-slate-200 text-slate-800 shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Ungraded ({ungradedAssignmentsCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAssignmentTypeFilter(assignmentTypeFilter === 'Text' ? 'All' : 'Text')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                    assignmentTypeFilter === 'Text'
+                      ? 'bg-indigo-100 text-indigo-800 shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Text
+                </button>
+              </div>
+
+              {availableCourses.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 font-medium">Course:</span>
+                  <select
+                    value={assignmentCourseFilter}
+                    onChange={(e) => setAssignmentCourseFilter(e.target.value)}
+                    className="text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="All">All Courses ({availableCourses.length})</option>
+                    {availableCourses.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
             </div>
 
@@ -426,69 +620,173 @@ function AssignmentsContent() {
               <div className="text-center py-6 bg-red-50 text-red-600 rounded-lg">
                 <p>{error}</p>
               </div>
-            ) : assignments.length > 0 ? (
+            ) : filteredAssignments.length > 0 ? (
               <div className="space-y-4">
-                {assignments.map((assignment: any, idx: number) => (
-                  <div 
-                    key={assignment.name || idx} 
-                    onClick={() => router.push(`/assignments/${assignment.name}`)}
-                    className="group flex flex-col sm:flex-row sm:items-center justify-between p-5 border border-slate-100 rounded-xl hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer bg-white"
-                  >
-                    <div className="flex items-start gap-4 mb-4 sm:mb-0">
-                      <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-100 transition-colors">
-                        <BookOpen className="w-5 h-5 text-indigo-600" />
+                {filteredAssignments.map((assignment: any, idx: number) => {
+                  const subCount = getSubmissionsCountForAssignment(assignment);
+                  const cleanQuestion = assignment.question
+                    ? assignment.question.replace(/<[^>]*>?/gm, '').trim()
+                    : '';
+
+                  return (
+                    <div 
+                      key={assignment.name || idx} 
+                      onClick={() => router.push(`/assignments/${assignment.name}`)}
+                      className="group flex flex-col p-5 border border-slate-200/90 rounded-2xl hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer bg-white gap-3.5"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                          <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-all text-indigo-600 shadow-2xs">
+                            <FileText className="w-5 h-5 transition-colors" />
+                          </div>
+                          
+                          <div className="min-w-0 flex-1">
+                            {/* Badges Row */}
+                            <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                              {/* Assignment ID */}
+                              {assignment.name && (
+                                <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200/80">
+                                  {assignment.name}
+                                </span>
+                              )}
+                              
+                              {/* Type Badge */}
+                              <span className="px-2 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                {assignment.type || 'Text'}
+                              </span>
+
+                              {/* Graded Badge */}
+                              {Number(assignment.grade_assignment) === 1 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                  <Award className="w-3 h-3 text-emerald-600" />
+                                  Graded Assignment
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                                  Practice / Ungraded
+                                </span>
+                              )}
+
+                              {/* Course Badge */}
+                              {assignment.course && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-violet-50 text-violet-700 border border-violet-100">
+                                  <BookOpen className="w-3 h-3 text-violet-500" />
+                                  {assignment.course}
+                                </span>
+                              )}
+
+                              {/* Model Answer Indicator */}
+                              {Boolean(assignment.answer) && (
+                                <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                                  ✓ Model Answer Set
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Title */}
+                            <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors text-base line-clamp-1">
+                              {assignment.title || assignment.assignment_title || assignment.name || 'Untitled Assignment'}
+                            </h3>
+
+                            {/* Question Preview */}
+                            {cleanQuestion && (
+                              <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                                {cleanQuestion}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Right side Actions & Student Status */}
+                        <div className="flex items-center justify-between sm:justify-end gap-3 sm:pl-4 sm:border-l border-slate-100 shrink-0">
+                          {!isInstructor && (
+                            <div className="flex flex-col sm:items-end">
+                              <span className="text-xs text-slate-400 font-medium">Status</span>
+                              <span className={`text-xs font-bold flex items-center gap-1 px-2.5 py-1 rounded-full ${
+                                assignment._is_submitted ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              }`}>
+                                {assignment._is_submitted ? <CheckCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                                {assignment._is_submitted ? (assignment.status && assignment.status !== 'Pending' ? assignment.status : 'Submitted') : 'Pending'}
+                              </span>
+                            </div>
+                          )}
+
+                          {isInstructor && (
+                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              <Link 
+                                href={`/assignments/${assignment.name}/edit`} 
+                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-100"
+                                title="Edit Assignment"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Link>
+                              <button 
+                                onClick={(e) => handleDelete(e, assignment.name)} 
+                                disabled={deletingName === assignment.name} 
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100 disabled:opacity-50 cursor-pointer"
+                                title="Delete Assignment"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+
+                          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all hidden sm:block" />
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                          {assignment.title || assignment.assignment_title || assignment.name || 'Untitled Assignment'}
-                        </h3>
-                        <p className="text-sm text-slate-500 mt-1 line-clamp-1">
-                          {assignment.course ? `Course: ${assignment.course}` : 'Assignment Task'}
-                        </p>
+
+                      {/* Footer Meta Row */}
+                      <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+                        <div className="flex items-center gap-3.5 flex-wrap">
+                          {assignment.creation && (
+                            <span className="flex items-center gap-1 text-[11px] text-slate-500">
+                              <Clock className="w-3.5 h-3.5 text-slate-400" />
+                              Created {formatDate(assignment.creation)}
+                            </span>
+                          )}
+                          {assignment.owner && (
+                            <span className="flex items-center gap-1 text-[11px] text-slate-500">
+                              <User className="w-3.5 h-3.5 text-slate-400" />
+                              {assignment.owner}
+                            </span>
+                          )}
+                        </div>
+
+                        {isInstructor && (
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700">
+                              <GraduationCap className="w-3.5 h-3.5 text-indigo-500" />
+                              {subCount} {subCount === 1 ? 'Submission' : 'Submissions'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
-                    
-                    <div className="flex items-center gap-4 sm:pl-4 sm:border-l border-slate-100">
-                      {!isInstructor && (
-                        <div className="flex flex-col sm:items-end">
-                          <span className="text-xs text-slate-400 font-medium">Status</span>
-                          <span className={`text-sm font-medium flex items-center gap-1 ${assignment._is_submitted ? 'text-emerald-600' : 'text-amber-600'}`}>
-                            {assignment._is_submitted ? <CheckCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                            {assignment._is_submitted ? (assignment.status && assignment.status !== 'Pending' ? assignment.status : 'Submitted') : 'Pending'}
-                          </span>
-                        </div>
-                      )}
-                      
-                      {isInstructor && (
-                        <div className="flex items-center gap-2">
-                          <Link 
-                            href={`/assignments/${assignment.name}/edit`} 
-                            onClick={(e) => e.stopPropagation()} 
-                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                            title="Edit Assignment"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Link>
-                          <button 
-                            onClick={(e) => handleDelete(e, assignment.name)} 
-                            disabled={deletingName === assignment.name} 
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                            title="Delete Assignment"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                      
-                      <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 transition-colors hidden sm:block" />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center py-12 bg-slate-50 rounded-lg border border-dashed border-slate-200">
                 <FileText className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 font-medium">You have no assignments assigned yet.</p>
+                <p className="text-slate-500 font-medium">
+                  {assignmentSearch || assignmentTypeFilter !== 'All' || assignmentGradedFilter !== 'All' || assignmentCourseFilter !== 'All'
+                    ? "No assignments match your search or filter criteria."
+                    : "You have no assignments assigned yet."}
+                </p>
+                {(assignmentSearch || assignmentTypeFilter !== 'All' || assignmentGradedFilter !== 'All' || assignmentCourseFilter !== 'All') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssignmentSearch('');
+                      setAssignmentTypeFilter('All');
+                      setAssignmentGradedFilter('All');
+                      setAssignmentCourseFilter('All');
+                    }}
+                    className="mt-3 text-xs font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                  >
+                    Reset all filters
+                  </button>
+                )}
               </div>
             )}
           </section>
