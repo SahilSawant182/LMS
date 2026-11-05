@@ -47,6 +47,66 @@ const nextConfig: NextConfig = {
         basePath: false,
         permanent: false,
       },
+      {
+        source: '/student/dashboard',
+        destination: '/student/dashboard',
+        basePath: false,
+        permanent: false,
+      },
+      {
+        source: '/lms/student/dashboard',
+        destination: '/student/dashboard',
+        basePath: false,
+        permanent: false,
+      },
+      {
+        source: '/college/dashboard',
+        destination: '/college/dashboard',
+        basePath: false,
+        permanent: false,
+      },
+      {
+        source: '/lms/college/dashboard',
+        destination: '/college/dashboard',
+        basePath: false,
+        permanent: false,
+      },
+      {
+        source: '/industry/dashboard',
+        destination: '/industry/dashboard',
+        basePath: false,
+        permanent: false,
+      },
+      {
+        source: '/lms/industry/dashboard',
+        destination: '/industry/dashboard',
+        basePath: false,
+        permanent: false,
+      },
+      {
+        source: '/mentor/dashboard',
+        destination: '/mentor/dashboard',
+        basePath: false,
+        permanent: false,
+      },
+      {
+        source: '/lms/mentor/dashboard',
+        destination: '/mentor/dashboard',
+        basePath: false,
+        permanent: false,
+      },
+      {
+        source: '/partner',
+        destination: '/partner',
+        basePath: false,
+        permanent: false,
+      },
+      {
+        source: '/lms/partner',
+        destination: '/partner',
+        basePath: false,
+        permanent: false,
+      },
     ];
   },
   async rewrites() {

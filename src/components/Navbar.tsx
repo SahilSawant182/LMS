@@ -11,6 +11,30 @@ import NotificationBell from '@/components/notifications/NotificationBell';
 import ViewSwitchButton from '@/components/Navbar/ViewSwitchButton';
 import { useViewMode } from '@/context/ViewModeContext';
 
+const getStrideNexDashboardUrl = (): string => {
+  if (typeof window === "undefined") return "/student/dashboard";
+  try {
+    const rolesStr = localStorage.getItem("roles") || localStorage.getItem("lms_saved_instructor_roles") || "";
+    const lowerRoles = rolesStr.toLowerCase();
+
+    if (lowerRoles.includes("partner")) {
+      return "/partner";
+    }
+    if (lowerRoles.includes("college")) {
+      return "/college/dashboard";
+    }
+    if (lowerRoles.includes("industry")) {
+      return "/industry/dashboard";
+    }
+    if (lowerRoles.includes("mentor")) {
+      return "/mentor/dashboard";
+    }
+    return "/student/dashboard";
+  } catch {
+    return "/student/dashboard";
+  }
+};
+
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -320,253 +344,253 @@ export default function Navbar() {
           </button>
 
           {/* "Back to StrideNex" Button */}
-          <Link
-            href="/student/dashboard"
+          <a
+            href={getStrideNexDashboardUrl()}
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200/70 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4 text-slate-500" />
             <span className="hidden sm:inline">Back to StrideNex</span>
             <span className="sm:hidden">Back</span>
-          </Link>
+          </a>
         </div>
 
-            {/* Middle: Search Bar with Dropdown Results */}
-            <div className="hidden md:flex flex-1 max-w-md mx-6 relative" ref={searchContainerRef}>
-              <div className="w-full relative group">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  {searchLoading ? (
-                    <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
-                  ) : (
-                    <Search className="w-4 h-4 text-gray-400 group-focus-within:text-indigo-600 transition-colors" />
-                  )}
+        {/* Middle: Search Bar with Dropdown Results */}
+        <div className="hidden md:flex flex-1 max-w-md mx-6 relative" ref={searchContainerRef}>
+          <div className="w-full relative group">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              {searchLoading ? (
+                <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
+              ) : (
+                <Search className="w-4 h-4 text-gray-400 group-focus-within:text-indigo-600 transition-colors" />
+              )}
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onFocus={() => {
+                loadSearchData();
+                if (searchQuery.trim()) setIsSearchOpen(true);
+              }}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (!isSearchOpen) setIsSearchOpen(true);
+                if (!dataFetched) loadSearchData();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setIsSearchOpen(false);
+                } else if (e.key === "Enter" && searchQuery.trim()) {
+                  if (searchResults.courses.length > 0) {
+                    router.push(`/course/${searchResults.courses[0].name}`);
+                    setIsSearchOpen(false);
+                  } else if (searchResults.batches.length > 0) {
+                    router.push(`/batch/${searchResults.batches[0].name}`);
+                    setIsSearchOpen(false);
+                  } else if (searchResults.programs.length > 0) {
+                    router.push(`/programs/${encodeURIComponent(searchResults.programs[0].title || searchResults.programs[0].name)}`);
+                    setIsSearchOpen(false);
+                  } else {
+                    router.push(`/courses`);
+                    setIsSearchOpen(false);
+                  }
+                }
+              }}
+              placeholder="Search courses, batches, programs, skills..."
+              className="w-full pl-10 pr-9 py-2 bg-slate-100 border border-slate-200/80 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-xs text-slate-800 placeholder:text-slate-400 transition-all duration-300 focus:bg-white"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setIsSearchOpen(false);
+                }}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Floating Search Results Dropdown */}
+          {isSearchOpen && searchQuery.trim() && (
+            <div className="absolute left-0 top-full mt-2 w-full bg-white rounded-2xl shadow-xl border border-slate-100 py-3 z-50 max-h-[75vh] overflow-y-auto animate-in fade-in-0 zoom-in-95 duration-150">
+              {searchLoading ? (
+                <div className="p-6 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                  Searching courses, batches, programs, and skills...
                 </div>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onFocus={() => {
-                    loadSearchData();
-                    if (searchQuery.trim()) setIsSearchOpen(true);
-                  }}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    if (!isSearchOpen) setIsSearchOpen(true);
-                    if (!dataFetched) loadSearchData();
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") {
-                      setIsSearchOpen(false);
-                    } else if (e.key === "Enter" && searchQuery.trim()) {
-                      if (searchResults.courses.length > 0) {
-                        router.push(`/course/${searchResults.courses[0].name}`);
-                        setIsSearchOpen(false);
-                      } else if (searchResults.batches.length > 0) {
-                        router.push(`/batch/${searchResults.batches[0].name}`);
-                        setIsSearchOpen(false);
-                      } else if (searchResults.programs.length > 0) {
-                        router.push(`/programs/${encodeURIComponent(searchResults.programs[0].title || searchResults.programs[0].name)}`);
-                        setIsSearchOpen(false);
-                      } else {
-                        router.push(`/courses`);
-                        setIsSearchOpen(false);
-                      }
-                    }
-                  }}
-                  placeholder="Search courses, batches, programs, skills..."
-                  className="w-full pl-10 pr-9 py-2 bg-slate-100 border border-slate-200/80 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-xs text-slate-800 placeholder:text-slate-400 transition-all duration-300 focus:bg-white"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setIsSearchOpen(false);
-                    }}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
-                    title="Clear search"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Floating Search Results Dropdown */}
-              {isSearchOpen && searchQuery.trim() && (
-                <div className="absolute left-0 top-full mt-2 w-full bg-white rounded-2xl shadow-xl border border-slate-100 py-3 z-50 max-h-[75vh] overflow-y-auto animate-in fade-in-0 zoom-in-95 duration-150">
-                  {searchLoading ? (
-                    <div className="p-6 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                      Searching courses, batches, programs, and skills...
-                    </div>
-                  ) : searchResults.total === 0 ? (
-                    <div className="p-6 text-center">
-                      <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
-                        <Search className="w-5 h-5" />
+              ) : searchResults.total === 0 ? (
+                <div className="p-6 text-center">
+                  <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
+                    <Search className="w-5 h-5" />
+                  </div>
+                  <p className="text-xs font-semibold text-slate-700">No results found</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    No courses, batches, programs, or skills match &ldquo;{searchQuery}&rdquo;
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Courses Section */}
+                  {searchResults.courses.length > 0 && (
+                    <div>
+                      <div className="px-4 py-1 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        <span className="flex items-center gap-1.5">
+                          <BookOpen className="w-3.5 h-3.5 text-indigo-500" /> Courses
+                        </span>
+                        <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full">
+                          {searchResults.courses.length}
+                        </span>
                       </div>
-                      <p className="text-xs font-semibold text-slate-700">No results found</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        No courses, batches, programs, or skills match &ldquo;{searchQuery}&rdquo;
-                      </p>
+                      <div className="mt-1 divide-y divide-slate-50">
+                        {searchResults.courses.map((course: any) => (
+                          <Link
+                            key={course.name}
+                            href={`/course/${course.name}`}
+                            onClick={() => setIsSearchOpen(false)}
+                            className="px-4 py-2 hover:bg-indigo-50/50 flex items-center justify-between group/item transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                              <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
+                                <BookOpen className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-slate-800 group-hover/item:text-indigo-600 truncate transition-colors">
+                                  {course.title || course.name}
+                                </p>
+                                {course.tags && (
+                                  <p className="text-[10px] text-slate-400 truncate">
+                                    Skills: {course.tags}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover/item:text-indigo-500 group-hover/item:translate-x-0.5 transition-all flex-shrink-0" />
+                          </Link>
+                        ))}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {/* Courses Section */}
-                      {searchResults.courses.length > 0 && (
-                        <div>
-                          <div className="px-4 py-1 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                            <span className="flex items-center gap-1.5">
-                              <BookOpen className="w-3.5 h-3.5 text-indigo-500" /> Courses
-                            </span>
-                            <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full">
-                              {searchResults.courses.length}
-                            </span>
-                          </div>
-                          <div className="mt-1 divide-y divide-slate-50">
-                            {searchResults.courses.map((course: any) => (
-                              <Link
-                                key={course.name}
-                                href={`/course/${course.name}`}
-                                onClick={() => setIsSearchOpen(false)}
-                                className="px-4 py-2 hover:bg-indigo-50/50 flex items-center justify-between group/item transition-colors"
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                                  <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
-                                    <BookOpen className="w-3.5 h-3.5" />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="text-xs font-semibold text-slate-800 group-hover/item:text-indigo-600 truncate transition-colors">
-                                      {course.title || course.name}
-                                    </p>
-                                    {course.tags && (
-                                      <p className="text-[10px] text-slate-400 truncate">
-                                        Skills: {course.tags}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover/item:text-indigo-500 group-hover/item:translate-x-0.5 transition-all flex-shrink-0" />
-                              </Link>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                  )}
 
-                      {/* Batches Section */}
-                      {searchResults.batches.length > 0 && (
-                        <div className="pt-1 border-t border-slate-100">
-                          <div className="px-4 py-1 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                            <span className="flex items-center gap-1.5">
-                              <Users className="w-3.5 h-3.5 text-emerald-500" /> Batches
-                            </span>
-                            <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
-                              {searchResults.batches.length}
-                            </span>
-                          </div>
-                          <div className="mt-1 divide-y divide-slate-50">
-                            {searchResults.batches.map((batch: any) => (
-                              <Link
-                                key={batch.name}
-                                href={`/batch/${batch.name}`}
-                                onClick={() => setIsSearchOpen(false)}
-                                className="px-4 py-2 hover:bg-emerald-50/50 flex items-center justify-between group/item transition-colors"
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                                  <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
-                                    <Users className="w-3.5 h-3.5" />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="text-xs font-semibold text-slate-800 group-hover/item:text-emerald-600 truncate transition-colors">
-                                      {batch.title || batch.batch_name || batch.name}
-                                    </p>
-                                    {batch.category && (
-                                      <p className="text-[10px] text-slate-400 truncate">
-                                        {batch.category}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover/item:text-emerald-500 group-hover/item:translate-x-0.5 transition-all flex-shrink-0" />
-                              </Link>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                  {/* Batches Section */}
+                  {searchResults.batches.length > 0 && (
+                    <div className="pt-1 border-t border-slate-100">
+                      <div className="px-4 py-1 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        <span className="flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-emerald-500" /> Batches
+                        </span>
+                        <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
+                          {searchResults.batches.length}
+                        </span>
+                      </div>
+                      <div className="mt-1 divide-y divide-slate-50">
+                        {searchResults.batches.map((batch: any) => (
+                          <Link
+                            key={batch.name}
+                            href={`/batch/${batch.name}`}
+                            onClick={() => setIsSearchOpen(false)}
+                            className="px-4 py-2 hover:bg-emerald-50/50 flex items-center justify-between group/item transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
+                                <Users className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-slate-800 group-hover/item:text-emerald-600 truncate transition-colors">
+                                  {batch.title || batch.batch_name || batch.name}
+                                </p>
+                                {batch.category && (
+                                  <p className="text-[10px] text-slate-400 truncate">
+                                    {batch.category}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover/item:text-emerald-500 group-hover/item:translate-x-0.5 transition-all flex-shrink-0" />
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                      {/* Programs Section */}
-                      {searchResults.programs.length > 0 && (
-                        <div className="pt-1 border-t border-slate-100">
-                          <div className="px-4 py-1 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                            <span className="flex items-center gap-1.5">
-                              <GraduationCap className="w-3.5 h-3.5 text-violet-500" /> Programs
-                            </span>
-                            <span className="text-[10px] font-semibold text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full">
-                              {searchResults.programs.length}
-                            </span>
-                          </div>
-                          <div className="mt-1 divide-y divide-slate-50">
-                            {searchResults.programs.map((prog: any) => (
-                              <Link
-                                key={prog.name || prog.title}
-                                href={`/programs/${encodeURIComponent(prog.title || prog.name)}`}
-                                onClick={() => setIsSearchOpen(false)}
-                                className="px-4 py-2 hover:bg-violet-50/50 flex items-center justify-between group/item transition-colors"
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                                  <div className="w-7 h-7 rounded-lg bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-600 flex-shrink-0">
-                                    <GraduationCap className="w-3.5 h-3.5" />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="text-xs font-semibold text-slate-800 group-hover/item:text-violet-600 truncate transition-colors">
-                                      {prog.title || prog.name}
-                                    </p>
-                                    {prog.course_count !== undefined && (
-                                      <p className="text-[10px] text-slate-400 truncate">
-                                        {prog.course_count} {prog.course_count === 1 ? 'course' : 'courses'}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover/item:text-violet-500 group-hover/item:translate-x-0.5 transition-all flex-shrink-0" />
-                              </Link>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                  {/* Programs Section */}
+                  {searchResults.programs.length > 0 && (
+                    <div className="pt-1 border-t border-slate-100">
+                      <div className="px-4 py-1 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        <span className="flex items-center gap-1.5">
+                          <GraduationCap className="w-3.5 h-3.5 text-violet-500" /> Programs
+                        </span>
+                        <span className="text-[10px] font-semibold text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full">
+                          {searchResults.programs.length}
+                        </span>
+                      </div>
+                      <div className="mt-1 divide-y divide-slate-50">
+                        {searchResults.programs.map((prog: any) => (
+                          <Link
+                            key={prog.name || prog.title}
+                            href={`/programs/${encodeURIComponent(prog.title || prog.name)}`}
+                            onClick={() => setIsSearchOpen(false)}
+                            className="px-4 py-2 hover:bg-violet-50/50 flex items-center justify-between group/item transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                              <div className="w-7 h-7 rounded-lg bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-600 flex-shrink-0">
+                                <GraduationCap className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-slate-800 group-hover/item:text-violet-600 truncate transition-colors">
+                                  {prog.title || prog.name}
+                                </p>
+                                {prog.course_count !== undefined && (
+                                  <p className="text-[10px] text-slate-400 truncate">
+                                    {prog.course_count} {prog.course_count === 1 ? 'course' : 'courses'}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover/item:text-violet-500 group-hover/item:translate-x-0.5 transition-all flex-shrink-0" />
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                      {/* Skills Section */}
-                      {searchResults.skills.length > 0 && (
-                        <div className="pt-1 border-t border-slate-100">
-                          <div className="px-4 py-1 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                            <span className="flex items-center gap-1.5">
-                              <Tag className="w-3.5 h-3.5 text-amber-500" /> Skills & Tags
+                  {/* Skills Section */}
+                  {searchResults.skills.length > 0 && (
+                    <div className="pt-1 border-t border-slate-100">
+                      <div className="px-4 py-1 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        <span className="flex items-center gap-1.5">
+                          <Tag className="w-3.5 h-3.5 text-amber-500" /> Skills & Tags
+                        </span>
+                        <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
+                          {searchResults.skills.length}
+                        </span>
+                      </div>
+                      <div className="mt-1 px-4 py-1.5 flex flex-wrap gap-1.5">
+                        {searchResults.skills.map((skill) => (
+                          <button
+                            key={skill.name}
+                            type="button"
+                            onClick={() => {
+                              setSearchQuery(skill.name);
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-xs font-medium border border-amber-200/60 transition-colors"
+                          >
+                            <span>{skill.name}</span>
+                            <span className="text-[9px] bg-white/80 px-1 rounded text-amber-700 font-bold">
+                              {skill.count}
                             </span>
-                            <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
-                              {searchResults.skills.length}
-                            </span>
-                          </div>
-                          <div className="mt-1 px-4 py-1.5 flex flex-wrap gap-1.5">
-                            {searchResults.skills.map((skill) => (
-                              <button
-                                key={skill.name}
-                                type="button"
-                                onClick={() => {
-                                  setSearchQuery(skill.name);
-                                }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-xs font-medium border border-amber-200/60 transition-colors"
-                              >
-                                <span>{skill.name}</span>
-                                <span className="text-[9px] bg-white/80 px-1 rounded text-amber-700 font-bold">
-                                  {skill.count}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
               )}
             </div>
+          )}
+        </div>
 
         {/* Right Section: View Switch, Notification Bell & Profile Pill */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
@@ -679,11 +703,10 @@ export default function Navbar() {
                           setIsDropdownOpen(false);
                           switchView();
                         }}
-                        className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer mb-1 ${
-                          viewMode === 'instructor'
+                        className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer mb-1 ${viewMode === 'instructor'
                             ? 'text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200'
                             : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200'
-                        }`}
+                          }`}
                       >
                         <span className="flex items-center gap-1.5">
                           {viewMode === 'instructor' ? (
@@ -708,13 +731,13 @@ export default function Navbar() {
                     >
                       My Dashboard
                     </Link>
-                    <Link
-                      href="/student/dashboard"
+                    <a
+                      href={getStrideNexDashboardUrl()}
                       onClick={() => setIsDropdownOpen(false)}
                       className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
                     >
                       Portal Dashboard
-                    </Link>
+                    </a>
                     {isAdmin && (
                       <Link
                         href="/admin?tab=reports"
