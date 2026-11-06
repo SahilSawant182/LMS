@@ -36,7 +36,7 @@ export function ViewModeProvider({
   const [mounted, setMounted] = useState<boolean>(false);
   const [canSwitch, setCanSwitch] = useState<boolean>(() => {
     if (user?.roles) {
-      const instructorRoles = [
+      const autoInstructorRoles = [
         "Instructor",
         "Course Creator",
         "Moderator",
@@ -45,16 +45,6 @@ export function ViewModeProvider({
         "Instructor Admin",
         "LMS Admin",
         "Admin Instructor",
-        "Mentor",
-        // ADD COLLEGE AND INDUSTRY ROLES:
-        "College",
-        "College Base",
-        "College Admin",
-        "College User",
-        "Industry",
-        "Industry Base",
-        "Industry Admin",
-        "Industry User",
         "Partner",
         "Partner Base",
         "Partner Admin",
@@ -62,7 +52,7 @@ export function ViewModeProvider({
         "Default Partner",
       ];
       const rList = Array.isArray(user.roles) ? user.roles : [user.roles];
-      return rList.some((r: string) => instructorRoles.includes(r));
+      return rList.some((r: string) => autoInstructorRoles.includes(r));
     }
     return false;
   });
@@ -71,6 +61,21 @@ export function ViewModeProvider({
   // Synchronize instructor ability and view mode safely from storage/APIs
   const syncViewMode = useCallback(() => {
     if (typeof window === 'undefined') return;
+
+    const rawRoles = localStorage.getItem('roles') || localStorage.getItem('lms_saved_instructor_roles') || '';
+    const rolesStr = rawRoles.toLowerCase();
+    const isPartner = rolesStr.includes('partner');
+    const isAdmin = rolesStr.includes('administrator') || rolesStr.includes('system manager');
+    const isRestrictedRole =
+      rolesStr.includes('mentor') ||
+      rolesStr.includes('college') ||
+      rolesStr.includes('industry');
+
+    if (!isPartner && !isAdmin && isRestrictedRole && localStorage.getItem('has_lms_access') !== 'true') {
+      setCanSwitch(false);
+      setViewMode('learner');
+      return;
+    }
 
     const switchable = canUserSwitchView();
     setCanSwitch(switchable);
@@ -101,7 +106,7 @@ export function ViewModeProvider({
         .then((res: any) => {
           const data = res?.message || res?.data || res;
           if (data && typeof data === 'object') {
-            const instructorRoles = [
+            const autoInstructorRoles = [
               "Instructor",
               "Course Creator",
               "Moderator",
@@ -110,16 +115,6 @@ export function ViewModeProvider({
               "Instructor Admin",
               "LMS Admin",
               "Admin Instructor",
-              "Mentor",
-              // ADD COLLEGE AND INDUSTRY ROLES:
-              "College",
-              "College Base",
-              "College Admin",
-              "College User",
-              "Industry",
-              "Industry Base",
-              "Industry Admin",
-              "Industry User",
               "Partner",
               "Partner Base",
               "Partner Admin",
@@ -127,10 +122,21 @@ export function ViewModeProvider({
               "Default Partner",
             ];
             const rawRoles = Array.isArray(data.roles) ? data.roles : [];
-            const hasInst = rawRoles.some((r: string) => instructorRoles.includes(r)) || Boolean(data.is_instructor);
+            const hasAutoInst = rawRoles.some((r: string) => autoInstructorRoles.includes(r)) || Boolean(data.is_instructor);
+
+            const isRestrictedRole = rawRoles.some((r: string) => {
+              const lower = (r || '').toLowerCase();
+              return lower.includes('college') || lower.includes('industry') || lower.includes('mentor');
+            });
+
+            const isPartner = rawRoles.some((r: string) => (r || '').toLowerCase().includes('partner'));
+            const isAdmin = rawRoles.some((r: string) => ['administrator', 'system manager'].includes((r || '').toLowerCase()));
+
+            const hasLmsEntitlement = localStorage.getItem('has_lms_access') === 'true';
+            const hasInst = hasAutoInst || (!isPartner && !isAdmin && isRestrictedRole && hasLmsEntitlement);
 
             if (!hasInst) {
-              // Pure learner account: purge instructor flags and disable view switching
+              // Pure learner or unpaid restricted account: purge instructor flags and disable view switching
               localStorage.setItem('can_switch_view', 'false');
               localStorage.setItem('isInstructor', 'false');
               localStorage.removeItem('lms_saved_instructor_roles');
@@ -188,17 +194,50 @@ export function ViewModeProvider({
   useEffect(() => {
     if (!mounted || !pathname) return;
 
+    const rawRoles = localStorage.getItem('roles') || localStorage.getItem('lms_saved_instructor_roles') || '';
+    const rolesStr = rawRoles.toLowerCase();
+    const isPartner = rolesStr.includes('partner');
+    const isAdmin = rolesStr.includes('administrator') || rolesStr.includes('system manager');
+    const isRestrictedRole =
+      rolesStr.includes('mentor') ||
+      rolesStr.includes('college') ||
+      rolesStr.includes('industry');
+
+    const hasLmsAccess = localStorage.getItem('has_lms_access') === 'true';
+    const isUnpaidRestrictedUser = !isPartner && !isAdmin && isRestrictedRole && !hasLmsAccess;
+
     const isInstructorRoute =
       pathname.startsWith('/instructor') ||
       pathname === '/course/create' ||
       pathname === '/batch/create' ||
+      pathname === '/courses' ||
+      pathname === '/quizzes' ||
+      pathname.startsWith('/quizzes/') ||
       /^\/course\/[^/]+\/edit/.test(pathname) ||
       /^\/batch\/[^/]+\/edit/.test(pathname) ||
       pathname.startsWith('/sales-earnings') ||
       pathname.startsWith('/course-evaluators') ||
-      pathname.startsWith('/certificate-evaluations');
+      pathname.startsWith('/certificate-evaluations') ||
+      pathname.startsWith('/programming-exercises/create') ||
+      pathname.startsWith('/assignments/create') ||
+      pathname.startsWith('/badges/create') ||
+      pathname.startsWith('/coupons');
 
     if (isInstructorRoute) {
+      if (isUnpaidRestrictedUser) {
+        // Redirect unpaid restricted user back to their dashboard or upgrade plans page
+        let redirectTarget = '/mentor/dashboard/plans';
+        if (rolesStr.includes('college')) {
+          redirectTarget = '/college/dashboard/plans';
+        } else if (rolesStr.includes('industry')) {
+          redirectTarget = '/industry/dashboard/plans';
+        } else if (rolesStr.includes('mentor')) {
+          redirectTarget = '/mentor/dashboard/plans';
+        }
+        window.location.href = redirectTarget;
+        return;
+      }
+
       if (!canSwitch || viewMode === 'learner') {
         // Non-instructors or users in learner view attempting to enter instructor areas are safely redirected
         router.replace('/dashboard');
