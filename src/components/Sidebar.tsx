@@ -117,7 +117,7 @@ export default function Sidebar({
     if (typeof window === 'undefined') return false;
     try {
       return isAuthorizedInstructor();
-    } catch {}
+    } catch { }
     return false;
   };
 
@@ -166,7 +166,7 @@ export default function Sidebar({
   const handleLogout = async () => {
     try {
       logout().catch((err) => console.warn("Logout API warning:", err));
-    } catch (e) {}
+    } catch (e) { }
 
     localStorage.removeItem("apiKey");
     localStorage.removeItem("apiSecret");
@@ -514,12 +514,12 @@ export default function Sidebar({
           {
             type: 'accordion',
             id: 'evaluations',
-            name: 'Evaluations & Staff',
+            name: 'Evaluations',
             icon: ClipboardCheck,
             instructorOnly: true,
             children: [
               {
-                name: 'Evaluations',
+                name: 'Learning Evaluation',
                 href: '/certificate-evaluations',
                 icon: ClipboardCheck,
                 instructorOnly: true,
@@ -584,52 +584,52 @@ export default function Sidebar({
       },
       ...(isAdminUser
         ? [
-            {
-              title: 'Admin Portal',
-              instructorOnly: true,
-              items: [
-                {
-                  type: 'accordion' as const,
-                  id: 'admin_portal',
-                  name: 'Admin & Reports',
-                  icon: ShieldCheck,
-                  badge: 'Admin',
-                  badgeColor: 'bg-purple-100 text-purple-700 font-bold border border-purple-200',
-                  instructorOnly: true,
-                  children: [
-                    {
-                      name: 'Admin Dashboard',
-                      href: '/admin',
-                      icon: LayoutDashboard,
-                      badge: 'Overview',
-                      badgeColor: 'bg-purple-50 text-purple-700 font-medium',
-                      instructorOnly: true,
-                    },
-                    {
-                      name: 'All LMS Courses',
-                      href: '/admin?tab=courses',
-                      icon: BookOpen,
-                      instructorOnly: true,
-                    },
-                    {
-                      name: 'User Directory',
-                      href: '/admin?tab=users',
-                      icon: Users,
-                      instructorOnly: true,
-                    },
-                    {
-                      name: 'Reports & Analytics',
-                      href: '/admin?tab=reports',
-                      icon: TrendingUp,
-                      badge: 'Reports',
-                      badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
-                      instructorOnly: true,
-                    },
-                  ],
-                },
-              ],
-            },
-          ]
+          {
+            title: 'Admin Portal',
+            instructorOnly: true,
+            items: [
+              {
+                type: 'accordion' as const,
+                id: 'admin_portal',
+                name: 'Admin & Reports',
+                icon: ShieldCheck,
+                badge: 'Admin',
+                badgeColor: 'bg-purple-100 text-purple-700 font-bold border border-purple-200',
+                instructorOnly: true,
+                children: [
+                  {
+                    name: 'Admin Dashboard',
+                    href: '/admin',
+                    icon: LayoutDashboard,
+                    badge: 'Overview',
+                    badgeColor: 'bg-purple-50 text-purple-700 font-medium',
+                    instructorOnly: true,
+                  },
+                  {
+                    name: 'All LMS Courses',
+                    href: '/admin?tab=courses',
+                    icon: BookOpen,
+                    instructorOnly: true,
+                  },
+                  {
+                    name: 'User Directory',
+                    href: '/admin?tab=users',
+                    icon: Users,
+                    instructorOnly: true,
+                  },
+                  {
+                    name: 'Reports & Analytics',
+                    href: '/admin?tab=reports',
+                    icon: TrendingUp,
+                    badge: 'Reports',
+                    badgeColor: 'bg-indigo-100 text-indigo-700 font-semibold',
+                    instructorOnly: true,
+                  },
+                ],
+              },
+            ],
+          },
+        ]
         : []),
     ];
   }, [effectiveIsInstructor, isAdminUser]);
@@ -663,9 +663,8 @@ export default function Sidebar({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 bg-white border-r border-slate-200/80 shadow-sm z-40 transition-all duration-300 flex flex-col ${
-          isExpanded ? 'w-64' : 'w-20'
-        } ${isOpenMobile ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+        className={`fixed top-0 bottom-0 left-0 bg-white border-r border-slate-200/80 shadow-sm z-40 transition-all duration-300 flex flex-col ${isExpanded ? 'w-64' : 'w-20'
+          } ${isOpenMobile ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
         {/* Sidebar Header with StrideNex Logo */}
         <div className="h-20 flex items-center justify-between px-4 border-b border-slate-100">
@@ -739,16 +738,14 @@ export default function Sidebar({
                           <Link
                             href={item.href}
                             onClick={() => onCloseMobile?.()}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative ${
-                              active
-                                ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-md shadow-indigo-600/20'
-                                : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/70'
-                            } ${!isExpanded ? 'justify-center' : ''}`}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative ${active
+                              ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-md shadow-indigo-600/20'
+                              : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/70'
+                              } ${!isExpanded ? 'justify-center' : ''}`}
                           >
                             <div
-                              className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${
-                                active ? 'text-white' : 'text-slate-500 group-hover:text-indigo-600'
-                              }`}
+                              className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${active ? 'text-white' : 'text-slate-500 group-hover:text-indigo-600'
+                                }`}
                             >
                               <Icon className="w-5 h-5" />
                             </div>
@@ -758,11 +755,10 @@ export default function Sidebar({
                                 <span className="truncate">{item.name}</span>
                                 {item.badge && (
                                   <span
-                                    className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
-                                      active
-                                        ? 'bg-white/20 text-white'
-                                        : item.badgeColor || 'bg-indigo-100 text-indigo-700'
-                                    }`}
+                                    className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${active
+                                      ? 'bg-white/20 text-white'
+                                      : item.badgeColor || 'bg-indigo-100 text-indigo-700'
+                                      }`}
                                   >
                                     {item.badge}
                                   </span>
@@ -817,20 +813,18 @@ export default function Sidebar({
                             }
                             toggleAccordion(item.id);
                           }}
-                          className={`w-full flex items-center justify-between rounded-xl text-sm font-medium transition-all duration-200 group relative px-3 py-2.5 cursor-pointer text-left ${
-                            isGroupActive && !isOpen
-                              ? 'bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80'
-                              : isGroupActive && isOpen
+                          className={`w-full flex items-center justify-between rounded-xl text-sm font-medium transition-all duration-200 group relative px-3 py-2.5 cursor-pointer text-left ${isGroupActive && !isOpen
+                            ? 'bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80'
+                            : isGroupActive && isOpen
                               ? 'bg-indigo-50/60 text-indigo-700 font-semibold'
                               : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-100/70'
-                          } ${!isExpanded ? 'justify-center' : ''}`}
+                            } ${!isExpanded ? 'justify-center' : ''}`}
                           title={isExpanded ? (isOpen ? `Collapse ${item.name}` : `Expand ${item.name}`) : item.name}
                         >
                           <div className={`flex items-center gap-3 flex-1 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
                             <div
-                              className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${
-                                isGroupActive ? 'text-indigo-600' : 'text-slate-500 group-hover:text-indigo-600'
-                              }`}
+                              className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${isGroupActive ? 'text-indigo-600' : 'text-slate-500 group-hover:text-indigo-600'
+                                }`}
                             >
                               <Icon className="w-5 h-5" />
                             </div>
@@ -840,9 +834,8 @@ export default function Sidebar({
                                 <span className="truncate">{item.name}</span>
                                 {item.badge && (
                                   <span
-                                    className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full mr-2 ${
-                                      item.badgeColor || 'bg-indigo-100 text-indigo-700'
-                                    }`}
+                                    className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full mr-2 ${item.badgeColor || 'bg-indigo-100 text-indigo-700'
+                                      }`}
                                   >
                                     {item.badge}
                                   </span>
@@ -856,9 +849,8 @@ export default function Sidebar({
                               className="p-1 text-slate-400 group-hover:text-indigo-600 transition-colors rounded-lg ml-1 shrink-0"
                             >
                               <ChevronDown
-                                className={`w-4 h-4 transition-transform duration-200 ${
-                                  isOpen ? 'rotate-180 text-indigo-600' : ''
-                                }`}
+                                className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180 text-indigo-600' : ''
+                                  }`}
                               />
                             </div>
                           )}
@@ -896,9 +888,8 @@ export default function Sidebar({
                                     </div>
                                     {child.badge && (
                                       <span
-                                        className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${
-                                          child.badgeColor || 'bg-indigo-100 text-indigo-700'
-                                        }`}
+                                        className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${child.badgeColor || 'bg-indigo-100 text-indigo-700'
+                                          }`}
                                       >
                                         {child.badge}
                                       </span>
@@ -912,26 +903,23 @@ export default function Sidebar({
                                   key={child.href || cIdx}
                                   href={child.href || '#'}
                                   onClick={() => onCloseMobile?.()}
-                                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors group ${
-                                    active
-                                      ? 'bg-indigo-50 text-indigo-700 font-bold'
-                                      : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-100/70'
-                                  }`}
+                                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors group ${active
+                                    ? 'bg-indigo-50 text-indigo-700 font-bold'
+                                    : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-100/70'
+                                    }`}
                                 >
                                   <div className="flex items-center gap-2 truncate">
                                     {SubIcon ? (
                                       <SubIcon
-                                        className={`w-3.5 h-3.5 shrink-0 ${
-                                          active ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-500'
-                                        }`}
+                                        className={`w-3.5 h-3.5 shrink-0 ${active ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-500'
+                                          }`}
                                       />
                                     ) : (
                                       <div
-                                        className={`w-1.5 h-1.5 rounded-full transition-transform ${
-                                          active
-                                            ? 'bg-indigo-600 scale-125'
-                                            : 'bg-slate-300 group-hover:bg-indigo-400'
-                                        }`}
+                                        className={`w-1.5 h-1.5 rounded-full transition-transform ${active
+                                          ? 'bg-indigo-600 scale-125'
+                                          : 'bg-slate-300 group-hover:bg-indigo-400'
+                                          }`}
                                       />
                                     )}
                                     <span className="truncate">{child.name}</span>
@@ -939,11 +927,10 @@ export default function Sidebar({
 
                                   {child.badge && (
                                     <span
-                                      className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${
-                                        active
-                                          ? 'bg-indigo-600 text-white'
-                                          : child.badgeColor || 'bg-slate-100 text-slate-600'
-                                      }`}
+                                      className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${active
+                                        ? 'bg-indigo-600 text-white'
+                                        : child.badgeColor || 'bg-slate-100 text-slate-600'
+                                        }`}
                                     >
                                       {child.badge}
                                     </span>
@@ -965,9 +952,8 @@ export default function Sidebar({
                               <span className="text-xs font-bold text-slate-900">{item.name}</span>
                               {item.badge && (
                                 <span
-                                  className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${
-                                    item.badgeColor || 'bg-indigo-100 text-indigo-700'
-                                  }`}
+                                  className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${item.badgeColor || 'bg-indigo-100 text-indigo-700'
+                                    }`}
                                 >
                                   {item.badge}
                                 </span>
@@ -1008,11 +994,10 @@ export default function Sidebar({
                                     key={child.href || cIdx}
                                     href={child.href || '#'}
                                     onClick={() => setHoveredGroupId(null)}
-                                    className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors ${
-                                      active
-                                        ? 'bg-indigo-50 text-indigo-700 font-bold'
-                                        : 'text-slate-700 hover:text-indigo-600 hover:bg-slate-50'
-                                    }`}
+                                    className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors ${active
+                                      ? 'bg-indigo-50 text-indigo-700 font-bold'
+                                      : 'text-slate-700 hover:text-indigo-600 hover:bg-slate-50'
+                                      }`}
                                   >
                                     <div className="flex items-center gap-2">
                                       {SubIcon && <SubIcon className="w-3.5 h-3.5 text-slate-400" />}
@@ -1020,11 +1005,10 @@ export default function Sidebar({
                                     </div>
                                     {child.badge && (
                                       <span
-                                        className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${
-                                          active
-                                            ? 'bg-indigo-600 text-white'
-                                            : child.badgeColor || 'bg-slate-100 text-slate-600'
-                                        }`}
+                                        className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${active
+                                          ? 'bg-indigo-600 text-white'
+                                          : child.badgeColor || 'bg-slate-100 text-slate-600'
+                                          }`}
                                       >
                                         {child.badge}
                                       </span>
@@ -1088,13 +1072,11 @@ export default function Sidebar({
                 type="button"
                 onClick={() => hasSwitchAbility && switchView()}
                 disabled={!hasSwitchAbility}
-                className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 transition-transform ${
-                  hasSwitchAbility ? 'cursor-pointer hover:scale-105' : ''
-                } ${
-                  effectiveIsInstructor
+                className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 transition-transform ${hasSwitchAbility ? 'cursor-pointer hover:scale-105' : ''
+                  } ${effectiveIsInstructor
                     ? 'bg-blue-100 text-blue-700'
                     : 'bg-emerald-100 text-emerald-700'
-                }`}
+                  }`}
                 title={hasSwitchAbility ? `Currently ${effectiveIsInstructor ? 'Instructor' : 'Learner'} View. Click to switch.` : undefined}
               >
                 {effectiveIsInstructor ? 'INS' : 'LRN'}
@@ -1132,13 +1114,11 @@ export default function Sidebar({
                 type="button"
                 onClick={() => hasSwitchAbility && switchView()}
                 disabled={!hasSwitchAbility}
-                className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center transition-transform ${
-                  hasSwitchAbility ? 'cursor-pointer hover:scale-105' : ''
-                } ${
-                  effectiveIsInstructor
+                className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center transition-transform ${hasSwitchAbility ? 'cursor-pointer hover:scale-105' : ''
+                  } ${effectiveIsInstructor
                     ? 'bg-blue-100 text-blue-700'
                     : 'bg-emerald-100 text-emerald-700'
-                }`}
+                  }`}
                 title={hasSwitchAbility ? `Currently ${effectiveIsInstructor ? 'Instructor' : 'Learner'} View. Click to switch.` : undefined}
               >
                 {effectiveIsInstructor ? 'INS' : 'LRN'}

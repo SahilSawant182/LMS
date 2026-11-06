@@ -721,6 +721,7 @@ export const previewCertificate = async (template_name: string): Promise<any> =>
 export interface CreateDefaultCertificatePayload {
   instructor: string;
   certificate: string;
+  type?: string;
 }
 
 export const createDefaultCertificate = async (payload: CreateDefaultCertificatePayload): Promise<any> => {
@@ -730,15 +731,28 @@ export const createDefaultCertificate = async (payload: CreateDefaultCertificate
   if (API_TOKEN) {
     headers['Authorization'] = `token ${API_TOKEN}`;
   }
+  const certType = payload.type || 'advance';
   return apiService.post(
     'method/lms.lms.doctype.default_certificate.default_certificate.create_default_certificate',
-    payload,
-    { headers }
+    {
+      instructor: payload.instructor,
+      certificate: payload.certificate,
+      type: certType,
+    },
+    {
+      headers,
+      params: {
+        type: certType,
+      },
+    }
   );
 };
 
+export type CertificateType = 'participation' | 'advance';
+
 export interface CreateStudentCertificatePayload {
   course: string;
+  type?: CertificateType | string;
 }
 
 export const createStudentCertificate = async (payload: CreateStudentCertificatePayload): Promise<any> => {
@@ -748,14 +762,22 @@ export const createStudentCertificate = async (payload: CreateStudentCertificate
   if (API_TOKEN) {
     headers['Authorization'] = `token ${API_TOKEN}`;
   }
+  const certType = (payload.type || 'participation').toLowerCase();
   const body = {
     course: payload.course,
+    type: certType,
+  };
+  const config = {
+    headers,
+    params: {
+      type: certType,
+    },
   };
   try {
     return await apiService.post(
       'method/lms.lms.doctype.lms_certificate.lms_certificate.create_student_certificate',
       body,
-      { headers }
+      config
     );
   } catch (err: any) {
     const msg = String(err?.response?.data?.message || err?.message || '');
@@ -763,7 +785,7 @@ export const createStudentCertificate = async (payload: CreateStudentCertificate
       return await apiService.post(
         'method/lms.lms.doctype.lms_certificate.lms_certificate.create_certificate',
         body,
-        { headers }
+        config
       );
     }
     throw err;

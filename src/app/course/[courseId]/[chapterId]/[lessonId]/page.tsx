@@ -667,10 +667,11 @@ export default function LessonPage() {
     try {
       const res = await createStudentCertificate({
         course: courseId,
+        type: 'participation',
       });
       const certData = res?.message?.data || res?.data?.message || res?.data || res?.message || res;
       setCreatedCertificate(certData);
-      showToast.success('Certificate generated successfully!');
+      showToast.success('Participation certificate generated successfully!');
 
       const certName = certData?.name || (typeof certData === 'string' ? certData : '') || courseData?.certificate || '';
       const certTemplate = certData?.template || certData?.format || 'StrideNEX Creative Pathways';
@@ -2814,7 +2815,7 @@ export default function LessonPage() {
                       ) : (
                         <>
                           <Award className="w-4 h-4" />
-                          <span>Generate Certificate</span>
+                          <span>Generate Participation Certificate</span>
                         </>
                       )}
                     </button>
@@ -2860,7 +2861,7 @@ export default function LessonPage() {
                     </div>
                     <div>
                       <h3 className="text-base font-bold text-slate-900 line-clamp-1">
-                        Course Completion Certificate
+                        Course Participation Certificate
                       </h3>
                       <p className="text-xs text-slate-500">
                         {courseData?.title || courseId}

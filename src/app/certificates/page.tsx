@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import Navbar from '@/components/Navbar';
 import {
   Award,
@@ -52,6 +52,8 @@ interface Certificate {
   batch_title?: string;
   template?: string;
   format?: string;
+  type?: string;
+  certificate_type?: string;
 }
 
 export default function CertificatesPage() {
@@ -65,7 +67,8 @@ export default function CertificatesPage() {
   const isInstructor = hasInstructorRole && viewMode === 'instructor';
   const [authChecked, setAuthChecked] = useState<boolean>(false);
 
-  // Instructor: Templates & Preview state
+  // Instructor: Certificate Type & Templates state
+  const [selectedCertType, setSelectedCertType] = useState<'advance' | 'participation'>('advance');
   const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [previewContent, setPreviewContent] = useState<string>('');
@@ -75,6 +78,30 @@ export default function CertificatesPage() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isSettingDefault, setIsSettingDefault] = useState<boolean>(false);
   const [defaultCertificate, setDefaultCertificate] = useState<string>('');
+
+  // Templates filtered by certificate type
+  // Integrated templates are advance certification; participation has no templates yet
+  const availableTemplates = selectedCertType === 'advance' ? templates : [];
+
+  // Handle Certificate Type switch
+  const handleCertTypeChange = async (type: 'advance' | 'participation') => {
+    setSelectedCertType(type);
+    if (type === 'advance') {
+      if (templates.length > 0) {
+        const first = templates[0];
+        const defaultName = typeof first === 'string' ? first : first.name;
+        setSelectedTemplate(defaultName);
+        await loadPreview(defaultName);
+      } else {
+        setSelectedTemplate('');
+        setPreviewContent('');
+      }
+    } else {
+      setSelectedTemplate('');
+      setPreviewContent('');
+      setPreviewError(null);
+    }
+  };
 
   // Set selected template as default certificate for instructor
   const handleSetDefaultCertificate = async () => {
@@ -100,6 +127,7 @@ export default function CertificatesPage() {
       const res = await createDefaultCertificate({
         instructor: instructorEmail.trim(),
         certificate: selectedTemplate.trim(),
+        type: selectedCertType,
       });
 
       setDefaultCertificate(selectedTemplate);
@@ -125,8 +153,21 @@ export default function CertificatesPage() {
 
   // Student state
   const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [studentFilterType, setStudentFilterType] = useState<'all' | 'participation' | 'advance'>('all');
   const [studentLoading, setStudentLoading] = useState<boolean>(false);
   const [studentError, setStudentError] = useState<string | null>(null);
+
+  // Filtered certificates for student view
+  const filteredStudentCertificates = useMemo(() => {
+    return certificates.filter((cert) => {
+      if (studentFilterType === 'all') return true;
+      const cType = ((cert as any).type || (cert as any).certificate_type || '').toLowerCase();
+      if (studentFilterType === 'advance') {
+        return cType.includes('advance');
+      }
+      return !cType.includes('advance');
+    });
+  }, [certificates, studentFilterType]);
 
   // Helper to fetch student's earned certificates using the dedicated get_student_certificate API
   const fetchStudentCertificates = async () => {
@@ -291,11 +332,16 @@ export default function CertificatesPage() {
       const validTemplates = Array.isArray(list) ? list : [];
       setTemplates(validTemplates);
 
-      if (validTemplates.length > 0) {
-        const first = validTemplates[0];
-        const defaultName = typeof first === 'string' ? first : first.name;
-        setSelectedTemplate(defaultName);
-        await loadPreview(defaultName);
+      if (selectedCertType === 'advance') {
+        if (validTemplates.length > 0) {
+          const first = validTemplates[0];
+          const defaultName = typeof first === 'string' ? first : first.name;
+          setSelectedTemplate(defaultName);
+          await loadPreview(defaultName);
+        } else {
+          setSelectedTemplate('');
+          setPreviewContent('');
+        }
       } else {
         setSelectedTemplate('');
         setPreviewContent('');
@@ -462,25 +508,44 @@ export default function CertificatesPage() {
                 </div>
               </div>
 
-              {/* Template Dropdown Selector (Matches Image 2) */}
+              {/* Type & Template Dropdown Selectors */}
               <div className="flex flex-wrap items-center gap-3">
-                <div className="w-full sm:w-auto min-w-[280px] md:min-w-[320px]">
+                {/* 1. Certification Type Dropdown */}
+                <div className="w-full sm:w-auto min-w-[210px]">
+                  <Dropdown
+                    id="certificate-type-select"
+                    value={selectedCertType}
+                    onChange={(val: string) => handleCertTypeChange(val as 'advance' | 'participation')}
+                    options={[
+                      { value: 'advance', label: 'Advance Certificate' },
+                      { value: 'participation', label: 'Participation Certificate' },
+                    ]}
+                    placeholder="Select Certificate Type"
+                    modalTitle="SELECT CERTIFICATE TYPE"
+                    triggerClassName="!bg-white !border-slate-200 hover:!border-slate-300 !rounded-xl !text-sm !font-semibold !py-2.5 !px-3.5 shadow-sm"
+                  />
+                </div>
+
+                {/* 2. Certificate Template Dropdown */}
+                <div className="w-full sm:w-auto min-w-[260px] md:min-w-[300px]">
                   <Dropdown
                     id="certificate-template-select"
                     value={selectedTemplate}
                     onChange={(val: string) => handleSelectTemplate(val)}
-                    options={templates.map((tpl) => {
+                    options={availableTemplates.map((tpl) => {
                       const name = typeof tpl === 'string' ? tpl : tpl.name;
                       return { value: name, label: name };
                     })}
                     placeholder={
-                      templatesLoading
+                      selectedCertType === 'participation'
+                        ? 'No templates available'
+                        : templatesLoading
                         ? 'Loading templates...'
                         : 'Select Certificate Template'
                     }
                     modalTitle="SELECT TEMPLATE"
                     searchable
-                    disabled={templatesLoading || templates.length === 0}
+                    disabled={selectedCertType === 'participation' || templatesLoading || availableTemplates.length === 0}
                     triggerClassName="!bg-white !border-slate-200 hover:!border-slate-300 !rounded-xl !text-sm !font-semibold !py-2.5 !px-3.5 shadow-sm"
                   />
                 </div>
@@ -489,8 +554,8 @@ export default function CertificatesPage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => loadPreview(selectedTemplate)}
-                    disabled={previewLoading || !selectedTemplate}
+                    onClick={() => selectedTemplate && loadPreview(selectedTemplate)}
+                    disabled={previewLoading || !selectedTemplate || selectedCertType === 'participation'}
                     title="Refresh Preview"
                     className="p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
@@ -501,7 +566,7 @@ export default function CertificatesPage() {
                   <button
                     type="button"
                     onClick={handleOpenInNewWindow}
-                    disabled={!previewContent || previewLoading}
+                    disabled={!previewContent || previewLoading || selectedCertType === 'participation'}
                     title="Open in new window"
                     className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 text-xs font-semibold border border-slate-200 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
@@ -511,7 +576,7 @@ export default function CertificatesPage() {
                   <button
                     type="button"
                     onClick={handlePrint}
-                    disabled={!previewContent || previewLoading}
+                    disabled={!previewContent || previewLoading || selectedCertType === 'participation'}
                     title="Print template"
                     className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-200 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
@@ -524,7 +589,8 @@ export default function CertificatesPage() {
                     disabled={
                       isSettingDefault ||
                       !selectedTemplate ||
-                      templatesLoading
+                      templatesLoading ||
+                      selectedCertType === 'participation'
                     }
                     title="Set as Default Certificate"
                     className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
@@ -551,12 +617,15 @@ export default function CertificatesPage() {
             </div>
 
             {/* Template Status / Meta Bar */}
-            {selectedTemplate && (
+            {selectedCertType === 'advance' && selectedTemplate ? (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4 px-4 py-2.5 bg-amber-50/60 rounded-xl border border-amber-100 text-xs">
                 <div className="flex items-center gap-2 text-amber-900 font-semibold truncate">
                   <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0" />
                   <span className="truncate">
                     Current Template: <strong className="text-amber-950 font-bold">{selectedTemplate}</strong>
+                  </span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                    Advance Certificate
                   </span>
                   {defaultCertificate === selectedTemplate && (
                     <span className="inline-flex items-center gap-1 bg-amber-200/90 text-amber-950 font-bold text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider ml-1">
@@ -585,11 +654,40 @@ export default function CertificatesPage() {
                   )}
                 </div>
               </div>
-            )}
+            ) : selectedCertType === 'participation' ? (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                <div className="flex items-center gap-2 text-slate-700 font-semibold">
+                  <Award className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <span>Type: <strong className="text-slate-900 font-bold">Participation Certificate</strong></span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                    Auto-generated on Course Completion
+                  </span>
+                </div>
+                <div className="text-slate-500 font-medium">
+                  0 templates configured (templates will be added later)
+                </div>
+              </div>
+            ) : null}
 
             {/* Preview Display Container */}
             <div className="mt-6">
-              {templatesLoading ? (
+              {selectedCertType === 'participation' ? (
+                <div className="text-center py-24 bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center">
+                  <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 shadow-xs mb-3">
+                    <Award className="w-10 h-10 text-emerald-600" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 mb-1">
+                    Participation Certificate Templates
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                    Every student automatically receives a Participation Certificate upon completing a course. Template designs for participation certificates are not yet available and will be added later.
+                  </p>
+                  <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-xs text-slate-600 font-medium">
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Templates will be added later</span>
+                  </div>
+                </div>
+              ) : templatesLoading ? (
                 <div className="flex flex-col items-center justify-center py-28 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                   <div className="animate-spin rounded-full h-12 w-12 border-3 border-amber-500 border-t-transparent mb-3"></div>
                   <p className="text-sm font-semibold text-slate-700">Loading Certificate Templates...</p>
@@ -675,9 +773,41 @@ export default function CertificatesPage() {
                   Certificates earned from completing your courses and programs.
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
-                  {certificates.length} Total
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex p-1 bg-slate-100 rounded-xl text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setStudentFilterType('all')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      studentFilterType === 'all'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    All ({certificates.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStudentFilterType('participation')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      studentFilterType === 'participation'
+                        ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Participation
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStudentFilterType('advance')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      studentFilterType === 'advance'
+                        ? 'bg-white text-purple-700 shadow-xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Advance
+                  </button>
                 </div>
               </div>
             </div>
@@ -690,108 +820,123 @@ export default function CertificatesPage() {
               <div className="text-center py-12 bg-red-50 text-red-600 rounded-lg border border-red-100">
                 <p>{studentError}</p>
               </div>
-            ) : certificates.length > 0 ? (
+            ) : filteredStudentCertificates.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {certificates.map((cert) => (
-                  <div
-                    key={cert.name}
-                    className="block group cursor-pointer"
-                    onClick={() => handleOpenCertificate(cert)}
-                  >
-                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-indigo-300 transition-all flex flex-col h-full">
-                      {/* Card Header (Design) */}
-                      <div className="h-24 bg-gradient-to-br from-slate-800 to-slate-900 relative">
-                        <div className="absolute -bottom-6 left-6 p-2 bg-white rounded-xl shadow-sm border border-slate-100">
-                          <div className="bg-amber-100 p-2 rounded-lg">
-                            <Award className="w-8 h-8 text-amber-600" />
+                {filteredStudentCertificates.map((cert) => {
+                  const isAdvance = ((cert as any).type || (cert as any).certificate_type || '').toLowerCase().includes('advance');
+                  return (
+                    <div
+                      key={cert.name}
+                      className="block group cursor-pointer"
+                      onClick={() => handleOpenCertificate(cert)}
+                    >
+                      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-indigo-300 transition-all flex flex-col h-full">
+                        {/* Card Header (Design) */}
+                        <div className="h-24 bg-gradient-to-br from-slate-800 to-slate-900 relative">
+                          <div className="absolute -bottom-6 left-6 p-2 bg-white rounded-xl shadow-sm border border-slate-100">
+                            <div className={`p-2 rounded-lg ${isAdvance ? 'bg-purple-100' : 'bg-emerald-100'}`}>
+                              <Award className={`w-8 h-8 ${isAdvance ? 'text-purple-600' : 'text-emerald-600'}`} />
+                            </div>
+                          </div>
+                          <div className="absolute top-4 right-4 bg-white/10 backdrop-blur-md px-2.5 py-1 rounded-md border border-white/20 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span className="text-xs font-semibold text-white">
+                              Verified
+                            </span>
                           </div>
                         </div>
-                        <div className="absolute top-4 right-4 bg-white/10 backdrop-blur-md px-2.5 py-1 rounded-md border border-white/20 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className="text-xs font-semibold text-white">
-                            Verified
-                          </span>
+
+                        {/* Card Body */}
+                        <div className="p-6 pt-10 flex-grow flex flex-col">
+                          {/* Type Badge */}
+                          <div className="mb-2">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                              isAdvance
+                                ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            }`}>
+                              <Award className="w-3 h-3" />
+                              {isAdvance ? 'Advance Certificate' : 'Participation Certificate'}
+                            </span>
+                          </div>
+
+                          <h3 className="text-lg font-bold text-slate-900 leading-tight mb-1 group-hover:text-indigo-600 transition-colors">
+                            {cert.course_title || cert.course}
+                          </h3>
+                          {cert.batch_title && (
+                            <p className="text-sm text-indigo-600 font-medium mb-4">
+                              {cert.batch_title}
+                            </p>
+                          )}
+
+                          <div className="space-y-3 mt-auto pt-3">
+                            {cert.member_name && (
+                              <div className="flex items-start gap-3">
+                                <User className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                                <div>
+                                  <p className="text-xs text-slate-500 font-medium">
+                                    Issued To
+                                  </p>
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {cert.member_name}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {cert.issue_date && (
+                              <div className="flex items-start gap-3">
+                                <Calendar className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                                <div>
+                                  <p className="text-xs text-slate-500 font-medium">
+                                    Issue Date
+                                  </p>
+                                  <p className="text-sm font-medium text-slate-800">
+                                    {formatDate(cert.issue_date)}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {cert.expiry_date && (
+                              <div className="flex items-start gap-3">
+                                <Clock className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                                <div>
+                                  <p className="text-xs text-slate-500 font-medium">
+                                    Expiry Date
+                                  </p>
+                                  <p className="text-sm font-medium text-slate-800">
+                                    {formatDate(cert.expiry_date)}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Card Body */}
-                      <div className="p-6 pt-10 flex-grow flex flex-col">
-                        <h3 className="text-lg font-bold text-slate-900 leading-tight mb-1 group-hover:text-indigo-600 transition-colors">
-                          {cert.course_title || cert.course}
-                        </h3>
-                        {cert.batch_title && (
-                          <p className="text-sm text-indigo-600 font-medium mb-4">
-                            {cert.batch_title}
-                          </p>
-                        )}
-
-                        <div className="space-y-3 mt-auto pt-3">
-                          {cert.member_name && (
-                            <div className="flex items-start gap-3">
-                              <User className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                              <div>
-                                <p className="text-xs text-slate-500 font-medium">
-                                  Issued To
-                                </p>
-                                <p className="text-sm font-semibold text-slate-800">
-                                  {cert.member_name}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-
-                          {cert.issue_date && (
-                            <div className="flex items-start gap-3">
-                              <Calendar className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                              <div>
-                                <p className="text-xs text-slate-500 font-medium">
-                                  Issue Date
-                                </p>
-                                <p className="text-sm font-medium text-slate-800">
-                                  {formatDate(cert.issue_date)}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-
-                          {cert.expiry_date && (
-                            <div className="flex items-start gap-3">
-                              <Clock className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                              <div>
-                                <p className="text-xs text-slate-500 font-medium">
-                                  Expiry Date
-                                </p>
-                                <p className="text-sm font-medium text-slate-800">
-                                  {formatDate(cert.expiry_date)}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Footer Actions */}
-                      <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end items-center text-xs">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenCertificate(cert);
-                            }}
-                            title="View / Download Certificate PDF"
-                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-                          <span className="text-indigo-600 font-semibold group-hover:underline flex items-center gap-1">
-                            View &rarr;
-                          </span>
+                        {/* Footer Actions */}
+                        <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end items-center text-xs">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenCertificate(cert);
+                              }}
+                              title="View / Download Certificate PDF"
+                              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                            <span className="text-indigo-600 font-semibold group-hover:underline flex items-center gap-1">
+                              View &rarr;
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center py-20 bg-slate-50 rounded-xl border border-dashed border-slate-200 flex flex-col items-center">
