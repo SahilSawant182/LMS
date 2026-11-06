@@ -35,9 +35,6 @@ export function ViewModeProvider({
 
   const [mounted, setMounted] = useState<boolean>(false);
   const [canSwitch, setCanSwitch] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return canUserSwitchView();
-    }
     if (user?.roles) {
       const instructorRoles = [
         "Instructor",

@@ -93,6 +93,8 @@ export default function Sidebar({
   const [internalExpanded, setInternalExpanded] = useState<boolean>(true);
   const [isInstructor, setIsInstructor] = useState<boolean>(false);
   const [isAdminUser, setIsAdminUser] = useState<boolean>(false);
+  const [mounted, setMounted] = useState<boolean>(false);
+  const hasSwitchAbility = mounted && canSwitch;
   const effectiveIsInstructor = Boolean((canSwitch || isInstructor) && viewMode === 'instructor');
   const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
   const [isCreateChapterOpen, setIsCreateChapterOpen] = useState<boolean>(false);
@@ -120,6 +122,7 @@ export default function Sidebar({
   };
 
   useEffect(() => {
+    setMounted(true);
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('lms_sidebar_expanded');
       if (saved !== null) {
@@ -1083,16 +1086,16 @@ export default function Sidebar({
             <div className="flex items-center gap-2 truncate flex-1 px-1">
               <button
                 type="button"
-                onClick={() => canSwitch && switchView()}
-                disabled={!canSwitch}
+                onClick={() => hasSwitchAbility && switchView()}
+                disabled={!hasSwitchAbility}
                 className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 transition-transform ${
-                  canSwitch ? 'cursor-pointer hover:scale-105' : ''
+                  hasSwitchAbility ? 'cursor-pointer hover:scale-105' : ''
                 } ${
                   effectiveIsInstructor
                     ? 'bg-blue-100 text-blue-700'
                     : 'bg-emerald-100 text-emerald-700'
                 }`}
-                title={canSwitch ? `Currently ${effectiveIsInstructor ? 'Instructor' : 'Learner'} View. Click to switch.` : undefined}
+                title={hasSwitchAbility ? `Currently ${effectiveIsInstructor ? 'Instructor' : 'Learner'} View. Click to switch.` : undefined}
               >
                 {effectiveIsInstructor ? 'INS' : 'LRN'}
               </button>
@@ -1101,7 +1104,7 @@ export default function Sidebar({
                   <p className="text-xs font-semibold text-slate-800 leading-none truncate">
                     {effectiveIsInstructor ? 'Instructor View' : 'Learner View'}
                   </p>
-                  {canSwitch && (
+                  {hasSwitchAbility && (
                     <button
                       type="button"
                       onClick={() => switchView()}
@@ -1127,16 +1130,16 @@ export default function Sidebar({
             <div className="w-full flex flex-col items-center gap-2">
               <button
                 type="button"
-                onClick={() => canSwitch && switchView()}
-                disabled={!canSwitch}
+                onClick={() => hasSwitchAbility && switchView()}
+                disabled={!hasSwitchAbility}
                 className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center transition-transform ${
-                  canSwitch ? 'cursor-pointer hover:scale-105' : ''
+                  hasSwitchAbility ? 'cursor-pointer hover:scale-105' : ''
                 } ${
                   effectiveIsInstructor
                     ? 'bg-blue-100 text-blue-700'
                     : 'bg-emerald-100 text-emerald-700'
                 }`}
-                title={canSwitch ? `Currently ${effectiveIsInstructor ? 'Instructor' : 'Learner'} View. Click to switch.` : undefined}
+                title={hasSwitchAbility ? `Currently ${effectiveIsInstructor ? 'Instructor' : 'Learner'} View. Click to switch.` : undefined}
               >
                 {effectiveIsInstructor ? 'INS' : 'LRN'}
               </button>

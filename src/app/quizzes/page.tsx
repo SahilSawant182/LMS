@@ -23,7 +23,8 @@ import {
   Calendar,
   Layers,
   Sparkles,
-  BookOpen
+  BookOpen,
+  Edit
 } from "lucide-react";
 
 interface Quiz {
@@ -274,7 +275,7 @@ function QuizzesContent() {
             }`}
           >
             <Award className="w-4 h-4" />
-            <span>Quizzes & Assessments</span>
+            <span>Quizzes</span>
             <span className={`ml-1.5 px-2 py-0.5 rounded-full text-xs font-bold ${
               activeTab === "quizzes" ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400"
             }`}>
@@ -374,7 +375,9 @@ function QuizzesContent() {
                     <div className="p-6 flex-grow">
                       <div className="flex justify-between items-start gap-2 mb-3">
                         <h2 className="text-base sm:text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors line-clamp-2">
-                          {quiz.title}
+                          <Link href={isInstructor ? `/quizzes/edit/${quiz.name}` : `/quizzes/${quiz.name}`} className="hover:underline">
+                            {quiz.title}
+                          </Link>
                         </h2>
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap shrink-0">
                           {quiz.total_marks} Marks
@@ -399,19 +402,21 @@ function QuizzesContent() {
                       </div>
                     </div>
 
-                    <div className="px-6 py-3.5 bg-slate-50/70 border-t border-gray-100 flex items-center gap-2">
-                      <Link
-                        href={`/quizzes/${quiz.name}`}
-                        className="flex-1 flex justify-center items-center px-4 py-2 text-xs font-bold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-xs"
-                      >
-                        Start Assessment
-                      </Link>
-                      {isInstructor && (
+                    <div className="px-6 py-3.5 bg-slate-50/70 border-t border-gray-100 flex items-center">
+                      {isInstructor ? (
                         <Link
                           href={`/quizzes/edit/${quiz.name}`}
-                          className="px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
+                          className="w-full flex justify-center items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-xs"
                         >
+                          <Edit className="w-3.5 h-3.5" />
                           Edit
+                        </Link>
+                      ) : (
+                        <Link
+                          href={`/quizzes/${quiz.name}`}
+                          className="w-full flex justify-center items-center px-4 py-2 text-xs font-bold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-xs"
+                        >
+                          Start Assessment
                         </Link>
                       )}
                     </div>

@@ -48,6 +48,7 @@ export default function Navbar() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
+  const [dashboardUrl, setDashboardUrl] = useState<string>("/student/dashboard");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Search state
@@ -108,11 +109,13 @@ export default function Navbar() {
         }
         setIsInstructor(hasInstructorRole);
         setIsAdmin(isAdminInstructor());
+        setDashboardUrl(getStrideNexDashboardUrl());
       } else {
         setIsAuthenticated(false);
         setUserImage("");
         setIsInstructor(false);
         setIsAdmin(false);
+        setDashboardUrl(getStrideNexDashboardUrl());
       }
     }
   };
@@ -345,7 +348,15 @@ export default function Navbar() {
 
           {/* "Back to StrideNex" Button */}
           <a
-            href={getStrideNexDashboardUrl()}
+            href={dashboardUrl}
+            suppressHydrationWarning
+            onClick={(e) => {
+              const target = getStrideNexDashboardUrl();
+              if (target && target !== dashboardUrl) {
+                e.preventDefault();
+                window.location.href = target;
+              }
+            }}
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200/70 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4 text-slate-500" />
@@ -732,8 +743,16 @@ export default function Navbar() {
                       My Dashboard
                     </Link>
                     <a
-                      href={getStrideNexDashboardUrl()}
-                      onClick={() => setIsDropdownOpen(false)}
+                      href={dashboardUrl}
+                      suppressHydrationWarning
+                      onClick={(e) => {
+                        setIsDropdownOpen(false);
+                        const target = getStrideNexDashboardUrl();
+                        if (target && target !== dashboardUrl) {
+                          e.preventDefault();
+                          window.location.href = target;
+                        }
+                      }}
                       className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
                     >
                       Portal Dashboard
