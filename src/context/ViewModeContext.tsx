@@ -9,6 +9,7 @@ import {
   getUserInfo,
   switchActiveViewMode,
 } from '@/services/auth.services';
+import { isStandaloneLms } from "@/utils/environment";
 
 export type ViewMode = 'instructor' | 'learner';
 
@@ -204,15 +205,17 @@ export function ViewModeProvider({
       rolesStr.includes('industry');
 
     const hasLmsAccess = localStorage.getItem('has_lms_access') === 'true';
-    const isUnpaidRestrictedUser = !isPartner && !isAdmin && isRestrictedRole && !hasLmsAccess;
 
+    // In standalone mode, there are no plan restrictions
+    const isUnpaidRestrictedUser =
+      !isStandaloneLms() && !isPartner && !isAdmin && isRestrictedRole && !hasLmsAccess;
+
+    // NOTE: /courses, /quizzes, and /quizzes/[quizId] are LEARNER facing catalogs!
+    // They must NOT be marked as isInstructorRoute.
     const isInstructorRoute =
       pathname.startsWith('/instructor') ||
       pathname === '/course/create' ||
       pathname === '/batch/create' ||
-      pathname === '/courses' ||
-      pathname === '/quizzes' ||
-      pathname.startsWith('/quizzes/') ||
       /^\/course\/[^/]+\/edit/.test(pathname) ||
       /^\/batch\/[^/]+\/edit/.test(pathname) ||
       pathname.startsWith('/sales-earnings') ||
@@ -225,7 +228,7 @@ export function ViewModeProvider({
 
     if (isInstructorRoute) {
       if (isUnpaidRestrictedUser) {
-        // Redirect unpaid restricted user back to their dashboard or upgrade plans page
+        // Only redirect to plans page in integrated mode
         let redirectTarget = '/mentor/dashboard/plans';
         if (rolesStr.includes('college')) {
           redirectTarget = '/college/dashboard/plans';
@@ -239,7 +242,6 @@ export function ViewModeProvider({
       }
 
       if (!canSwitch || viewMode === 'learner') {
-        // Non-instructors or users in learner view attempting to enter instructor areas are safely redirected
         router.replace('/dashboard');
       }
     }

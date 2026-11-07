@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { X, Check } from "lucide-react";
 import { login, forgotPassword, checkLmsAccess } from "@/services/auth.services";
+import { isStandaloneLms } from "@/utils/environment";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -84,10 +85,19 @@ export default function LoginPage() {
 
       let isActualInstructor = Boolean(isInstructor || hasAutoInstructorRole);
 
-      if (isRestrictedAccount && !hasAutoInstructorRole) {
+      // In standalone mode, automatically grant access if the user has instructor/mentor role
+      if (isStandaloneLms()) {
+        const standaloneInstructorRoles = ["Instructor", "Course Creator", "Mentor", "Teacher", "Administrator", "System Manager"];
+        const hasStandaloneRole = Array.isArray(roles) && roles.some((r: string) => standaloneInstructorRoles.includes(r));
+        if (hasStandaloneRole) {
+          isActualInstructor = true;
+          localStorage.setItem("has_lms_access", "true");
+        }
+      } else if (isRestrictedAccount && !hasAutoInstructorRole) {
+        // Integrated mode: verify subscription plan
         try {
           const lmsCheck: any = await checkLmsAccess(user);
-          const hasAccess = lmsCheck?.message?.has_access === true;
+          const hasAccess = lmsCheck?.message?.has_access === true || lmsCheck?.has_access === true;
           isActualInstructor = hasAccess;
           localStorage.setItem("has_lms_access", hasAccess ? "true" : "false");
         } catch {

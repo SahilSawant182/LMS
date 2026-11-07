@@ -11,6 +11,7 @@ import { isAuthorizedInstructor, checkLmsAccess } from "@/services/auth.services
 import { getImageUrl, getCurrentUserEmail } from "@/services/api.services";
 import { showToast } from "@/components/ui/Toast";
 import { useViewMode } from "@/context/ViewModeContext";
+import { isStandaloneLms } from "@/utils/environment";
 import {
   Search,
   BookOpen,
@@ -52,14 +53,21 @@ export default function CoursesPage() {
     const verifyLmsAccess = async () => {
       if (typeof window === "undefined") return;
 
-      if (viewMode === "instructor") {
-        sessionStorage.removeItem("lms_browse_as_learner");
-      } else if (sessionStorage.getItem("lms_browse_as_learner") === "true") {
+      // 1. Standalone LMS has zero plan gating
+      if (isStandaloneLms()) {
         setIsBlockedByPlan(false);
         return;
       }
 
-      // 1. Partner and Admins always have access
+      // 2. In learner view, users can ALWAYS view the course catalog
+      if (viewMode !== "instructor") {
+        setIsBlockedByPlan(false);
+        return;
+      }
+
+      sessionStorage.removeItem("lms_browse_as_learner");
+
+      // 3. Partner and Admins always have access
       const rolesStr = localStorage.getItem("roles") || localStorage.getItem("lms_saved_instructor_roles") || "";
       if (
         rolesStr.includes("Partner") ||
@@ -70,7 +78,7 @@ export default function CoursesPage() {
         return;
       }
 
-      // 2. Only gate if user belongs to restricted roles
+      // 4. Only gate restricted roles (College, Industry, Mentor) in Integrated mode
       const isRestrictedRole =
         rolesStr.includes("College") ||
         rolesStr.includes("Industry") ||
@@ -81,13 +89,11 @@ export default function CoursesPage() {
         return;
       }
 
-      // 3. For restricted roles (College, Industry, Mentor): always verify live via backend check_lms_access
-      // Do NOT bypass with stale localStorage cache
       setCheckingAccess(true);
       try {
         const email = getCurrentUserEmail() || localStorage.getItem("user") || localStorage.getItem("userEmail") || "";
         const res: any = await checkLmsAccess(email);
-        const hasAccess = res?.message?.has_access === true;
+        const hasAccess = res?.message?.has_access === true || res?.has_access === true;
         if (hasAccess) {
           localStorage.setItem("has_lms_access", "true");
           localStorage.setItem("isInstructor", "true");
