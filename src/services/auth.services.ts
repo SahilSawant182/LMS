@@ -1,4 +1,5 @@
 import { apiService, getCurrentUserEmail } from "./api.services";
+import { isStandaloneLms } from "@/utils/environment";
 
 export const checkLmsAccess = async (userEmail?: string) => {
   const email = userEmail || getCurrentUserEmail();
@@ -95,14 +96,16 @@ export const hasInstructorAccountRole = (): boolean => {
       return true;
     }
 
-    // 3. Restricted roles (Industry / College / Mentor) are plan-gated
-    const isRestrictedRole = roles.some((r: string) => {
-      const lower = r.toLowerCase();
-      return lower.includes("college") || lower.includes("industry") || lower.includes("mentor");
-    });
+    // In Integrated mode only, restricted roles are plan-gated
+    if (!isStandaloneLms()) {
+      const isRestrictedRole = roles.some((r: string) => {
+        const lower = r.toLowerCase();
+        return lower.includes("college") || lower.includes("industry") || lower.includes("mentor");
+      });
 
-    if (isRestrictedRole) {
-      return localStorage.getItem("has_lms_access") === "true";
+      if (isRestrictedRole) {
+        return localStorage.getItem("has_lms_access") === "true";
+      }
     }
 
     const instructorRoles = [
@@ -114,6 +117,8 @@ export const hasInstructorAccountRole = (): boolean => {
       "Instructor Admin",
       "LMS Admin",
       "Admin Instructor",
+      "Mentor",
+      "Teacher",
     ];
 
     const checkRoles = (raw: string | null): boolean => {
