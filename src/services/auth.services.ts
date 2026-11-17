@@ -3,7 +3,29 @@ import { isStandaloneLms } from "@/utils/environment";
 
 export const checkLmsAccess = async (userEmail?: string) => {
   const email = userEmail || getCurrentUserEmail();
-  return apiService.post("method/lms.lms.stride_lms.check_lms_access", { user: email });
+  const res = await apiService.post("method/lms.lms.stride_lms.check_lms_access", { user: email });
+  const msg = (res as any)?.message || res;
+  if (msg && typeof msg === 'object') {
+    if (msg.can_access_stridenex !== undefined) {
+      localStorage.setItem("can_access_stridenex", String(msg.can_access_stridenex));
+      if (typeof document !== "undefined") {
+        document.cookie = `can_access_stridenex=${msg.can_access_stridenex}; path=/; max-age=86400`;
+      }
+    }
+    if (msg.can_switch_view !== undefined) {
+      localStorage.setItem("can_switch_view", String(msg.can_switch_view));
+      if (typeof document !== "undefined") {
+        document.cookie = `can_switch_view=${msg.can_switch_view}; path=/; max-age=86400`;
+      }
+    }
+    if (msg.has_access !== undefined) {
+      localStorage.setItem("has_lms_access", String(msg.has_access));
+      if (typeof document !== "undefined") {
+        document.cookie = `has_lms_access=${msg.has_access}; path=/; max-age=86400`;
+      }
+    }
+  }
+  return res;
 };
 
 export const login = async (payload: any) => {
@@ -153,14 +175,39 @@ export const hasInstructorAccountRole = (): boolean => {
 export const canUserSwitchView = (): boolean => {
   if (typeof window === "undefined") return false;
   try {
+    let op: any = null;
+    try {
+      const rawOp = localStorage.getItem("operational_profile");
+      if (rawOp) op = JSON.parse(rawOp);
+    } catch {}
+
+    if (op) {
+      if (op.tier === "learner_member" || op.member_type === "Member" || op.can_switch_view === false) {
+        return false;
+      }
+      if (op.tier === "instructor_member" || op.member_type === "Instructor" || op.can_switch_view === true) {
+        return true;
+      }
+    }
+
+    const tier = localStorage.getItem("tier") || "";
+    const memberType = localStorage.getItem("member_type") || "";
+    if (tier === "learner_member" || memberType === "Member") return false;
+    if (tier === "instructor_member" || memberType === "Instructor") return true;
+
+    const canSwitch = localStorage.getItem("can_switch_view");
+    if (canSwitch === "false") return false;
+    if (canSwitch === "true") return true;
+
+    const cookieCanSwitch = document.cookie.match(/(?:^|;\s*)can_switch_view=([^;]+)/)?.[1];
+    if (cookieCanSwitch === "false") return false;
+    if (cookieCanSwitch === "true") return true;
+
     // If user does not have any instructor/admin role, they are purely a learner.
     // Pure learners can NEVER switch views and must NEVER see the toggle button.
     if (!hasInstructorAccountRole()) {
       return false;
     }
-
-    const canSwitch = localStorage.getItem("can_switch_view");
-    if (canSwitch === "false") return false;
 
     return true;
   } catch {

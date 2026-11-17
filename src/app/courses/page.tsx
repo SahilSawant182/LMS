@@ -285,36 +285,95 @@ export default function CoursesPage() {
       return "/billing/pricing";
     };
 
+    let op: any = null;
+    try {
+      const raw = localStorage.getItem("operational_profile");
+      if (raw) op = JSON.parse(raw);
+    } catch {}
+    const tier = op?.tier || localStorage.getItem("tier") || "";
+    const memberType = op?.member_type || localStorage.getItem("member_type") || "";
+    const isOrgMember = tier === "instructor_member" || tier === "learner_member" || memberType === "Member" || memberType === "Instructor" || tier.includes("_member");
+    const isOwner = tier === "owner" || memberType === "Owner";
+
     return (
       <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
         <Navbar />
         <main className="flex-grow flex items-center justify-center px-4 py-16">
           <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8 text-center">
-            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <div className={`w-16 h-16 ${isOrgMember ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'} rounded-2xl flex items-center justify-center mx-auto mb-4`}>
               <Lock className="w-8 h-8" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900">Pro Plan Required for LMS Studio</h2>
-            <p className="mt-2 text-gray-600">
-              Your current plan does not include Course Authoring. Upgrade your plan to create courses, manage quizzes, and host live batches.
-            </p>
-            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <a
-                href={getUpgradeUrl()}
-                className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
-              >
-                View Plans & Upgrade
-              </a>
-              <button
-                onClick={() => {
-                  sessionStorage.setItem("lms_browse_as_learner", "true");
-                  setIsBlockedByPlan(false);
-                  switchView("learner");
-                }}
-                className="w-full sm:w-auto px-5 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition"
-              >
-                Browse as Learner
-              </button>
-            </div>
+            {isOrgMember ? (
+              <>
+                <h2 className="text-2xl font-bold text-gray-900">Access Required</h2>
+                <p className="mt-2 text-gray-600 text-sm leading-relaxed">
+                  {op?.plan_message || "Your organization's administrator does not have an active LMS subscription. Please ask your administrator to upgrade the plan to gain LMS access."}
+                </p>
+                <div className="mt-6 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== "undefined") {
+                        window.location.reload();
+                      }
+                    }}
+                    className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                  >
+                    Refresh Status
+                  </button>
+                </div>
+              </>
+            ) : isOwner ? (
+              <>
+                <h2 className="text-2xl font-bold text-gray-900">LMS Plan Required</h2>
+                <p className="mt-2 text-gray-600 text-sm leading-relaxed">
+                  You do not have an active LMS subscription plan. Please upgrade your billing package to gain LMS access.
+                </p>
+                <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <a
+                    href="/profile/payments"
+                    className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
+                  >
+                    Upgrade Plan
+                  </a>
+                  <button
+                    onClick={() => {
+                      sessionStorage.setItem("lms_browse_as_learner", "true");
+                      setIsBlockedByPlan(false);
+                      switchView("learner");
+                    }}
+                    className="w-full sm:w-auto px-5 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition"
+                  >
+                    Browse as Learner
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-bold text-gray-900">Pro Plan Required for LMS Studio</h2>
+                <p className="mt-2 text-gray-600 text-sm leading-relaxed">
+                  Your current plan does not include Course Authoring. Upgrade your plan to create courses, manage quizzes, and host live batches.
+                </p>
+                <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <a
+                    href={getUpgradeUrl()}
+                    className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
+                  >
+                    View Plans & Upgrade
+                  </a>
+                  <button
+                    onClick={() => {
+                      sessionStorage.setItem("lms_browse_as_learner", "true");
+                      setIsBlockedByPlan(false);
+                      switchView("learner");
+                    }}
+                    className="w-full sm:w-auto px-5 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition"
+                  >
+                    Browse as Learner
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </main>
       </div>

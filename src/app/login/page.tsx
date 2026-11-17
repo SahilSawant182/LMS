@@ -60,6 +60,34 @@ export default function LoginPage() {
       const roles = res?.roles || res?.message?.roles || res?.data?.roles || [];
       const isInstructor = res?.is_instructor ?? res?.message?.is_instructor ?? res?.data?.is_instructor;
       const isStudent = res?.is_student ?? res?.message?.is_student ?? res?.data?.is_student;
+      const op = res?.operational_profile || res?.message?.operational_profile || res?.data?.operational_profile;
+
+      if (op) {
+        localStorage.setItem("operational_profile", JSON.stringify(op));
+        localStorage.setItem("can_access_stridenex", String(op.can_access_stridenex));
+        localStorage.setItem("can_switch_view", String(op.can_switch_view));
+        localStorage.setItem("has_lms_access", String(op.has_lms_access));
+        localStorage.setItem("member_type", op.member_type || "");
+        localStorage.setItem("tier", op.tier || "");
+        localStorage.setItem("isInstructor", op.member_type === "Instructor" || op.tier === "instructor_member" || op.tier === "owner" ? "true" : "false");
+
+        if (typeof document !== "undefined") {
+          document.cookie = `has_lms_access=${op.has_lms_access}; path=/; max-age=86400`;
+          document.cookie = `can_access_stridenex=${op.can_access_stridenex}; path=/; max-age=86400`;
+          document.cookie = `can_switch_view=${op.can_switch_view}; path=/; max-age=86400`;
+          document.cookie = `member_type=${op.member_type}; path=/; max-age=86400`;
+          document.cookie = `tier=${op.tier}; path=/; max-age=86400`;
+          document.cookie = `operational_profile=${encodeURIComponent(JSON.stringify(op))}; path=/; max-age=86400`;
+        }
+
+        if (op.default_redirect) {
+          if (op.default_redirect === "/lms/no-access" || op.default_redirect === "/no-access") {
+            setError(op.plan_message || "Your organization's administrator does not have an active LMS subscription. Please ask your administrator to upgrade the plan to gain LMS access.");
+            setLoading(false);
+            return;
+          }
+        }
+      }
 
       const autoInstructorRoles = [
         "Instructor",
@@ -132,7 +160,12 @@ export default function LoginPage() {
       // Notify Navbar & context of auth state change
       window.dispatchEvent(new Event("auth-changed"));
       
-      router.push("/dashboard");
+      if (op?.default_redirect) {
+        const dest = op.default_redirect.replace(/^\/lms/, "") || "/dashboard";
+        router.push(dest);
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err: any) {
       console.error("Login API error:", err);
       setError(err.message || "Failed to login");
