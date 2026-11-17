@@ -27,3 +27,11 @@ export const isStandaloneLms = (): boolean => {
   return false;
 };
 
+export const getStrideNexLoginUrl = (): string => {
+  if (typeof window === "undefined") return "/login";
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    return "http://localhost:3001/login";
+  }
+  return "/login";
+};
+

@@ -45,18 +45,30 @@ export function ViewModeProvider({
       if (rawOp) op = JSON.parse(rawOp);
     } catch {}
 
-    const cookieCanSwitch = document.cookie.match(/(?:^|;\s*)can_switch_view=([^;]+)/)?.[1];
-    const cookieMemberType = document.cookie.match(/(?:^|;\s*)member_type=([^;]+)/)?.[1];
     const cookieTier = document.cookie.match(/(?:^|;\s*)tier=([^;]+)/)?.[1];
+    const cookieMemberType = document.cookie.match(/(?:^|;\s*)member_type=([^;]+)/)?.[1];
     const cookieActiveMode = document.cookie.match(/(?:^|;\s*)lms_active_view_mode=([^;]+)/)?.[1] as ViewMode | undefined;
+
+    const rawRoles = localStorage.getItem('roles') || localStorage.getItem('lms_saved_instructor_roles') || '';
+    let rolesList: string[] = [];
+    try {
+      rolesList = rawRoles.startsWith('[') ? JSON.parse(rawRoles) : [rawRoles];
+    } catch {
+      rolesList = rawRoles ? [rawRoles] : [];
+    }
+
+    const hasInstructorRole = rolesList.some((r: string) =>
+      ['Instructor', 'Course Creator', 'Moderator', 'Administrator', 'System Manager', 'Partner', 'Industry Admin', 'College Admin', 'Instructor Admin', 'LMS Admin'].includes(r)
+    );
 
     const tier = op?.tier || localStorage.getItem('tier') || cookieTier || '';
     const memberType = op?.member_type || localStorage.getItem('member_type') || cookieMemberType || '';
-    const canSwitchStorage = localStorage.getItem('can_switch_view');
-    const canSwitchFlag = op?.can_switch_view ?? (canSwitchStorage !== null ? canSwitchStorage === 'true' : (cookieCanSwitch !== undefined ? cookieCanSwitch === 'true' : null));
+    const isExplicitInstructor = tier === 'instructor_member' || memberType === 'Instructor' || hasInstructorRole || localStorage.getItem('isInstructor') === 'true';
+    const isExplicitAdmin = tier === 'owner' || memberType === 'Owner' || tier === 'admin_member' || memberType === 'Admin' || rolesList.some((r: string) => ['Administrator', 'System Manager', 'Partner'].includes(r));
+    const userCanSwitch = isExplicitInstructor || isExplicitAdmin;
 
-    // Rule 1: Pure Learner Member
-    if (tier === 'learner_member' || memberType === 'Member' || canSwitchFlag === false) {
+    // RULE 1: Pure Learner Member or Student (without Instructor or Admin role)
+    if (!userCanSwitch || ((tier === 'learner_member' || memberType === 'Member' || tier === 'student') && !hasInstructorRole && localStorage.getItem('isInstructor') !== 'true')) {
       setCanSwitch(false);
       setViewMode('learner');
       localStorage.setItem('can_switch_view', 'false');
@@ -65,49 +77,27 @@ export function ViewModeProvider({
       return;
     }
 
-    // Rule 2: Instructor Member
-    if (tier === 'instructor_member' || memberType === 'Instructor' || canSwitchFlag === true) {
-      setCanSwitch(true);
-      localStorage.setItem('can_switch_view', 'true');
+    // RULE 2: Instructor or Admin user
+    setCanSwitch(true);
+    localStorage.setItem('can_switch_view', 'true');
+    localStorage.setItem('isInstructor', 'true');
 
-      // Check URL query param first
-      const urlParams = new URLSearchParams(window.location.search);
-      const viewParam = urlParams.get('view') as ViewMode | null;
-      if (viewParam === 'instructor' || viewParam === 'learner') {
-        setViewMode(viewParam);
-        localStorage.setItem('lms_active_view_mode', viewParam);
-        localStorage.setItem('isInstructor', viewParam === 'instructor' ? 'true' : 'false');
-        return;
-      }
-
-      // Check saved user preference (localStorage or cookie)
-      const saved = cookieActiveMode || (localStorage.getItem('lms_active_view_mode') as ViewMode | null);
-      if (saved === 'learner' || saved === 'instructor') {
-        setViewMode(saved);
-        localStorage.setItem('isInstructor', saved === 'instructor' ? 'true' : 'false');
-      } else {
-        setViewMode('instructor');
-        localStorage.setItem('lms_active_view_mode', 'instructor');
-        localStorage.setItem('isInstructor', 'true');
-      }
+    // Check URL query param (?view=instructor or ?view=learner)
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewParam = urlParams.get('view') as ViewMode | null;
+    if (viewParam === 'instructor' || viewParam === 'learner') {
+      setViewMode(viewParam);
+      localStorage.setItem('lms_active_view_mode', viewParam);
       return;
     }
 
-    // Rule 3: General users (Owner, Partner, Admin, Mentor, Student)
-    const switchable = canUserSwitchView();
-    setCanSwitch(switchable);
-
-    if (!switchable) {
-      setViewMode('learner');
-      return;
-    }
-
+    // Check saved user preference (localStorage or cookie); default to 'instructor'
     const saved = cookieActiveMode || (localStorage.getItem('lms_active_view_mode') as ViewMode | null);
     if (saved === 'learner' || saved === 'instructor') {
       setViewMode(saved);
     } else {
-      const isInst = isAuthorizedInstructor();
-      setViewMode(isInst ? 'instructor' : 'learner');
+      setViewMode('instructor');
+      localStorage.setItem('lms_active_view_mode', 'instructor');
     }
   }, []);
 

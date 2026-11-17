@@ -27,6 +27,13 @@ export default function LoginPage() {
     if (typeof window !== "undefined") {
       document.body.classList.remove("has-sidebar");
       document.documentElement.style.removeProperty("--sidebar-width");
+
+      if (!isStandaloneLms()) {
+        const stridenexBase = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") ? "http://localhost:3001" : "";
+        window.location.href = `${stridenexBase}/login`;
+        return;
+      }
+
       if (localStorage.getItem("apiKey")) {
         router.push("/dashboard");
       }

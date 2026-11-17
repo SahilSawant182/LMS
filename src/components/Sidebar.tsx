@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import CreateChapterModal from '@/components/admin/CreateChapterModal';
 import { logout, isAuthorizedInstructor, isAdminInstructor } from '@/services/auth.services';
+import { getStrideNexLoginUrl } from '@/utils/environment';
 import { useViewMode } from '@/context/ViewModeContext';
 
 interface SidebarProps {
@@ -168,21 +169,25 @@ export default function Sidebar({
       logout().catch((err) => console.warn("Logout API warning:", err));
     } catch (e) { }
 
-    localStorage.removeItem("apiKey");
-    localStorage.removeItem("apiSecret");
-    localStorage.removeItem("userEmail");
-    localStorage.removeItem("fullName");
-    localStorage.removeItem("roles");
-    localStorage.removeItem("isInstructor");
-    localStorage.removeItem("can_switch_view");
-    localStorage.removeItem("lms_active_view_mode");
     localStorage.clear();
     sessionStorage.clear();
 
-    document.body.classList.remove("has-sidebar");
-    document.documentElement.style.removeProperty("--sidebar-width");
+    if (typeof document !== "undefined") {
+      const cookiesToClear = [
+        "token", "apiKey", "apiSecret", "user_id", "user_role", "roles",
+        "isInstructor", "can_switch_view", "can_access_stridenex", "has_lms_access",
+        "member_type", "tier", "operational_profile", "lms_active_view_mode",
+        "full_name", "user_image"
+      ];
+      cookiesToClear.forEach((c) => {
+        document.cookie = `${c}=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+      });
+      document.body.classList.remove("has-sidebar");
+      document.documentElement.style.removeProperty("--sidebar-width");
+    }
+
     window.dispatchEvent(new Event("auth-changed"));
-    window.location.href = "/lms/login";
+    window.location.href = getStrideNexLoginUrl();
   };
 
   const toggleAccordion = (id: string) => {
