@@ -3,7 +3,29 @@ import { isStandaloneLms } from "@/utils/environment";
 
 export const checkLmsAccess = async (userEmail?: string) => {
   const email = userEmail || getCurrentUserEmail();
-  return apiService.post("method/lms.lms.stride_lms.check_lms_access", { user: email });
+  const res = await apiService.post("method/lms.lms.stride_lms.check_lms_access", { user: email });
+  const msg = (res as any)?.message || res;
+  if (msg && typeof msg === 'object') {
+    if (msg.can_access_stridenex !== undefined) {
+      localStorage.setItem("can_access_stridenex", String(msg.can_access_stridenex));
+      if (typeof document !== "undefined") {
+        document.cookie = `can_access_stridenex=${msg.can_access_stridenex}; path=/; max-age=86400`;
+      }
+    }
+    if (msg.can_switch_view !== undefined) {
+      localStorage.setItem("can_switch_view", String(msg.can_switch_view));
+      if (typeof document !== "undefined") {
+        document.cookie = `can_switch_view=${msg.can_switch_view}; path=/; max-age=86400`;
+      }
+    }
+    if (msg.has_access !== undefined) {
+      localStorage.setItem("has_lms_access", String(msg.has_access));
+      if (typeof document !== "undefined") {
+        document.cookie = `has_lms_access=${msg.has_access}; path=/; max-age=86400`;
+      }
+    }
+  }
+  return res;
 };
 
 export const login = async (payload: any) => {
@@ -153,14 +175,39 @@ export const hasInstructorAccountRole = (): boolean => {
 export const canUserSwitchView = (): boolean => {
   if (typeof window === "undefined") return false;
   try {
+    let op: any = null;
+    try {
+      const rawOp = localStorage.getItem("operational_profile");
+      if (rawOp) op = JSON.parse(rawOp);
+    } catch {}
+
+    if (op) {
+      if (op.tier === "learner_member" || op.member_type === "Member" || op.can_switch_view === false) {
+        return false;
+      }
+      if (op.tier === "instructor_member" || op.member_type === "Instructor" || op.can_switch_view === true) {
+        return true;
+      }
+    }
+
+    const tier = localStorage.getItem("tier") || "";
+    const memberType = localStorage.getItem("member_type") || "";
+    if (tier === "learner_member" || memberType === "Member") return false;
+    if (tier === "instructor_member" || memberType === "Instructor") return true;
+
+    const canSwitch = localStorage.getItem("can_switch_view");
+    if (canSwitch === "false") return false;
+    if (canSwitch === "true") return true;
+
+    const cookieCanSwitch = document.cookie.match(/(?:^|;\s*)can_switch_view=([^;]+)/)?.[1];
+    if (cookieCanSwitch === "false") return false;
+    if (cookieCanSwitch === "true") return true;
+
     // If user does not have any instructor/admin role, they are purely a learner.
     // Pure learners can NEVER switch views and must NEVER see the toggle button.
     if (!hasInstructorAccountRole()) {
       return false;
     }
-
-    const canSwitch = localStorage.getItem("can_switch_view");
-    if (canSwitch === "false") return false;
 
     return true;
   } catch {
@@ -194,78 +241,52 @@ export const setActiveViewMode = (mode: "instructor" | "learner") => {
 export const switchActiveViewMode = (targetMode?: "instructor" | "learner") => {
   if (typeof window === "undefined") return;
 
-  const currentMode = localStorage.getItem("lms_active_view_mode") || (localStorage.getItem("isInstructor") === "false" ? "learner" : "instructor");
+  const currentMode =
+    (localStorage.getItem("lms_active_view_mode") as "instructor" | "learner") ||
+    (localStorage.getItem("isInstructor") === "true" ? "instructor" : "learner");
   const nextMode = targetMode || (currentMode === "instructor" ? "learner" : "instructor");
 
-  if (nextMode === "learner") {
-    // 1. Preserve original instructor roles so we can switch back
-    const currentRoles = localStorage.getItem("roles");
-    if (currentRoles && hasInstructorAccountRole()) {
-      localStorage.setItem("lms_saved_instructor_roles", currentRoles);
-    }
-    // 2. Soft-login as Student / Learner
-    localStorage.setItem("lms_active_view_mode", "learner");
-    localStorage.setItem("isInstructor", "false");
-    localStorage.setItem("roles", JSON.stringify(["Student", "LMS Student", "Website User"]));
-    localStorage.setItem("can_switch_view", "true");
-  } else {
-    // 1. Restore original instructor roles
-    const savedRoles = localStorage.getItem("lms_saved_instructor_roles") || JSON.stringify(["Instructor", "Partner", "Student", "LMS Student", "Website User"]);
-    localStorage.setItem("lms_active_view_mode", "instructor");
-    localStorage.setItem("isInstructor", "true");
-    localStorage.setItem("roles", savedRoles);
-    localStorage.setItem("can_switch_view", "true");
+  localStorage.setItem("lms_active_view_mode", nextMode);
+  localStorage.setItem("isInstructor", nextMode === "instructor" ? "true" : "false");
+
+  if (typeof document !== "undefined") {
+    document.cookie = `lms_active_view_mode=${nextMode}; path=/; max-age=86400`;
+    document.cookie = `isInstructor=${nextMode === "instructor"}; path=/; max-age=86400`;
   }
 
-  // 3. Dispatch auth and view change events
+  // Restore preserved roles when switching to instructor
+  if (nextMode === "instructor") {
+    const savedRoles = localStorage.getItem("lms_saved_instructor_roles");
+    if (savedRoles) {
+      localStorage.setItem("roles", savedRoles);
+    }
+  }
+
   window.dispatchEvent(new Event("auth-changed"));
   window.dispatchEvent(new CustomEvent("view-mode-changed", { detail: { viewMode: nextMode } }));
-
-  // 4. Directly reload on dashboard as that role using LMS base path
-  const basePath = typeof window !== "undefined" && window.location.pathname.startsWith("/lms") ? "/lms" : "/lms";
-  window.location.href = `${basePath}/dashboard`;
 };
 
 export const isAuthorizedInstructor = (): boolean => {
   if (typeof window === "undefined") return false;
   try {
-    // 1. System admin always has full access
     if (isSystemAdmin()) return true;
 
-    const activeMode = localStorage.getItem("lms_active_view_mode");
-    if (activeMode === "learner") return false;
-
-    const rawRoles = localStorage.getItem("roles") || localStorage.getItem("lms_saved_instructor_roles") || "";
-    let roles: string[] = [];
+    // Check operational profile
     try {
-      if (rawRoles.startsWith("[")) {
-        roles = JSON.parse(rawRoles);
-      } else if (rawRoles) {
-        roles = [rawRoles];
+      const rawOp = localStorage.getItem("operational_profile");
+      if (rawOp) {
+        const op = JSON.parse(rawOp);
+        if (op.member_type === "Member" || op.tier === "learner_member") return false;
+        if (op.member_type === "Instructor" || op.tier === "instructor_member") {
+          return op.has_lms_access === true;
+        }
       }
-    } catch {
-      roles = rawRoles ? [rawRoles] : [];
-    }
-
-    // 2. Partner has NO plan restrictions
-    if (roles.some((r: string) => r.toLowerCase().includes("partner"))) {
-      return true;
-    }
-
-    // 3. Restricted roles (College, Industry, Mentor) require active LMS access
-    const isRestrictedRole = roles.some((r: string) => {
-      const lower = r.toLowerCase();
-      return lower.includes("college") || lower.includes("industry") || lower.includes("mentor");
-    });
-
-    if (isRestrictedRole) {
-      return localStorage.getItem("has_lms_access") === "true";
-    }
+    } catch {}
 
     const isInst = localStorage.getItem("isInstructor");
-    if (isInst === "false") return false;
     if (isInst === "true") return true;
 
+    const rawRoles = localStorage.getItem("roles") || localStorage.getItem("lms_saved_instructor_roles") || "";
     const authorizedRoles = [
       "Instructor",
       "Course Creator",
@@ -275,12 +296,17 @@ export const isAuthorizedInstructor = (): boolean => {
       "Instructor Admin",
       "LMS Admin",
       "Admin Instructor",
+      "Partner"
     ];
 
-    if (Array.isArray(roles)) {
-      return roles.some((r: string) => authorizedRoles.includes(r));
+    let roles: string[] = [];
+    try {
+      roles = rawRoles.startsWith("[") ? JSON.parse(rawRoles) : [rawRoles];
+    } catch {
+      roles = rawRoles ? [rawRoles] : [];
     }
-    return authorizedRoles.some((r: string) => rawRoles.includes(r));
+
+    return roles.some((r: string) => authorizedRoles.includes(r));
   } catch {
     return false;
   }

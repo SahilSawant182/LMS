@@ -30,6 +30,12 @@ const nextConfig: NextConfig = {
         permanent: false,
       },
       {
+        source: '/no-access',
+        destination: '/lms/no-access',
+        basePath: false,
+        permanent: false,
+      },
+      {
         source: '/courses',
         destination: '/lms/courses',
         basePath: false,
