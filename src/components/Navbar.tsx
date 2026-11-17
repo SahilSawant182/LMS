@@ -10,6 +10,7 @@ import Sidebar from '@/components/Sidebar';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import ViewSwitchButton from '@/components/Navbar/ViewSwitchButton';
 import { useViewMode } from '@/context/ViewModeContext';
+import PlanStatusBanner from '@/components/PlanStatusBanner';
 
 const getStrideNexDashboardUrl = (): string => {
   if (typeof window === "undefined") return "/student/dashboard";
@@ -48,6 +49,19 @@ export default function Navbar() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
+
+  const canAccessStrideNex = useMemo(() => {
+    if (typeof window === "undefined") return true;
+    const raw = localStorage.getItem("can_access_stridenex");
+    if (raw === "false") return false;
+    try {
+      const op = JSON.parse(localStorage.getItem("operational_profile") || "{}");
+      if (op.can_access_stridenex === false) return false;
+    } catch {}
+    const match = document.cookie.match(/(?:^|;\s*)can_access_stridenex=([^;]+)/);
+    if (match && match[1] === "false") return false;
+    return true;
+  }, [isAuthenticated]);
   const [dashboardUrl, setDashboardUrl] = useState<string>("/student/dashboard");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -346,23 +360,25 @@ export default function Navbar() {
             <Menu className="w-5 h-5" />
           </button>
 
-          {/* "Back to StrideNex" Button */}
-          <a
-            href={dashboardUrl}
-            suppressHydrationWarning
-            onClick={(e) => {
-              const target = getStrideNexDashboardUrl();
-              if (target && target !== dashboardUrl) {
-                e.preventDefault();
-                window.location.href = target;
-              }
-            }}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200/70 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4 text-slate-500" />
-            <span className="hidden sm:inline">Back to StrideNex</span>
-            <span className="sm:hidden">Back</span>
-          </a>
+          {/* "Back to StrideNex" Button - Only show if user has permission to access StrideNex */}
+          {canAccessStrideNex && (
+            <a
+              href={dashboardUrl}
+              suppressHydrationWarning
+              onClick={(e) => {
+                const target = getStrideNexDashboardUrl();
+                if (target && target !== dashboardUrl) {
+                  e.preventDefault();
+                  window.location.href = target;
+                }
+              }}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200/70 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4 text-slate-500" />
+              <span className="hidden sm:inline">Back to StrideNex</span>
+              <span className="sm:hidden">Back</span>
+            </a>
+          )}
         </div>
 
         {/* Middle: Search Bar with Dropdown Results */}
@@ -742,21 +758,23 @@ export default function Navbar() {
                     >
                       My Dashboard
                     </Link>
-                    <a
-                      href={dashboardUrl}
-                      suppressHydrationWarning
-                      onClick={(e) => {
-                        setIsDropdownOpen(false);
-                        const target = getStrideNexDashboardUrl();
-                        if (target && target !== dashboardUrl) {
-                          e.preventDefault();
-                          window.location.href = target;
-                        }
-                      }}
-                      className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
-                    >
-                      Portal Dashboard
-                    </a>
+                    {canAccessStrideNex && (
+                      <a
+                        href={dashboardUrl}
+                        suppressHydrationWarning
+                        onClick={(e) => {
+                          setIsDropdownOpen(false);
+                          const target = getStrideNexDashboardUrl();
+                          if (target && target !== dashboardUrl) {
+                            e.preventDefault();
+                            window.location.href = target;
+                          }
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                      >
+                        Portal Dashboard
+                      </a>
+                    )}
                     {isAdmin && (
                       <Link
                         href="/admin?tab=reports"
@@ -923,6 +941,7 @@ export default function Navbar() {
           </div>
         )}
       </nav>
+      <PlanStatusBanner />
     </>
   );
 }
