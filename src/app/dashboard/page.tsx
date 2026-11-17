@@ -76,7 +76,7 @@ export function DashboardContent() {
   // When a user is in learner view (or has_lms_access !== "true" for restricted roles),
   // ONLY render the Student Learner Dashboard. Prevent non-subscribers from loading or toggling into Instructor Dashboard.
   const isAuthorized = isAuthorizedInstructor();
-  const effectiveInstructorView = Boolean(isAuthorized && canSwitch && viewMode === "instructor");
+  const effectiveInstructorView = Boolean((isAuthorized || canSwitch) && viewMode === "instructor");
   const [isAdminRole, setIsAdminRole] = useState(false);
   const [studentTab, setStudentTab] = useState<StudentTab>("courses");
   const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyBreakdownItem[]>([]);
