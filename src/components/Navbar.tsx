@@ -351,6 +351,11 @@ export default function Navbar() {
             href={dashboardUrl}
             suppressHydrationWarning
             onClick={(e) => {
+              if (typeof window !== "undefined" && (window as any).ReactNativeWebView) {
+                e.preventDefault();
+                (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: "BACK_TO_STRIDENEX" }));
+                return;
+              }
               const target = getStrideNexDashboardUrl();
               if (target && target !== dashboardUrl) {
                 e.preventDefault();
@@ -747,6 +752,11 @@ export default function Navbar() {
                       suppressHydrationWarning
                       onClick={(e) => {
                         setIsDropdownOpen(false);
+                        if (typeof window !== "undefined" && (window as any).ReactNativeWebView) {
+                          e.preventDefault();
+                          (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: "BACK_TO_STRIDENEX" }));
+                          return;
+                        }
                         const target = getStrideNexDashboardUrl();
                         if (target && target !== dashboardUrl) {
                           e.preventDefault();
