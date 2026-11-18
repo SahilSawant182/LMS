@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, ChevronDown, Menu, LogOut, User, Bell, PanelLeft, Medal, Sparkles, Receipt, CreditCard, UserCheck, Wallet, TrendingUp, Settings, ClipboardCheck, BookOpen, Users, Tag, X, Loader2, ArrowRight, GraduationCap, ArrowLeft, Briefcase, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { logout, isAdminInstructor } from '@/services/auth.services';
+import { logout, isAdminInstructor, checkCanAccessStrideNex } from '@/services/auth.services';
 import { getCourses, getBatches, getProgramList } from '@/services/lms.services';
 import Sidebar from '@/components/Sidebar';
 import NotificationBell from '@/components/notifications/NotificationBell';
@@ -51,30 +51,7 @@ export default function Navbar() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
-  const canAccessStrideNex = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    let op: any = null;
-    try {
-      op = JSON.parse(localStorage.getItem("operational_profile") || "{}");
-    } catch {}
-
-    const tier = op?.tier || localStorage.getItem("tier") || "";
-    const memberType = op?.member_type || localStorage.getItem("member_type") || "";
-
-    // Strictly blocked for members & instructor members
-    if (tier === "instructor_member" || tier === "learner_member" || memberType === "Member" || memberType === "Instructor") {
-      return false;
-    }
-
-    const raw = localStorage.getItem("can_access_stridenex");
-    if (raw === "false") return false;
-    if (op?.can_access_stridenex === false) return false;
-
-    const match = document.cookie.match(/(?:^|;\s*)can_access_stridenex=([^;]+)/);
-    if (match && match[1] === "false") return false;
-
-    return true;
-  }, [isAuthenticated]);
+  const showBackToStrideNex = isAuthenticated && checkCanAccessStrideNex();
   const [dashboardUrl, setDashboardUrl] = useState<string>("/student/dashboard");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -378,7 +355,7 @@ export default function Navbar() {
           </button>
 
           {/* "Back to StrideNex" Button - Only show if user has permission to access StrideNex */}
-          {canAccessStrideNex && (
+          {showBackToStrideNex && (
             <a
               href={dashboardUrl}
               suppressHydrationWarning
@@ -659,8 +636,8 @@ export default function Navbar() {
 
           {isAuthenticated ? (
             <>
-              {/* Navbar Switch View Button for Instructors */}
-              <ViewSwitchButton />
+              {/* Navbar Switch View Button for Instructors & Admins */}
+              {canSwitch && <ViewSwitchButton />}
 
               {/* Exact StrideNex Notification Bell */}
               <NotificationBell />
@@ -780,7 +757,7 @@ export default function Navbar() {
                     >
                       My Dashboard
                     </Link>
-                    {canAccessStrideNex && (
+                    {showBackToStrideNex && (
                       <a
                         href={dashboardUrl}
                         suppressHydrationWarning

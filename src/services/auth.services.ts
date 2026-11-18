@@ -181,6 +181,34 @@ export const canUserSwitchView = (): boolean => {
       if (rawOp) op = JSON.parse(rawOp);
     } catch {}
 
+    const cookieTier = (document.cookie.match(/(?:^|;\s*)tier=([^;]+)/)?.[1] || "").toLowerCase().trim();
+    const cookieMemberType = (document.cookie.match(/(?:^|;\s*)member_type=([^;]+)/)?.[1] || "").toLowerCase().trim();
+    const tier = (op?.tier || localStorage.getItem("tier") || cookieTier || "").toLowerCase().trim();
+    const memberType = (op?.member_type || localStorage.getItem("member_type") || cookieMemberType || "").toLowerCase().trim();
+
+    // 1. Pure Learner Member or standard Student is STRICTLY prohibited from switching views
+    if (tier === "learner_member" || memberType === "member" || tier === "student") {
+      return false;
+    }
+
+    // 2. Admin / Owner / Partner can ALWAYS switch views
+    if (
+      tier === "owner" ||
+      memberType === "owner" ||
+      tier === "admin" ||
+      tier === "admin_member" ||
+      memberType === "admin" ||
+      isAdminUserOrOwner()
+    ) {
+      return true;
+    }
+
+    // 3. Instructor Member can ALWAYS switch views
+    if (tier === "instructor_member" || memberType === "instructor") {
+      return true;
+    }
+
+    // 4. Check explicit instructor roles
     const rawRoles = localStorage.getItem("roles") || localStorage.getItem("lms_saved_instructor_roles") || "";
     let rolesList: string[] = [];
     try {
@@ -193,30 +221,10 @@ export const canUserSwitchView = (): boolean => {
       ["Instructor", "Course Creator", "Moderator", "Administrator", "System Manager", "Partner", "Industry Admin", "College Admin", "Instructor Admin", "LMS Admin"].includes(r)
     );
 
-    const tier = op?.tier || localStorage.getItem("tier") || "";
-    const memberType = op?.member_type || localStorage.getItem("member_type") || "";
-
-    // 1. Pure Learner Member (Org member without instructor role)
-    if ((tier === "learner_member" || memberType === "Member") && !hasInstructorRole && localStorage.getItem("isInstructor") !== "true") {
-      return false;
-    }
-
-    // 2. Pure Student (without instructor/admin role)
-    if (tier === "student" && !hasInstructorRole && localStorage.getItem("isInstructor") !== "true") {
-      return false;
-    }
-
-    // 3. Instructor Member or user with instructor roles
-    if (tier === "instructor_member" || memberType === "Instructor" || hasInstructorRole || localStorage.getItem("isInstructor") === "true") {
+    if (hasInstructorRole || localStorage.getItem("isInstructor") === "true") {
       return true;
     }
 
-    // 4. Admin / Owner / Partner
-    if (tier === "owner" || memberType === "Owner" || tier === "admin_member" || memberType === "Admin") {
-      return true;
-    }
-
-    // 5. Fallback check for instructor account roles
     return hasInstructorAccountRole();
   } catch {
     return false;
@@ -270,19 +278,32 @@ export const switchActiveViewMode = (targetMode?: "instructor" | "learner") => {
 export const isAuthorizedInstructor = (): boolean => {
   if (typeof window === "undefined") return false;
   try {
-    if (isSystemAdmin()) return true;
-
-    // Check operational profile
+    let op: any = null;
     try {
       const rawOp = localStorage.getItem("operational_profile");
       if (rawOp) {
-        const op = JSON.parse(rawOp);
-        if (op.member_type === "Member" || op.tier === "learner_member") return false;
-        if (op.member_type === "Instructor" || op.tier === "instructor_member") {
-          return op.has_lms_access === true;
-        }
+        op = JSON.parse(rawOp);
+      } else {
+        const match = document.cookie.match(/(?:^|;\s*)operational_profile=([^;]+)/);
+        if (match) op = JSON.parse(decodeURIComponent(match[1]));
       }
     } catch {}
+
+    const cookieTier = (document.cookie.match(/(?:^|;\s*)tier=([^;]+)/)?.[1] || "").toLowerCase().trim();
+    const cookieMemberType = (document.cookie.match(/(?:^|;\s*)member_type=([^;]+)/)?.[1] || "").toLowerCase().trim();
+    const tier = (op?.tier || localStorage.getItem("tier") || cookieTier || "").toLowerCase().trim();
+    const memberType = (op?.member_type || localStorage.getItem("member_type") || cookieMemberType || "").toLowerCase().trim();
+
+    // 1. Learner members and pure students are NEVER authorized instructors
+    if (tier === "learner_member" || memberType === "member" || tier === "student") {
+      return false;
+    }
+
+    if (isSystemAdmin() || isAdminUserOrOwner()) return true;
+
+    if (tier === "instructor_member" || memberType === "instructor") {
+      return true;
+    }
 
     const isInst = localStorage.getItem("isInstructor");
     if (isInst === "true") return true;
@@ -315,6 +336,143 @@ export const isAuthorizedInstructor = (): boolean => {
 
 export const isAdminInstructor = (): boolean => {
   return isSystemAdmin();
+};
+
+export const isAdminUserOrOwner = (): boolean => {
+  if (typeof window === "undefined") return false;
+
+  let op: any = null;
+  try {
+    const rawOp = localStorage.getItem("operational_profile");
+    if (rawOp) {
+      op = JSON.parse(rawOp);
+    } else {
+      const match = document.cookie.match(/(?:^|;\s*)operational_profile=([^;]+)/);
+      if (match) op = JSON.parse(decodeURIComponent(match[1]));
+    }
+  } catch {}
+
+  const cookieTier = (document.cookie.match(/(?:^|;\s*)tier=([^;]+)/)?.[1] || "").toLowerCase().trim();
+  const cookieMemberType = (document.cookie.match(/(?:^|;\s*)member_type=([^;]+)/)?.[1] || "").toLowerCase().trim();
+
+  const tier = (op?.tier || localStorage.getItem("tier") || cookieTier || "").toLowerCase().trim();
+  const memberType = (op?.member_type || localStorage.getItem("member_type") || cookieMemberType || "").toLowerCase().trim();
+
+  // 1. Sub-members (learner_member, instructor_member, member, instructor, student) are STRICTLY NOT admin or owner!
+  if (
+    tier === "learner_member" ||
+    tier === "instructor_member" ||
+    memberType === "member" ||
+    memberType === "instructor" ||
+    tier === "student" ||
+    localStorage.getItem("can_access_stridenex") === "false" ||
+    (document.cookie.match(/(?:^|;\s*)can_access_stridenex=([^;]+)/)?.[1] === "false")
+  ) {
+    return false;
+  }
+
+  // 2. Explicit owner / admin tier or org owner flag
+  if (
+    tier === "owner" ||
+    memberType === "owner" ||
+    tier === "admin" ||
+    tier === "admin_member" ||
+    memberType === "admin" ||
+    localStorage.getItem("is_org_owner") === "true" ||
+    (document.cookie.match(/(?:^|;\s*)is_org_owner=([^;]+)/)?.[1] === "true")
+  ) {
+    return true;
+  }
+
+  // 3. User email or login name
+  const cookieUser = (document.cookie.match(/(?:^|;\s*)(?:user_id|user_email|user)=([^;]+)/)?.[1] || "").toLowerCase();
+  const user = (localStorage.getItem("userEmail") || localStorage.getItem("user") || localStorage.getItem("currentUser") || localStorage.getItem("email") || cookieUser || "").toLowerCase().trim();
+  if (user === "administrator" || user.startsWith("admin@") || user === "admin") {
+    return true;
+  }
+
+  // 4. Roles list from localStorage or cookies (ONLY genuine administrative roles!)
+  // Note: DO NOT include "industry base" or "college base" - those are assigned to all org members!
+  const cookieRoles = (document.cookie.match(/(?:^|;\s*)roles=([^;]+)/)?.[1] || "").toLowerCase();
+  const rawRoles = (localStorage.getItem("roles") || localStorage.getItem("lms_saved_instructor_roles") || cookieRoles || "").toLowerCase();
+  if (
+    rawRoles.includes("administrator") ||
+    rawRoles.includes("system manager") ||
+    rawRoles.includes("industry admin") ||
+    rawRoles.includes("college admin") ||
+    rawRoles.includes("instructor admin") ||
+    rawRoles.includes("lms admin") ||
+    rawRoles.includes("company admin")
+  ) {
+    return true;
+  }
+
+  // 5. Industry / College organization account owner (role='industry' or 'college' or can_access_stridenex=true and is NOT a sub-member)
+  const role = (localStorage.getItem("role") || "").toLowerCase();
+  const cookieRoleMatch = document.cookie.match(/(?:^|;\s*)user_role=([^;]+)/);
+  const cookieRole = (cookieRoleMatch ? decodeURIComponent(cookieRoleMatch[1]) : "").toLowerCase();
+  const canAccessStridenexFlag =
+    localStorage.getItem("can_access_stridenex") === "true" ||
+    (document.cookie.match(/(?:^|;\s*)can_access_stridenex=([^;]+)/)?.[1] === "true");
+
+  if (
+    role === "industry" ||
+    role === "college" ||
+    cookieRole === "industry" ||
+    cookieRole === "college" ||
+    canAccessStridenexFlag
+  ) {
+    return true;
+  }
+
+  // 6. Partner
+  if (tier === "partner" || memberType === "partner" || rawRoles.includes("partner") || role === "partner" || cookieRole === "partner") {
+    return true;
+  }
+
+  return isSystemAdmin();
+};
+
+export const checkCanAccessStrideNex = (): boolean => {
+  if (typeof window === "undefined") return false;
+
+  // 1. CRITICAL: Standalone LMS must NEVER show "Back to StrideNex"!
+  if (isStandaloneLms()) {
+    return false;
+  }
+
+  // 2. In Integrated LMS:
+  // Sub-members (instructor members, learner members, students) MUST NEVER see Back to StrideNex!
+  let op: any = null;
+  try {
+    const rawOp = localStorage.getItem("operational_profile");
+    if (rawOp) {
+      op = JSON.parse(rawOp);
+    } else {
+      const match = document.cookie.match(/(?:^|;\s*)operational_profile=([^;]+)/);
+      if (match) op = JSON.parse(decodeURIComponent(match[1]));
+    }
+  } catch {}
+
+  const cookieTier = (document.cookie.match(/(?:^|;\s*)tier=([^;]+)/)?.[1] || "").toLowerCase().trim();
+  const cookieMemberType = (document.cookie.match(/(?:^|;\s*)member_type=([^;]+)/)?.[1] || "").toLowerCase().trim();
+  const tier = (op?.tier || localStorage.getItem("tier") || cookieTier || "").toLowerCase().trim();
+  const memberType = (op?.member_type || localStorage.getItem("member_type") || cookieMemberType || "").toLowerCase().trim();
+
+  if (
+    tier === "learner_member" ||
+    tier === "instructor_member" ||
+    memberType === "member" ||
+    memberType === "instructor" ||
+    tier === "student" ||
+    localStorage.getItem("can_access_stridenex") === "false" ||
+    (document.cookie.match(/(?:^|;\s*)can_access_stridenex=([^;]+)/)?.[1] === "false")
+  ) {
+    return false;
+  }
+
+  // ONLY Admin and Organization Owner are permitted to see this button!
+  return isAdminUserOrOwner();
 };
 
 export const isCourseInstructorOrOwner = (course: any, userEmail?: string): boolean => {
