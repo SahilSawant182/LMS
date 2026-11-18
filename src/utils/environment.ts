@@ -1,26 +1,44 @@
 // src/utils/environment.ts
 
 export const isStandaloneLms = (): boolean => {
-  if (process.env.NEXT_PUBLIC_IS_STANDALONE === "true") return true;
-
   if (typeof window !== "undefined") {
-    const host = window.location.hostname.toLowerCase();
-    const port = window.location.port;
+    const host = (window.location.hostname || "").toLowerCase();
+    const port = String(window.location.port || "");
+    const pathname = (window.location.pathname || "").toLowerCase();
+
+    // 1. Standalone indicators:
     if (
-      host.includes("devlms") ||
-      host.includes("lms.stridenex.ai") ||
-      port === "3003"
+      port === "3003" ||
+      host === "lms.stridenex.ai" ||
+      host.startsWith("devlms") ||
+      host.startsWith("lms.stridenex") ||
+      host.includes("lms-standalone")
     ) {
       return true;
     }
+
+    // 2. Integrated indicators:
+    if (
+      port === "3004" ||
+      port === "3001" ||
+      host.includes("quantcloud") ||
+      host.includes("testwebstridenex") ||
+      host.includes("devstridenex") ||
+      pathname.startsWith("/lms")
+    ) {
+      return false;
+    }
   }
 
+  if (process.env.NEXT_PUBLIC_IS_STANDALONE === "true") return true;
+  if (process.env.NEXT_PUBLIC_IS_STANDALONE === "false") return false;
+
+  // Fallback checks
   const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").toLowerCase();
-  if (
-    apiBase.includes("devlms") ||
-    apiBase.includes("8005") ||
-    (!apiBase.includes("quantcloud") && !apiBase.includes("devstridenex"))
-  ) {
+  if (apiBase.includes("quantcloud") || apiBase.includes("devstridenex")) {
+    return false;
+  }
+  if (apiBase.includes("devlms") || apiBase.includes("8005") || apiBase.includes("lms.stridenex")) {
     return true;
   }
 

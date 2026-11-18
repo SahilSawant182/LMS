@@ -7,6 +7,7 @@ import {
   isAuthorizedInstructor,
   getUserInfo,
   switchActiveViewMode,
+  isAdminUserOrOwner,
 } from '@/services/auth.services';
 import { isStandaloneLms } from "@/utils/environment";
 
@@ -67,8 +68,25 @@ export function ViewModeProvider({
     const isExplicitAdmin = tier === 'owner' || memberType === 'Owner' || tier === 'admin_member' || memberType === 'Admin' || rolesList.some((r: string) => ['Administrator', 'System Manager', 'Partner'].includes(r));
     const userCanSwitch = isExplicitInstructor || isExplicitAdmin;
 
-    // RULE 1: Pure Learner Member or Student (without Instructor or Admin role)
-    if (!userCanSwitch || ((tier === 'learner_member' || memberType === 'Member' || tier === 'student') && !hasInstructorRole && localStorage.getItem('isInstructor') !== 'true')) {
+    // RULE 1: Pure Learner Member or Student — STRICTLY prohibited from switching views
+    if (tier === 'learner_member' || memberType.toLowerCase() === 'member' || tier === 'student') {
+      setCanSwitch(false);
+      setViewMode('learner');
+      localStorage.setItem('can_switch_view', 'false');
+      localStorage.setItem('isInstructor', 'false');
+      localStorage.setItem('lms_active_view_mode', 'learner');
+      return;
+    }
+
+    const isAdmin = isAdminUserOrOwner();
+    const isInstructorUser =
+      isAdmin ||
+      tier === 'instructor_member' ||
+      memberType.toLowerCase() === 'instructor' ||
+      hasInstructorRole ||
+      localStorage.getItem('isInstructor') === 'true';
+
+    if (!isInstructorUser) {
       setCanSwitch(false);
       setViewMode('learner');
       localStorage.setItem('can_switch_view', 'false');
@@ -113,11 +131,6 @@ export function ViewModeProvider({
           const data = res?.message || res?.data || res;
           if (data && typeof data === 'object') {
             const rawRoles = Array.isArray(data.roles) ? data.roles : [];
-            const autoInstructorRoles = [
-              "Instructor", "Course Creator", "Moderator", "Administrator",
-              "System Manager", "Instructor Admin", "LMS Admin", "Partner"
-            ];
-            const hasAutoInst = rawRoles.some((r: string) => autoInstructorRoles.includes(r)) || Boolean(data.is_instructor);
 
             let op: any = null;
             try {
@@ -125,9 +138,50 @@ export function ViewModeProvider({
               if (rawOp) op = JSON.parse(rawOp);
             } catch {}
 
-            const isInstMember = op?.tier === 'instructor_member' || op?.member_type === 'Instructor';
+            const cookieTierInner = (document.cookie.match(/(?:^|;\s*)tier=([^;]+)/)?.[1] || '').toLowerCase().trim();
+            const cookieMemberTypeInner = (document.cookie.match(/(?:^|;\s*)member_type=([^;]+)/)?.[1] || '').toLowerCase().trim();
+            const tier = (op?.tier || localStorage.getItem('tier') || cookieTierInner || '').toLowerCase().trim();
+            const memberType = (op?.member_type || localStorage.getItem('member_type') || cookieMemberTypeInner || '').toLowerCase().trim();
 
-            if (hasAutoInst || isInstMember) {
+            // CRITICAL: Learner member or standard student must NEVER get canSwitch = true!
+            if (tier === 'learner_member' || memberType === 'member' || tier === 'student') {
+              setCanSwitch(false);
+              setViewMode('learner');
+              localStorage.setItem('can_switch_view', 'false');
+              localStorage.setItem('isInstructor', 'false');
+              localStorage.setItem('lms_active_view_mode', 'learner');
+              return;
+            }
+
+            if (data.is_org_owner) {
+              localStorage.setItem('tier', 'owner');
+              localStorage.setItem('member_type', 'Owner');
+              localStorage.setItem('is_org_owner', 'true');
+              localStorage.setItem('can_access_stridenex', 'true');
+              if (typeof document !== 'undefined') {
+                document.cookie = 'tier=owner; path=/; max-age=86400';
+                document.cookie = 'member_type=Owner; path=/; max-age=86400';
+                document.cookie = 'is_org_owner=true; path=/; max-age=86400';
+                document.cookie = 'can_access_stridenex=true; path=/; max-age=86400';
+              }
+              if (data.org_type) {
+                localStorage.setItem('role', String(data.org_type).toLowerCase());
+                if (typeof document !== 'undefined') {
+                  document.cookie = `user_role=${String(data.org_type).toLowerCase()}; path=/; max-age=86400`;
+                }
+              }
+              window.dispatchEvent(new Event('auth-changed'));
+            }
+
+            const autoInstructorRoles = [
+              "Instructor", "Course Creator", "Moderator", "Administrator",
+              "System Manager", "Instructor Admin", "LMS Admin", "Partner",
+              "Industry Admin", "College Admin", "Company Admin"
+            ];
+            const hasAutoInst = rawRoles.some((r: string) => autoInstructorRoles.includes(r)) || Boolean(data.is_instructor);
+            const isInstMember = tier === 'instructor_member' || memberType === 'instructor' || op?.tier === 'instructor_member' || op?.member_type === 'Instructor';
+
+            if (hasAutoInst || isInstMember || isAdminUserOrOwner()) {
               setCanSwitch(true);
               localStorage.setItem('can_switch_view', 'true');
               if (Array.isArray(data.roles)) {
