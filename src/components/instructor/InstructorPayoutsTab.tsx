@@ -169,7 +169,7 @@ export default function InstructorPayoutsTab({
           localStorage.removeItem("apiKey");
           localStorage.removeItem("apiSecret");
           window.dispatchEvent(new Event("auth-changed"));
-          window.location.href = "/lms/login";
+          window.location.href = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "http://localhost:3001/login" : "/login";
           return;
         }
       }

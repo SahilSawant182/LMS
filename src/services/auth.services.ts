@@ -181,35 +181,43 @@ export const canUserSwitchView = (): boolean => {
       if (rawOp) op = JSON.parse(rawOp);
     } catch {}
 
-    if (op) {
-      if (op.tier === "learner_member" || op.member_type === "Member" || op.can_switch_view === false) {
-        return false;
-      }
-      if (op.tier === "instructor_member" || op.member_type === "Instructor" || op.can_switch_view === true) {
-        return true;
-      }
+    const rawRoles = localStorage.getItem("roles") || localStorage.getItem("lms_saved_instructor_roles") || "";
+    let rolesList: string[] = [];
+    try {
+      rolesList = rawRoles.startsWith("[") ? JSON.parse(rawRoles) : [rawRoles];
+    } catch {
+      rolesList = rawRoles ? [rawRoles] : [];
     }
 
-    const tier = localStorage.getItem("tier") || "";
-    const memberType = localStorage.getItem("member_type") || "";
-    if (tier === "learner_member" || memberType === "Member") return false;
-    if (tier === "instructor_member" || memberType === "Instructor") return true;
+    const hasInstructorRole = rolesList.some((r: string) =>
+      ["Instructor", "Course Creator", "Moderator", "Administrator", "System Manager", "Partner", "Industry Admin", "College Admin", "Instructor Admin", "LMS Admin"].includes(r)
+    );
 
-    const canSwitch = localStorage.getItem("can_switch_view");
-    if (canSwitch === "false") return false;
-    if (canSwitch === "true") return true;
+    const tier = op?.tier || localStorage.getItem("tier") || "";
+    const memberType = op?.member_type || localStorage.getItem("member_type") || "";
 
-    const cookieCanSwitch = document.cookie.match(/(?:^|;\s*)can_switch_view=([^;]+)/)?.[1];
-    if (cookieCanSwitch === "false") return false;
-    if (cookieCanSwitch === "true") return true;
-
-    // If user does not have any instructor/admin role, they are purely a learner.
-    // Pure learners can NEVER switch views and must NEVER see the toggle button.
-    if (!hasInstructorAccountRole()) {
+    // 1. Pure Learner Member (Org member without instructor role)
+    if ((tier === "learner_member" || memberType === "Member") && !hasInstructorRole && localStorage.getItem("isInstructor") !== "true") {
       return false;
     }
 
-    return true;
+    // 2. Pure Student (without instructor/admin role)
+    if (tier === "student" && !hasInstructorRole && localStorage.getItem("isInstructor") !== "true") {
+      return false;
+    }
+
+    // 3. Instructor Member or user with instructor roles
+    if (tier === "instructor_member" || memberType === "Instructor" || hasInstructorRole || localStorage.getItem("isInstructor") === "true") {
+      return true;
+    }
+
+    // 4. Admin / Owner / Partner
+    if (tier === "owner" || memberType === "Owner" || tier === "admin_member" || memberType === "Admin") {
+      return true;
+    }
+
+    // 5. Fallback check for instructor account roles
+    return hasInstructorAccountRole();
   } catch {
     return false;
   }
@@ -218,17 +226,13 @@ export const canUserSwitchView = (): boolean => {
 export const getActiveViewMode = (): "instructor" | "learner" => {
   if (typeof window === "undefined") return "learner";
   try {
-    // If not an instructor account, view mode is strictly 'learner'
-    if (!hasInstructorAccountRole()) return "learner";
+    if (!canUserSwitchView()) return "learner";
 
     const saved = localStorage.getItem("lms_active_view_mode");
     if (saved === "learner" || saved === "instructor") {
       return saved;
     }
-    const isInst = localStorage.getItem("isInstructor");
-    if (isInst === "false") return "learner";
-    if (isInst === "true") return "instructor";
-    return isAuthorizedInstructor() ? "instructor" : "learner";
+    return "instructor";
   } catch {
     return "learner";
   }
@@ -242,16 +246,13 @@ export const switchActiveViewMode = (targetMode?: "instructor" | "learner") => {
   if (typeof window === "undefined") return;
 
   const currentMode =
-    (localStorage.getItem("lms_active_view_mode") as "instructor" | "learner") ||
-    (localStorage.getItem("isInstructor") === "true" ? "instructor" : "learner");
+    (localStorage.getItem("lms_active_view_mode") as "instructor" | "learner") || "instructor";
   const nextMode = targetMode || (currentMode === "instructor" ? "learner" : "instructor");
 
   localStorage.setItem("lms_active_view_mode", nextMode);
-  localStorage.setItem("isInstructor", nextMode === "instructor" ? "true" : "false");
 
   if (typeof document !== "undefined") {
     document.cookie = `lms_active_view_mode=${nextMode}; path=/; max-age=86400`;
-    document.cookie = `isInstructor=${nextMode === "instructor"}; path=/; max-age=86400`;
   }
 
   // Restore preserved roles when switching to instructor

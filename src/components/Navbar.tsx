@@ -11,6 +11,7 @@ import NotificationBell from '@/components/notifications/NotificationBell';
 import ViewSwitchButton from '@/components/Navbar/ViewSwitchButton';
 import { useViewMode } from '@/context/ViewModeContext';
 import PlanStatusBanner from '@/components/PlanStatusBanner';
+import { getStrideNexLoginUrl } from '@/utils/environment';
 
 const getStrideNexDashboardUrl = (): string => {
   if (typeof window === "undefined") return "/student/dashboard";
@@ -51,15 +52,27 @@ export default function Navbar() {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
   const canAccessStrideNex = useMemo(() => {
-    if (typeof window === "undefined") return true;
+    if (typeof window === "undefined") return false;
+    let op: any = null;
+    try {
+      op = JSON.parse(localStorage.getItem("operational_profile") || "{}");
+    } catch {}
+
+    const tier = op?.tier || localStorage.getItem("tier") || "";
+    const memberType = op?.member_type || localStorage.getItem("member_type") || "";
+
+    // Strictly blocked for members & instructor members
+    if (tier === "instructor_member" || tier === "learner_member" || memberType === "Member" || memberType === "Instructor") {
+      return false;
+    }
+
     const raw = localStorage.getItem("can_access_stridenex");
     if (raw === "false") return false;
-    try {
-      const op = JSON.parse(localStorage.getItem("operational_profile") || "{}");
-      if (op.can_access_stridenex === false) return false;
-    } catch {}
+    if (op?.can_access_stridenex === false) return false;
+
     const match = document.cookie.match(/(?:^|;\s*)can_access_stridenex=([^;]+)/);
     if (match && match[1] === "false") return false;
+
     return true;
   }, [isAuthenticated]);
   const [dashboardUrl, setDashboardUrl] = useState<string>("/student/dashboard");
@@ -183,22 +196,26 @@ export default function Navbar() {
       logout().catch((err) => console.warn("Logout API warning:", err));
     } catch (e) { }
 
-    localStorage.removeItem("apiKey");
-    localStorage.removeItem("apiSecret");
-    localStorage.removeItem("userEmail");
-    localStorage.removeItem("fullName");
-    localStorage.removeItem("roles");
-    localStorage.removeItem("isInstructor");
-    localStorage.removeItem("can_switch_view");
-    localStorage.removeItem("lms_active_view_mode");
     localStorage.clear();
     sessionStorage.clear();
 
-    document.body.classList.remove("has-sidebar");
-    document.documentElement.style.removeProperty("--sidebar-width");
+    if (typeof document !== "undefined") {
+      const cookiesToClear = [
+        "token", "apiKey", "apiSecret", "user_id", "user_role", "roles",
+        "isInstructor", "can_switch_view", "can_access_stridenex", "has_lms_access",
+        "member_type", "tier", "operational_profile", "lms_active_view_mode",
+        "full_name", "user_image"
+      ];
+      cookiesToClear.forEach((c) => {
+        document.cookie = `${c}=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+      });
+      document.body.classList.remove("has-sidebar");
+      document.documentElement.style.removeProperty("--sidebar-width");
+    }
+
     setIsAuthenticated(false);
     window.dispatchEvent(new Event("auth-changed"));
-    window.location.href = "/lms/login";
+    window.location.href = getStrideNexLoginUrl();
   };
 
   // Load courses, batches, and programs for search
