@@ -334,6 +334,21 @@ export const isAuthorizedInstructor = (): boolean => {
   }
 };
 
+/**
+ * Returns true ONLY if the user is an authorized instructor AND is currently
+ * operating in 'instructor' view mode. When in 'learner' view mode, returns false.
+ */
+export const isEffectiveInstructorMode = (): boolean => {
+  if (typeof window === "undefined") return false;
+  try {
+    const activeMode = getActiveViewMode();
+    if (activeMode === "learner") return false;
+    return isAuthorizedInstructor();
+  } catch {
+    return false;
+  }
+};
+
 export const isAdminInstructor = (): boolean => {
   return isSystemAdmin();
 };
