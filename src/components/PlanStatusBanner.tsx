@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
+import { checkLmsAccess } from '@/services/auth.services';
 
 export default function PlanStatusBanner() {
   const [mounted, setMounted] = useState(false);
@@ -9,6 +10,7 @@ export default function PlanStatusBanner() {
   const [tier, setTier] = useState<string>('');
   const [memberType, setMemberType] = useState<string>('');
   const [planMessage, setPlanMessage] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -36,23 +38,37 @@ export default function PlanStatusBanner() {
 
       const currentTier = op?.tier || localStorage.getItem('tier') || document.cookie.match(/(?:^|;\s*)tier=([^;]+)/)?.[1] || '';
       const currentMemberType = op?.member_type || localStorage.getItem('member_type') || document.cookie.match(/(?:^|;\s*)member_type=([^;]+)/)?.[1] || '';
+      const currentViewMode = localStorage.getItem('lms_active_view_mode') || document.cookie.match(/(?:^|;\s*)lms_active_view_mode=([^;]+)/)?.[1] || null;
 
       setHasLmsAccess(hasAccess);
       setTier(currentTier);
       setMemberType(currentMemberType);
       setPlanMessage(op?.plan_message || null);
+      setViewMode(currentViewMode);
     };
 
     syncStatus();
+
+    // Re-validate checkLmsAccess() on mount so stale localStorage does not show a false warning
+    checkLmsAccess()
+      .then(() => syncStatus())
+      .catch(() => {});
+
     window.addEventListener('auth-changed', syncStatus);
     window.addEventListener('storage', syncStatus);
+    window.addEventListener('view-mode-changed', syncStatus);
     return () => {
       window.removeEventListener('auth-changed', syncStatus);
       window.removeEventListener('storage', syncStatus);
+      window.removeEventListener('view-mode-changed', syncStatus);
     };
   }, []);
 
-  if (!mounted || hasLmsAccess) return null;
+  // Hide banner if user has LMS access, or if they are in Learner View
+  const activeViewMode = typeof window !== "undefined" ? (viewMode || localStorage.getItem("lms_active_view_mode")) : null;
+  if (!mounted || hasLmsAccess || activeViewMode === "learner") {
+    return null;
+  }
 
   const isOwnerOrIndividual = tier === 'owner' || tier === 'individual' || memberType === 'Owner' || memberType === 'Individual';
 

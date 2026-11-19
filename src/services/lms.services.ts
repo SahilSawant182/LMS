@@ -1,5 +1,5 @@
 import { apiService, API_TOKEN, API_METHOD_PREFIX, uploadFile, BASE_URL, getCurrentUserEmail } from "./api.services";
-import { isAuthorizedInstructor, isCourseInstructorOrOwner, isBatchInstructorOrOwner, isProgramInstructorOrOwner } from "./auth.services";
+import { isAuthorizedInstructor, isEffectiveInstructorMode, isCourseInstructorOrOwner, isBatchInstructorOrOwner, isProgramInstructorOrOwner } from "./auth.services";
 import { compareCurriculumItems } from "@/utils/curriculum";
 
 // Define interfaces if needed, or use any/generic for now
@@ -68,7 +68,7 @@ export interface Course {
 }
 
 const getInstructorFilterParams = (payload?: any) => {
-  const isInstructor = isAuthorizedInstructor();
+  const isInstructor = isEffectiveInstructorMode();
   const currentUser = getCurrentUserEmail();
 
   let rawParams: Record<string, any> = {};
@@ -188,7 +188,7 @@ export const getInstructorCourses = async (payload?: any): Promise<Course[]> => 
 };
 
 export const getCourses = async (payload?: any): Promise<Course[]> => {
-  const isInstructor = isAuthorizedInstructor();
+  const isInstructor = isEffectiveInstructorMode();
 
   // For instructor role, do not call get_courses. Call get_instructor_courses directly so instructor only sees their created courses
   if (isInstructor) {
@@ -435,7 +435,7 @@ export const getReviews = async (payload: GetReviewsPayload) => {
 };
 
 export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
-  const isInstructor = isAuthorizedInstructor();
+  const isInstructor = isEffectiveInstructorMode();
   const currentUser = getCurrentUserEmail();
   const nameParam = payload.batch || payload.name;
   const params = getInstructorFilterParams({
@@ -456,7 +456,7 @@ export const getBatchDetails = async (payload: GetBatchDetailsPayload) => {
 };
 
 export const getBatchCourses = async (payload: GetBatchCoursesPayload) => {
-  const isInstructor = isAuthorizedInstructor();
+  const isInstructor = isEffectiveInstructorMode();
   const params = getInstructorFilterParams(payload);
   if (!isInstructor) {
     delete params.user;
@@ -470,7 +470,7 @@ export const getBatchCourses = async (payload: GetBatchCoursesPayload) => {
 };
 
 export const getBatches = async (payload?: any): Promise<any> => {
-  const isInstructor = isAuthorizedInstructor();
+  const isInstructor = isEffectiveInstructorMode();
   const currentUser = getCurrentUserEmail();
   const params = getInstructorFilterParams(payload);
   if (!isInstructor) {
@@ -2988,7 +2988,7 @@ export interface Program {
 }
 
 export const getProgramList = async (payload?: any): Promise<Program[]> => {
-  const isInstructor = isAuthorizedInstructor();
+  const isInstructor = isEffectiveInstructorMode();
   const currentUser = getCurrentUserEmail();
   const params: Record<string, any> = {};
   if (typeof payload === 'object' && payload !== null) {
