@@ -1,7 +1,20 @@
 /**
- * Smart back navigation utility for LMS.
- * Ensures users are always returned to the screen from which they came.
+ * Strips the Next.js basePath ('/lms') from internal application routes
+ * so they can be safely passed to Next.js `router.push(...)` or `<Link href={...}>`
+ * without triggering double-prefixing (e.g. /lms/lms/... -> 404).
  */
+export function stripBasePath(url?: string | null): string {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+
+  let cleaned = trimmed.replace(/^(\/lms)+(\/|$)/, '$2');
+  if (!cleaned.startsWith('/') && !cleaned.startsWith('#') && !cleaned.startsWith('?')) {
+    cleaned = '/' + cleaned;
+  }
+  return cleaned || '/';
+}
 
 /**
  * Smart back navigation utility for LMS.
@@ -19,7 +32,8 @@ export function navigateBack(
   // 1. Explicit returnUrl or from in query parameters has highest priority
   try {
     const urlParams = new URLSearchParams(window.location.search);
-    const returnUrl = urlParams.get("returnUrl") || urlParams.get("from");
+    const rawReturnUrl = urlParams.get("returnUrl") || urlParams.get("from");
+    const returnUrl = stripBasePath(rawReturnUrl);
     if (returnUrl) {
       router.push(returnUrl);
       return;
@@ -41,7 +55,7 @@ export function navigateBack(
 
   // If caller explicitly requested to force fallback URL
   if (options?.forceFallback && fallbackUrl) {
-    router.push(fallbackUrl);
+    router.push(stripBasePath(fallbackUrl));
     return;
   }
 
@@ -94,7 +108,7 @@ export function navigateBack(
   // or a specific itemLink), and the previous URL was the dashboard or invalid:
   // Directly navigate to fallbackUrl instead of jumping unexpectedly to dashboard!
   if (hasSpecificFallback && (!isValidPrevUrl || isPrevDashboard)) {
-    router.push(fallbackUrl);
+    router.push(stripBasePath(fallbackUrl));
     return;
   }
 
@@ -105,7 +119,7 @@ export function navigateBack(
       router.back();
       return;
     }
-    router.push(prevUrl);
+    router.push(stripBasePath(prevUrl));
     return;
   }
 
@@ -125,7 +139,7 @@ export function navigateBack(
 
   // 5. Default fallback URL
   if (fallbackUrl) {
-    router.push(fallbackUrl);
+    router.push(stripBasePath(fallbackUrl));
   } else {
     router.push("/dashboard");
   }

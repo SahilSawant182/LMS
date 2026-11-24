@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createAssignment } from '@/services/lms.services';
 import { getCurrentUserEmail } from '@/services/api.services';
 import Dropdown from '@/components/ui/Dropdown';
-import { navigateBack } from '@/utils/navigation';
+import { navigateBack, stripBasePath } from '@/utils/navigation';
 import { ArrowLeft, Save, CheckCircle } from 'lucide-react';
 
 function CreateAssignmentForm() {
@@ -68,10 +68,11 @@ function CreateAssignmentForm() {
       
       setSubmitSuccess(true);
       
-      const returnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
+      const rawReturnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('lms_return_url');
       }
+      const returnUrl = stripBasePath(rawReturnUrl);
 
       // Navigate back to lesson editor or assignments list after a short delay
       setTimeout(() => {
@@ -89,7 +90,8 @@ function CreateAssignmentForm() {
     }
   };
 
-  const returnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
+  const rawReturnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
+  const returnUrl = stripBasePath(rawReturnUrl);
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-800">

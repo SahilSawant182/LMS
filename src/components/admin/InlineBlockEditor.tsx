@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import AddPredefinedItemModal, { PredefinedItemType } from '@/components/admin/AddPredefinedItemModal';
+import { stripBasePath } from '@/utils/navigation';
 
 type BlockType = 'text' | 'heading' | 'list' | 'upload' | 'table' | 'quiz' | 'assignment' | 'programming' | 'codebox';
 
@@ -110,7 +111,7 @@ export default function InlineBlockEditor({
   const handleModalCreateNew = () => {
     if (!modalState.type) return;
     const currentUrl = typeof window !== 'undefined'
-      ? (window.location.pathname + window.location.search + window.location.hash)
+      ? (stripBasePath(window.location.pathname) + window.location.search + window.location.hash)
       : '';
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('lms_return_url', currentUrl);
