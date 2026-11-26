@@ -15,26 +15,33 @@ import { getStrideNexLoginUrl } from '@/utils/environment';
 
 const getStrideNexDashboardUrl = (): string => {
   if (typeof window === "undefined") return "/student/dashboard";
+  let targetPath = "/student/dashboard";
   try {
     const rolesStr = localStorage.getItem("roles") || localStorage.getItem("lms_saved_instructor_roles") || "";
     const lowerRoles = rolesStr.toLowerCase();
 
     if (lowerRoles.includes("partner")) {
-      return "/partner";
+      targetPath = "/partner";
+    } else if (lowerRoles.includes("college")) {
+      targetPath = "/college/dashboard";
+    } else if (lowerRoles.includes("industry")) {
+      targetPath = "/industry/dashboard";
+    } else if (lowerRoles.includes("mentor")) {
+      targetPath = "/mentor/dashboard";
+    } else {
+      targetPath = "/student/dashboard";
     }
-    if (lowerRoles.includes("college")) {
-      return "/college/dashboard";
-    }
-    if (lowerRoles.includes("industry")) {
-      return "/industry/dashboard";
-    }
-    if (lowerRoles.includes("mentor")) {
-      return "/mentor/dashboard";
-    }
-    return "/student/dashboard";
   } catch {
-    return "/student/dashboard";
+    targetPath = "/student/dashboard";
   }
+
+  if (
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") &&
+    window.location.port === "3004"
+  ) {
+    return `http://localhost:3001${targetPath}`;
+  }
+  return targetPath;
 };
 
 export default function Navbar() {
@@ -365,11 +372,9 @@ export default function Navbar() {
                   (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: "BACK_TO_STRIDENEX" }));
                   return;
                 }
+                e.preventDefault();
                 const target = getStrideNexDashboardUrl();
-                if (target && target !== dashboardUrl) {
-                  e.preventDefault();
-                  window.location.href = target;
-                }
+                window.location.href = target;
               }}
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200/70 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
             >
@@ -768,11 +773,9 @@ export default function Navbar() {
                             (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: "BACK_TO_STRIDENEX" }));
                             return;
                           }
+                          e.preventDefault();
                           const target = getStrideNexDashboardUrl();
-                          if (target && target !== dashboardUrl) {
-                            e.preventDefault();
-                            window.location.href = target;
-                          }
+                          window.location.href = target;
                         }}
                         className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
                       >
