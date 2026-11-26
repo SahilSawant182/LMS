@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { navigateBack } from '@/utils/navigation';
+import { navigateBack, stripBasePath } from '@/utils/navigation';
 import { createProgrammingExercise, ProgrammingExerciseTestCase } from '@/services/lms.services';
 import {
   ArrowLeft,
@@ -77,7 +77,8 @@ const PREDEFINED_TEMPLATES = [
 function CreateProgrammingExerciseForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
+  const rawReturnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
+  const returnUrl = stripBasePath(rawReturnUrl);
 
   const [isInstructor, setIsInstructor] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);

@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { createQuestion, CreateQuestionPayload } from "@/services/lms.services";
 import { isAuthorizedInstructor } from "@/services/auth.services";
 import { useRouter, useSearchParams } from "next/navigation";
-import { navigateBack } from "@/utils/navigation";
+import { navigateBack, stripBasePath } from "@/utils/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { ShieldAlert, ArrowLeft } from "lucide-react";
@@ -12,7 +12,8 @@ import { ShieldAlert, ArrowLeft } from "lucide-react";
 function CreateQuestionForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
+  const rawReturnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
+  const returnUrl = stripBasePath(rawReturnUrl);
   const courseParam = searchParams.get('course') || '';
   
   const [loading, setLoading] = useState(false);

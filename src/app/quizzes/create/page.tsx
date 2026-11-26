@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { navigateBack } from '@/utils/navigation';
+import { navigateBack, stripBasePath } from '@/utils/navigation';
 import {
   createQuiz,
   updateQuiz,
@@ -80,7 +80,8 @@ export interface QuizQuestionItem {
 export function CreateQuizContent({ initialQuizName }: { initialQuizName?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
+  const rawReturnUrl = searchParams.get('returnUrl') || (typeof window !== 'undefined' ? sessionStorage.getItem('lms_return_url') : null);
+  const returnUrl = stripBasePath(rawReturnUrl);
   const courseParam = searchParams.get('course') || '';
   const quizParam = initialQuizName || searchParams.get('quiz') || searchParams.get('name') || '';
 
@@ -719,6 +720,9 @@ export function CreateQuizContent({ initialQuizName }: { initialQuizName?: strin
       setHasUnsavedChanges(false);
 
       if (returnUrl) {
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('lms_return_url');
+        }
         setTimeout(() => {
           router.push(returnUrl);
         }, 1200);
@@ -746,6 +750,9 @@ export function CreateQuizContent({ initialQuizName }: { initialQuizName?: strin
             </p>
             <button
               onClick={() => {
+                if (typeof window !== 'undefined') {
+                  sessionStorage.removeItem('lms_return_url');
+                }
                 if (returnUrl) {
                   router.push(returnUrl);
                 } else if (courseParam) {
@@ -777,6 +784,9 @@ export function CreateQuizContent({ initialQuizName }: { initialQuizName?: strin
             href={returnUrl || "/quizzes"}
             onClick={(e) => {
               e.preventDefault();
+              if (typeof window !== 'undefined') {
+                sessionStorage.removeItem('lms_return_url');
+              }
               navigateBack(router, returnUrl || "/quizzes");
             }}
             className="text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1.5 cursor-pointer"
