@@ -457,7 +457,7 @@ export const checkCanAccessStrideNex = (): boolean => {
   }
 
   // 2. In Integrated LMS:
-  // Sub-members (instructor members, learner members, students) MUST NEVER see Back to StrideNex!
+  // Sub-members (instructor members, learner members) MUST NEVER see Back to StrideNex!
   let op: any = null;
   try {
     const rawOp = localStorage.getItem("operational_profile");
@@ -474,19 +474,29 @@ export const checkCanAccessStrideNex = (): boolean => {
   const tier = (op?.tier || localStorage.getItem("tier") || cookieTier || "").toLowerCase().trim();
   const memberType = (op?.member_type || localStorage.getItem("member_type") || cookieMemberType || "").toLowerCase().trim();
 
+  // Sub-members (added by Mentor, College, Industry with Member or Instructor role) are strictly restricted to LMS only
   if (
     tier === "learner_member" ||
     tier === "instructor_member" ||
     memberType === "member" ||
     memberType === "instructor" ||
-    tier === "student" ||
     localStorage.getItem("can_access_stridenex") === "false" ||
     (document.cookie.match(/(?:^|;\s*)can_access_stridenex=([^;]+)/)?.[1] === "false")
   ) {
     return false;
   }
 
-  // ONLY Admin and Organization Owner are permitted to see this button!
+  // 3. Regular Students coming from StrideNEX MUST see Back to StrideNex
+  const canAccessFlag =
+    localStorage.getItem("can_access_stridenex") === "true" ||
+    (document.cookie.match(/(?:^|;\s*)can_access_stridenex=([^;]+)/)?.[1] === "true");
+
+  const role = (localStorage.getItem("role") || "").toLowerCase().trim();
+  if (tier === "student" || memberType === "student" || role === "student" || canAccessFlag) {
+    return true;
+  }
+
+  // 4. Admin, Organization Owner, Partner
   return isAdminUserOrOwner();
 };
 
